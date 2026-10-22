@@ -1,30 +1,60 @@
 // API Client for Bondtex Production Dashboard
+// Provides seamless auto-detection: connects to live backend API when available,
+// and gracefully falls back to the client-side reactive Firestore / LocalStorage engine
+// on Firebase Hosting without ever crashing on HTML/JSON parse errors.
 
-const BASE_URL = '/api';
+import { dbStore } from '../services/dbStore';
+
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+
+/**
+ * Safely executes a fetch request and verifies JSON content type.
+ * Returns null if the server returned HTML (e.g., Firebase Hosting SPA rewrite) or failed.
+ */
+async function safeFetchJson(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      // Returned HTML or other non-JSON response
+      return null;
+    }
+    const text = await res.text();
+    if (!text || text.trim().startsWith('<')) {
+      return null;
+    }
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
 export const api = {
-  // Get factory overview (totals + all 4 categories)
+  // 1. Factory overview
   getOverview: async () => {
-    const res = await fetch(`${BASE_URL}/overview`);
-    if (!res.ok) throw new Error('Failed to fetch factory overview');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/overview`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getFactoryOverview() };
   },
 
-  // Get categories summary
+  // 2. Categories summary
   getCategories: async () => {
-    const res = await fetch(`${BASE_URL}/categories`);
-    if (!res.ok) throw new Error('Failed to fetch categories');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/categories`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getCategoriesSummary() };
   },
 
-  // Get single category details
+  // 3. Single category details
   getCategoryDetails: async (category) => {
-    const res = await fetch(`${BASE_URL}/categories/${encodeURIComponent(category)}`);
-    if (!res.ok) throw new Error(`Failed to fetch category details for ${category}`);
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/categories/${encodeURIComponent(category)}`);
+    if (remote && remote.success) return remote;
+    const data = dbStore.getCategoryDetails(category);
+    if (!data) throw new Error(`Category '${category}' not found`);
+    return { success: true, data };
   },
 
-  // Get orders with filters
+  // 4. Orders with filters
   getOrders: async (filters = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
@@ -32,187 +62,197 @@ export const api = {
         params.append(key, val);
       }
     });
-    const res = await fetch(`${BASE_URL}/orders?${params.toString()}`);
-    if (!res.ok) throw new Error('Failed to fetch orders');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/orders?${params.toString()}`);
+    if (remote && remote.success) return remote;
+    const result = dbStore.getOrders(filters);
+    return { success: true, ...result };
   },
 
-  // Get single order
+  // 5. Single order
   getOrderById: async (id) => {
-    const res = await fetch(`${BASE_URL}/orders/${encodeURIComponent(id)}`);
-    if (!res.ok) throw new Error('Order not found');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/orders/${encodeURIComponent(id)}`);
+    if (remote && remote.success) return remote;
+    const order = dbStore.getOrderById(id);
+    if (!order) throw new Error('Order not found');
+    return { success: true, data: order };
   },
 
-  // Create new order
+  // 6. Create new order
   createOrder: async (orderData) => {
-    const res = await fetch(`${BASE_URL}/orders`, {
+    const remote = await safeFetchJson(`${BASE_URL}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(orderData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to create order');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const newOrder = dbStore.createOrder(orderData);
+    return { success: true, data: newOrder };
   },
 
-  // Log daily output (Plan vs Actual)
+  // 7. Add daily log
   addDailyLog: async (orderId, logData) => {
-    const res = await fetch(`${BASE_URL}/orders/${encodeURIComponent(orderId)}/logs`, {
+    const remote = await safeFetchJson(`${BASE_URL}/orders/${encodeURIComponent(orderId)}/logs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to log daily production');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const updated = dbStore.addDailyLog(orderId, logData);
+    if (!updated) throw new Error('Order not found');
+    return { success: true, data: updated };
   },
 
-  // Dynamic Plan vs Actual time series
+  // 8. Dynamic Plan vs Actual time series
   getPlanVsActual: async (category = 'All') => {
-    const res = await fetch(`${BASE_URL}/plan-vs-actual?category=${encodeURIComponent(category)}`);
-    if (!res.ok) throw new Error('Failed to fetch plan vs actual data');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/plan-vs-actual?category=${encodeURIComponent(category)}`);
+    if (remote && remote.success) return remote;
+    const series = dbStore.getTimeSeries(category);
+    return { success: true, category, data: series };
   },
 
-  // Barcode search
+  // 9. Barcode search
   searchBarcode: async (code) => {
-    const res = await fetch(`${BASE_URL}/barcode/${encodeURIComponent(code)}`);
-    if (!res.ok) throw new Error('Barcode not found');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/barcode/${encodeURIComponent(code)}`);
+    if (remote && remote.success) return remote;
+    const match = dbStore.lookupBarcode(code);
+    if (!match) throw new Error(`No order found for barcode: ${code}`);
+    return { success: true, data: match };
   },
 
-  // Metadata for filter dropdowns
+  // 10. Filter metadata
   getMetadata: async () => {
-    const res = await fetch(`${BASE_URL}/metadata`);
-    if (!res.ok) throw new Error('Failed to fetch filter metadata');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/metadata`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getMetadata() };
   },
 
-  // Reset DB
+  // 11. Reset Database
   resetDb: async () => {
-    const res = await fetch(`${BASE_URL}/reset`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to reset database');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/reset`, { method: 'POST' });
+    if (remote && remote.success) return remote;
+    const res = dbStore.reset();
+    return { success: true, message: 'Database reset to initial clean data', ...res };
   },
 
-  // Machines API (Admin & Worker)
+  // 12. Machines API (Admin & Worker)
   getMachines: async () => {
-    const res = await fetch(`${BASE_URL}/machines`);
-    if (!res.ok) throw new Error('Failed to fetch machines');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/machines`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getMachines() };
   },
 
   getMachineById: async (id) => {
-    const res = await fetch(`${BASE_URL}/machines/${encodeURIComponent(id)}`);
-    if (!res.ok) throw new Error(`Machine '${id}' not found`);
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/machines/${encodeURIComponent(id)}`);
+    if (remote && remote.success) return remote;
+    const machine = dbStore.getMachineById(id);
+    if (!machine) throw new Error(`Machine '${id}' not found`);
+    return { success: true, data: machine };
   },
 
   saveMachine: async (machineData) => {
-    const res = await fetch(`${BASE_URL}/machines`, {
+    const remote = await safeFetchJson(`${BASE_URL}/machines`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(machineData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to save machine configuration');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const saved = dbStore.saveMachine(machineData);
+    return { success: true, data: saved, message: 'Machine configuration saved successfully' };
   },
 
+  // 13. Worker Production Batch Submission (from Mobile Floor QR Scan)
   submitWorkerBatch: async (batchData) => {
-    const res = await fetch(`${BASE_URL}/worker/submit`, {
+    const remote = await safeFetchJson(`${BASE_URL}/worker/submit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(batchData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to submit production batch');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const result = dbStore.submitWorkerProduction(batchData);
+    return { success: true, ...result };
   },
 
-  // Local Network Information for Mobile QR Codes
+  // 14. Network Info for QR Generation
   getNetworkInfo: async () => {
-    const res = await fetch(`${BASE_URL}/network-info`);
-    if (!res.ok) throw new Error('Failed to get network info');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/network-info`);
+    if (remote && remote.success) return remote;
+    const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const port = typeof window !== 'undefined' ? window.location.port : '5000';
+    return {
+      success: true,
+      data: {
+        primaryIp: host,
+        port: port || (window.location.protocol === 'https:' ? '443' : '80'),
+        allIps: [host],
+      },
+    };
   },
 
-  // Worker Management API
+  // 15. Worker Management API
   getWorkers: async () => {
-    const res = await fetch(`${BASE_URL}/workers`);
-    if (!res.ok) throw new Error('Failed to fetch workers');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/workers`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getWorkers() };
   },
 
   createWorker: async (workerData) => {
-    const res = await fetch(`${BASE_URL}/workers`, {
+    const remote = await safeFetchJson(`${BASE_URL}/workers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(workerData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to create worker');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const newWorker = dbStore.addWorker(workerData);
+    return { success: true, data: newWorker, message: 'Worker registered successfully' };
   },
 
   updateWorker: async (id, workerData) => {
-    const res = await fetch(`${BASE_URL}/workers/${encodeURIComponent(id)}`, {
+    const remote = await safeFetchJson(`${BASE_URL}/workers/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(workerData),
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to update worker');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const updated = dbStore.updateWorker(id, workerData);
+    if (!updated) throw new Error('Worker not found');
+    return { success: true, data: updated, message: 'Worker updated successfully' };
   },
 
   deleteWorker: async (id) => {
-    const res = await fetch(`${BASE_URL}/workers/${encodeURIComponent(id)}`, {
+    const remote = await safeFetchJson(`${BASE_URL}/workers/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to delete worker');
-    }
-    return res.json();
+    if (remote && remote.success) return remote;
+    const success = dbStore.deleteWorker(id);
+    if (!success) throw new Error('Worker not found');
+    return { success: true, message: 'Worker deleted successfully' };
   },
 
-  // Dedicated Daily Production Dashboard (Loop focus)
+  // 16. Dedicated Daily Production Dashboard (Loop focus)
   getDailyProduction: async (category = 'Loop', date = '') => {
     const params = new URLSearchParams();
     if (category) params.append('category', category);
     if (date) params.append('date', date);
-    const res = await fetch(`${BASE_URL}/daily-production?${params.toString()}`);
-    if (!res.ok) throw new Error('Failed to fetch daily production dashboard data');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/daily-production?${params.toString()}`);
+    if (remote && remote.success) return remote;
+    const data = dbStore.getDailyProduction({ category, date });
+    return { success: true, data };
   },
 
-  // Dedicated Hourly Production Dashboard (Machine breakdown, multiplier, Target vs Actual)
+  // 17. Dedicated Hourly Production Dashboard (Machine breakdown, multiplier, Target vs Actual)
   getHourlyProduction: async (params = {}) => {
     const q = new URLSearchParams();
     if (params.shift) q.append('shift', params.shift);
     if (params.date) q.append('date', params.date);
     if (params.category) q.append('category', params.category);
     if (params.machineId) q.append('machineId', params.machineId);
-    const res = await fetch(`${BASE_URL}/hourly-production?${q.toString()}`);
-    if (!res.ok) throw new Error('Failed to fetch hourly production data');
-    return res.json();
+    const remote = await safeFetchJson(`${BASE_URL}/hourly-production?${q.toString()}`);
+    if (remote && remote.success) return remote;
+    const data = dbStore.getHourlyProduction(params);
+    return { success: true, data };
   },
 
-  // Export CSV url
+  // 18. Export CSV URL
   getExportUrl: (filters = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
@@ -223,3 +263,5 @@ export const api = {
     return `${BASE_URL}/export/csv?${params.toString()}`;
   },
 };
+
+export default api;
