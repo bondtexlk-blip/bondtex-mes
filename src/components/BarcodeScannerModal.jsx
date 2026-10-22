@@ -61,7 +61,7 @@ export default function BarcodeScannerModal({ onClose, onOrderMatched }) {
   };
 
   const sampleBarcodes = [
-    { code: '4502991550', label: 'Black 093 54A2 (Loop)', rm: '200150259454A2' },
+    { code: '4502991550', label: 'Black 033 54A2 (Loop)', rm: '200150259454A2' },
     { code: '4502991532', label: 'Marzipan 39H6 (Strap)', rm: '200150259439H6' },
     { code: '4502991599', label: 'Praline 65H8 (T-shirt)', rm: '200150259465H8' },
     { code: '4502991520', label: 'Ganache 33F6 (Other)', rm: '200150259433F6' },

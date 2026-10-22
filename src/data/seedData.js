@@ -69,64 +69,40 @@ const getFutureDateStr = (daysAhead) => {
   return d.toISOString().split('T')[0];
 };
 
-// No mock daily logs - daily logs are generated solely by actual factory floor entries and submissions
-
-
-// Raw Structured Reference Data directly matching the user's Excel/Database table
-// Initialized clean with productionQty: 0, deliveryQty: 0, status: 'Scheduled'
+// Exact Real Production Orders directly matching the Factory Production Sheet
 export const rawProductionRows = [
-  // PO 4502991550 | 200150259454A2 | Black 093 54A2 | Loop
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 18000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 22000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 25000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 15000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  // PO 4502991550 | 200150259454A2 | Black 033 54A2 | Loop
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 033 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 21612, productionQty: 21612, deliveryQty: 21612, status: 'Completed' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 033 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 24496, productionQty: 24496, deliveryQty: 24496, status: 'Completed' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 033 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 6700, productionQty: 6700, deliveryQty: 6700, status: 'Completed' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 033 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 756, productionQty: 755, deliveryQty: 755, status: 'Ahead' },
 
   // PO 4502991532 | 200150259439H6 | Marzipan 39H6 | Strap
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 16000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 24000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 28000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 14000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 35003, productionQty: 34003, deliveryQty: 32000, status: 'Ahead' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 20874, productionQty: 18550, deliveryQty: 17000, status: 'Ahead' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 1351, productionQty: 1353, deliveryQty: 1351, status: 'Completed' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 447, productionQty: 450, deliveryQty: 447, status: 'Completed' },
 
   // PO 4502991599 | 200150259465H8 | Praline 65H8 | T-shirt
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 30000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 45000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 50000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 35000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 20000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 61714, productionQty: 41200, deliveryQty: 38000, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 31682, productionQty: 11000, deliveryQty: 10000, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 6408, productionQty: 1000, deliveryQty: 800, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 291, productionQty: 297, deliveryQty: 291, status: 'Completed' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 64, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
 
   // PO 4502991520 | 200150259433F6 | Ganache 33F6 | Other
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 25000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 35000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 40000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 22000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 15000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 923, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 2506, productionQty: 1800, deliveryQty: 1500, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 2420, productionQty: 1400, deliveryQty: 1200, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 1500, productionQty: 275, deliveryQty: 250, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 214, productionQty: 216, deliveryQty: 214, status: 'Completed' },
 
   // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Other
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 28000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 32000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 38000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 20000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 12000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-
-  // PO 4502991557 | 200150259454A2 | Black 093 54A2 | Loop
-  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Fastener Trim - 54A2', styleCode: 'LP-54A2', orderQty: 15000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Fastener Trim - 54A2', styleCode: 'LP-54A2', orderQty: 20000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Fastener Trim - 54A2', styleCode: 'LP-54A2', orderQty: 18000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-
-  // PO 4502991538 | 200150259439H6 | Marzipan 39H6 | Strap
-  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Strap', style: 'Strap Bonded Band - 39H6', styleCode: 'ST-39H6', orderQty: 14000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Strap', style: 'Strap Bonded Band - 39H6', styleCode: 'ST-39H6', orderQty: 18000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Strap', style: 'Strap Bonded Band - 39H6', styleCode: 'ST-39H6', orderQty: 16000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-
-  // PO 4502991603 | 200150259465H8 | Praline 65H8 | T-shirt
-  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'T-shirt', style: 'T-Shirt Seamless - 65H8', styleCode: 'TS-65H8', orderQty: 22000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'T-shirt', style: 'T-Shirt Seamless - 65H8', styleCode: 'TS-65H8', orderQty: 26000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'T-shirt', style: 'T-Shirt Seamless - 65H8', styleCode: 'TS-65H8', orderQty: 24000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-
-  // PO 4502991526 | 200150259433F6 | Ganache 33F6 | Other
-  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Other', style: 'Specialty Binding Trim - 33F6', styleCode: 'OT-33F6', orderQty: 18000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Other', style: 'Specialty Binding Trim - 33F6', styleCode: 'OT-33F6', orderQty: 22000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Other', style: 'Specialty Binding Trim - 33F6', styleCode: 'OT-33F6', orderQty: 20000, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 29699, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 19055, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 3260, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 451, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 63, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
 ];
 
 export const initialMachines = [
@@ -137,15 +113,15 @@ export const initialMachines = [
     type: 'High Speed Elastic Loom L1',
     category: 'Loop',
     operatorName: 'Sunil Perera',
-    shift: 'Shift A',
+    shift: 'Day Shift',
     status: 'Active',
-    dailyTargetQty: 2500,
+    dailyTargetQty: 5000,
     assignedStyles: ['Loop Elastic Band - 54A2'],
-    assignedColours: ['Black 093 54A2'],
+    assignedColours: ['Black 033 54A2'],
     assignedSizes: ['10', '12', '14', '16'],
-    assignedPos: ['4502991550', '4502991557'],
+    assignedPos: ['4502991550'],
     qrPayload: 'MCH-01',
-    notes: 'Primary elastic loop line with auto tension feed',
+    notes: 'Primary elastic loop line (PO 4502991550 - Black 033 54A2)',
     todayLogs: [],
   },
   {
@@ -155,15 +131,15 @@ export const initialMachines = [
     type: 'Webbing Loom W2',
     category: 'Strap',
     operatorName: 'Pradeep Silva',
-    shift: 'Shift A',
+    shift: 'Day Shift',
     status: 'Active',
-    dailyTargetQty: 3000,
+    dailyTargetQty: 4000,
     assignedStyles: ['Strap Webbing Band - 39H6'],
     assignedColours: ['Marzipan 39H6'],
     assignedSizes: ['10', '12', '14', '16'],
-    assignedPos: ['4502991532', '4502991538'],
+    assignedPos: ['4502991532'],
     qrPayload: 'MCH-02',
-    notes: 'Nylon bonding strap section',
+    notes: 'Nylon bonding strap section (PO 4502991532 - Marzipan 39H6)',
     todayLogs: [],
   },
   {
@@ -173,15 +149,15 @@ export const initialMachines = [
     type: 'Santoni Circular Knit C3',
     category: 'T-shirt',
     operatorName: 'Chamari Wickramasinghe',
-    shift: 'Shift A',
+    shift: 'Day Shift',
     status: 'Active',
-    dailyTargetQty: 4000,
-    assignedStyles: ['T-Shirt Combed Knit - 65H8', 'T-Shirt Seamless - 65H8'],
+    dailyTargetQty: 6000,
+    assignedStyles: ['T-Shirt Combed Knit - 65H8'],
     assignedColours: ['Praline 65H8'],
     assignedSizes: ['10', '12', '14', '16', '18'],
-    assignedPos: ['4502991599', '4502991603'],
+    assignedPos: ['4502991599'],
     qrPayload: 'MCH-03',
-    notes: 'Continuous circular knitting cylinder 28 gauge',
+    notes: 'Continuous circular knitting cylinder (PO 4502991599 - Praline 65H8)',
     todayLogs: [],
   },
   {
@@ -191,15 +167,15 @@ export const initialMachines = [
     type: 'Ultrasonic Trim Slitter U4',
     category: 'Other',
     operatorName: 'Roshan Kumara',
-    shift: 'Shift A',
+    shift: 'Day Shift',
     status: 'Active',
-    dailyTargetQty: 3200,
+    dailyTargetQty: 1500,
     assignedStyles: ['Specialty Trim Finish - 33F6'],
     assignedColours: ['Ganache 33F6'],
     assignedSizes: ['10', '12', '14', '16', '18'],
-    assignedPos: ['4502991520', '4502991526'],
+    assignedPos: ['4502991520'],
     qrPayload: 'MCH-04',
-    notes: 'Precision cold/hot slitter with optical guide',
+    notes: 'Precision cold/hot slitter (PO 4502991520 - Ganache 33F6)',
     todayLogs: [],
   },
   {
@@ -209,29 +185,29 @@ export const initialMachines = [
     type: 'Multi-Bed Thermal Press T5',
     category: 'Other',
     operatorName: 'Dinesh Bandara',
-    shift: 'Shift B',
+    shift: 'Day Shift',
     status: 'Active',
-    dailyTargetQty: 2600,
+    dailyTargetQty: 3000,
     assignedStyles: ['Technical Finish Trim - 57H1'],
     assignedColours: ['Talc 69-09-47 57H1'],
     assignedSizes: ['10', '12', '14', '16', '18'],
     assignedPos: ['4502991562'],
     qrPayload: 'MCH-05',
-    notes: 'Heat seal and adhesive curing bed',
+    notes: 'Heat seal and adhesive curing bed (PO 4502991562 - Talc 69-09-47 57H1)',
     todayLogs: [],
   },
 ];
 
 export const initialWorkers = [
-  { id: 'WRK-01', name: 'Sunil Perera', empId: 'EMP-1041', category: 'Loop', shift: 'Shift A', status: 'Active', phone: '+94 77 123 4567', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-02', name: 'Kavinda Perera', empId: 'EMP-1042', category: 'Loop', shift: 'Shift B', status: 'Active', phone: '+94 77 234 5678', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-03', name: 'Nimal Jayawardena', empId: 'EMP-1043', category: 'Loop', shift: 'Shift A', status: 'Active', phone: '+94 77 345 6789', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-04', name: 'Pradeep Silva', empId: 'EMP-1044', category: 'Strap', shift: 'Shift A', status: 'Active', phone: '+94 77 456 7890', assignedMachine: 'MCH-02', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-05', name: 'Ruwan Gamage', empId: 'EMP-1045', category: 'Strap', shift: 'Shift B', status: 'Active', phone: '+94 77 567 8901', assignedMachine: 'MCH-02', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-06', name: 'Chamari Wickramasinghe', empId: 'EMP-1046', category: 'T-shirt', shift: 'Shift A', status: 'Active', phone: '+94 77 678 9012', assignedMachine: 'MCH-03', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-07', name: 'Kusum Fernando', empId: 'EMP-1047', category: 'T-shirt', shift: 'Shift B', status: 'Active', phone: '+94 77 789 0123', assignedMachine: 'MCH-03', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-08', name: 'Roshan Kumara', empId: 'EMP-1048', category: 'Other', shift: 'Shift A', status: 'Active', phone: '+94 77 890 1234', assignedMachine: 'MCH-04', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
-  { id: 'WRK-09', name: 'Dinesh Bandara', empId: 'EMP-1049', category: 'Other', shift: 'Shift B', status: 'Active', phone: '+94 77 901 2345', assignedMachine: 'MCH-05', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-01', name: 'Sunil Perera', empId: 'EMP-1041', category: 'Loop', shift: 'Day Shift', status: 'Active', phone: '+94 77 123 4567', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-02', name: 'Kavinda Perera', empId: 'EMP-1042', category: 'Loop', shift: 'Day Shift', status: 'Active', phone: '+94 77 234 5678', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-03', name: 'Nimal Jayawardena', empId: 'EMP-1043', category: 'Loop', shift: 'Day Shift', status: 'Active', phone: '+94 77 345 6789', assignedMachine: 'MCH-01', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-04', name: 'Pradeep Silva', empId: 'EMP-1044', category: 'Strap', shift: 'Day Shift', status: 'Active', phone: '+94 77 456 7890', assignedMachine: 'MCH-02', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-05', name: 'Ruwan Gamage', empId: 'EMP-1045', category: 'Strap', shift: 'Day Shift', status: 'Active', phone: '+94 77 567 8901', assignedMachine: 'MCH-02', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-06', name: 'Chamari Wickramasinghe', empId: 'EMP-1046', category: 'T-shirt', shift: 'Day Shift', status: 'Active', phone: '+94 77 678 9012', assignedMachine: 'MCH-03', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-07', name: 'Kusum Fernando', empId: 'EMP-1047', category: 'T-shirt', shift: 'Night Shift', status: 'Active', phone: '+94 77 789 0123', assignedMachine: 'MCH-03', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-08', name: 'Roshan Kumara', empId: 'EMP-1048', category: 'Other', shift: 'Day Shift', status: 'Active', phone: '+94 77 890 1234', assignedMachine: 'MCH-04', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
+  { id: 'WRK-09', name: 'Dinesh Bandara', empId: 'EMP-1049', category: 'Other', shift: 'Night Shift', status: 'Active', phone: '+94 77 901 2345', assignedMachine: 'MCH-05', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
 ];
 
 export const initialProductionLogs = [];
@@ -239,8 +215,8 @@ export const initialProductionLogs = [];
 export const initialOrders = rawProductionRows.map((row, idx) => {
   const id = `ORD-${String(idx + 1).padStart(3, '0')}`;
   const barcode = `BTX-${row.poNumber}-${row.size}`;
-  const balanceQty = row.orderQty;
-  const deliveryBalanceQty = row.orderQty;
+  const balanceQty = Math.max(0, row.orderQty - row.productionQty);
+  const deliveryBalanceQty = Math.max(0, row.orderQty - row.deliveryQty);
 
   return {
     id,
@@ -253,14 +229,22 @@ export const initialOrders = rawProductionRows.map((row, idx) => {
     styleCode: row.styleCode,
     barcode,
     orderQty: row.orderQty,
-    productionQty: 0,
-    deliveryQty: 0,
+    productionQty: row.productionQty,
+    deliveryQty: row.deliveryQty,
     balanceQty,
     deliveryBalanceQty,
     startDate: getPastDateStr(14 + (idx % 7)),
     targetDate: getFutureDateStr(6 + (idx % 8)),
-    status: 'Scheduled',
+    status: row.status,
     priority: idx % 3 === 0 ? 'High' : idx % 4 === 0 ? 'Critical' : 'Normal',
-    dailyLogs: [],
+    dailyLogs: row.productionQty > 0 ? [
+      {
+        date: getPastDateStr(1),
+        planQty: Math.round(row.orderQty / 5),
+        actualQty: row.productionQty,
+        deliveryQty: row.deliveryQty,
+        notes: 'Factory verified production records',
+      }
+    ] : [],
   };
 });
