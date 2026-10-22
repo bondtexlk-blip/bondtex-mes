@@ -19,6 +19,7 @@ class ClientDatabaseStore {
     this.machines = [];
     this.workers = [];
     this.productionLogs = [];
+    this.deliveryReceivedLogs = [];
     this.init();
   }
 
@@ -32,6 +33,7 @@ class ClientDatabaseStore {
         this.machines = Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines));
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
+        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
       } else {
         this.reset();
       }
@@ -52,6 +54,7 @@ class ClientDatabaseStore {
             machines: this.machines,
             workers: this.workers,
             productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
             lastSaved: new Date().toISOString(),
           })
         );
@@ -67,6 +70,7 @@ class ClientDatabaseStore {
     this.machines = JSON.parse(JSON.stringify(initialMachines));
     this.workers = JSON.parse(JSON.stringify(initialWorkers));
     this.productionLogs = [];
+    this.deliveryReceivedLogs = [];
     this.ensureSpecialMachines();
     this.save();
     return { success: true, count: this.orders.length };
@@ -997,6 +1001,189 @@ class ClientDatabaseStore {
         activeMachinesCount: machineTables.length,
       },
       machines: machineTables,
+    };
+  }
+
+  // Delivery & Received Multi-Step Workflow Engine
+  recordDeliveryReceived(payload) {
+    const {
+      type = 'Delivery', // 'Delivery' | 'Received'
+      subCategory = 'Outsource', // 'Outsource' | 'Permanent' | 'Internal'
+      outsourcePartner = null, // 'Saroja' | 'Anoja' | 'Iresh'
+      poNumber,
+      colour,
+      size,
+      qty = 0,
+      items = [],
+      notes = '',
+      handlerName = 'Dispatcher',
+    } = payload;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const createdLogs = [];
+
+    const entries = Array.isArray(items) && items.length > 0
+      ? items
+      : [{ size, qty, colour, poNumber }];
+
+    for (const item of entries) {
+      const targetPo = item.poNumber || poNumber;
+      const targetColour = item.colour || colour;
+      const targetSize = String(item.size || size || '').trim();
+      const numQty = Math.max(1, Number(item.qty || qty) || 0);
+
+      // Find matching order by PO #, Colour, Size
+      const order = this.orders.find((o) => {
+        const matchPo = o.poNumber === targetPo || o.id === targetPo;
+        const matchColour = !targetColour || (o.colour || '').toLowerCase() === targetColour.toLowerCase();
+        const matchSize = !targetSize || String(o.size).trim() === targetSize;
+        return matchPo && matchColour && matchSize;
+      }) || this.orders.find((o) => o.poNumber === targetPo);
+
+      let calculationEffect = '';
+      let dayTargetDeduction = 0;
+      let balanceDeduction = 0;
+
+      if (type === 'Delivery') {
+        if (subCategory === 'Outsource') {
+          // 1. Outsource Delivery: Deduct from day's target
+          dayTargetDeduction = numQty;
+          if (order) {
+            order.dayTargetDeduction = (Number(order.dayTargetDeduction) || 0) + numQty;
+          }
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target (${outsourcePartner || 'Outsource'})`;
+        } else if (subCategory === 'Permanent') {
+          // 2. Permanent Delivery: Deduct from system balance, allowing tracking of order completion status
+          balanceDeduction = numQty;
+          if (order) {
+            order.deliveryQty = (Number(order.deliveryQty) || 0) + numQty;
+            order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+            order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+
+            if (order.balanceQty === 0) {
+              order.status = 'Completed';
+            } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
+              order.status = 'Ahead';
+            }
+
+            if (!order.dailyLogs) order.dailyLogs = [];
+            order.dailyLogs.push({
+              date: todayStr,
+              planQty: 0,
+              actualQty: 0,
+              deliveryQty: numQty,
+              notes: `Permanent Dispatch (${numQty} pcs)`,
+            });
+          }
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from System Balance (Remaining: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs)`;
+        }
+      } else {
+        // Received Flow
+        calculationEffect = `Received ${numQty.toLocaleString()} pcs into warehouse from ${outsourcePartner || 'Partner'}`;
+      }
+
+      const logEntry = {
+        id: `DLR-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        type,
+        subCategory: type === 'Delivery' ? subCategory : 'Received',
+        outsourcePartner: outsourcePartner || (type === 'Received' ? payload.receivedSource || 'Supplier' : null),
+        poNumber: order ? order.poNumber : targetPo,
+        colour: order ? order.colour : (targetColour || 'All'),
+        size: order ? String(order.size) : (targetSize || 'All'),
+        qty: numQty,
+        calculationEffect,
+        dayTargetDeduction,
+        balanceDeduction,
+        systemBalanceAfter: order ? order.balanceQty : null,
+        orderStatusAfter: order ? order.status : null,
+        date: todayStr,
+        timestamp: new Date().toISOString(),
+        handlerName,
+        notes: notes || '',
+      };
+
+      if (!this.deliveryReceivedLogs) this.deliveryReceivedLogs = [];
+      this.deliveryReceivedLogs.unshift(logEntry);
+      createdLogs.push(logEntry);
+    }
+
+    this.save();
+
+    return {
+      success: true,
+      message: `${type} transaction recorded successfully!`,
+      logs: createdLogs,
+    };
+  }
+
+  getDeliveryReceivedLogs(params = {}) {
+    const {
+      type = 'All',
+      subCategory = 'All',
+      partner = 'All',
+      poNumber = '',
+      search = '',
+      limit = 100,
+    } = params;
+
+    let list = this.deliveryReceivedLogs || [];
+
+    if (type !== 'All') {
+      list = list.filter((l) => l.type.toLowerCase() === type.toLowerCase());
+    }
+    if (subCategory !== 'All') {
+      list = list.filter((l) => (l.subCategory || '').toLowerCase() === subCategory.toLowerCase());
+    }
+    if (partner !== 'All') {
+      list = list.filter((l) => (l.outsourcePartner || '').toLowerCase() === partner.toLowerCase());
+    }
+    if (poNumber) {
+      list = list.filter((l) => l.poNumber === poNumber);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((l) =>
+        (l.poNumber || '').toLowerCase().includes(q) ||
+        (l.colour || '').toLowerCase().includes(q) ||
+        (l.size || '').toLowerCase().includes(q) ||
+        (l.outsourcePartner || '').toLowerCase().includes(q) ||
+        (l.handlerName || '').toLowerCase().includes(q)
+      );
+    }
+
+    // Summary calculations
+    const allLogs = this.deliveryReceivedLogs || [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLogs = allLogs.filter((l) => l.date === todayStr);
+
+    const outsourceDeliveredToday = todayLogs
+      .filter((l) => l.type === 'Delivery' && l.subCategory === 'Outsource')
+      .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    const permanentDeliveredToday = todayLogs
+      .filter((l) => l.type === 'Delivery' && l.subCategory === 'Permanent')
+      .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    const totalReceivedToday = todayLogs
+      .filter((l) => l.type === 'Received')
+      .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    const partnerBreakdown = {
+      Saroja: todayLogs.filter((l) => l.outsourcePartner === 'Saroja').reduce((sum, l) => sum + Number(l.qty), 0),
+      Anoja: todayLogs.filter((l) => l.outsourcePartner === 'Anoja').reduce((sum, l) => sum + Number(l.qty), 0),
+      Iresh: todayLogs.filter((l) => l.outsourcePartner === 'Iresh').reduce((sum, l) => sum + Number(l.qty), 0),
+    };
+
+    return {
+      success: true,
+      logs: list.slice(0, Number(limit) || 100),
+      totalLogs: list.length,
+      summary: {
+        outsourceDeliveredToday,
+        permanentDeliveredToday,
+        totalReceivedToday,
+        partnerBreakdown,
+      },
     };
   }
 }

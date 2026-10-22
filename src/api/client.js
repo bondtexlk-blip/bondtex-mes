@@ -252,7 +252,30 @@ export const api = {
     return { success: true, data };
   },
 
-  // 18. Export CSV URL
+  // 18. Delivery & Received Workflow API
+  getDeliveryReceivedLogs: async (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.type) q.append('type', params.type);
+    if (params.subCategory) q.append('subCategory', params.subCategory);
+    if (params.partner) q.append('partner', params.partner);
+    if (params.poNumber) q.append('poNumber', params.poNumber);
+    if (params.search) q.append('search', params.search);
+    const remote = await safeFetchJson(`${BASE_URL}/delivery-received?${q.toString()}`);
+    if (remote && remote.success) return remote;
+    return dbStore.getDeliveryReceivedLogs(params);
+  },
+
+  recordDeliveryReceived: async (payload) => {
+    const remote = await safeFetchJson(`${BASE_URL}/delivery-received`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.recordDeliveryReceived(payload);
+  },
+
+  // 19. Export CSV URL
   getExportUrl: (filters = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {

@@ -95,6 +95,17 @@ export default function Navbar({
             Hourly Production
           </button>
           <button
+            onClick={() => setActiveView('delivery-received')}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+              activeView === 'delivery-received'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-purple-400 hover:text-purple-300'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+            Delivery & Received
+          </button>
+          <button
             onClick={() => setActiveView('drilldown')}
             className={`px-3 py-1.5 rounded-xl transition ${
               activeView === 'drilldown'

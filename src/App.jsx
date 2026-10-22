@@ -15,6 +15,7 @@ import AdminPanel from './components/AdminPanel';
 import WorkerPortal from './components/WorkerPortal';
 import DailyProductionDashboard from './components/DailyProductionDashboard';
 import HourlyProductionDashboard from './components/HourlyProductionDashboard';
+import DeliveryReceivedDashboard from './components/DeliveryReceivedDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { api } from './api/client';
 import {
@@ -108,6 +109,8 @@ export default function App() {
         setActiveView('daily-production');
       } else if (viewParam === 'hourly-production' || viewParam === 'hourly') {
         setActiveView('hourly-production');
+      } else if (viewParam === 'delivery-received' || viewParam === 'delivery') {
+        setActiveView('delivery-received');
       } else if (viewParam === 'admin') {
         setActiveView('admin');
       } else if (viewParam === 'drilldown') {
@@ -345,6 +348,13 @@ export default function App() {
                 onShowToast={showToast}
                 theme={theme}
                 onToggleTheme={toggleTheme}
+              />
+            ) : activeView === 'delivery-received' ? (
+              /* 2C. DEDICATED DELIVERY & RECEIVED DASHBOARD (FIXED QR SCANNER & MULTI-STEP WORKFLOW) */
+              <DeliveryReceivedDashboard
+                onShowToast={showToast}
+                onNavigateToView={(v) => setActiveView(v)}
+                theme={theme}
               />
             ) : activeView === 'drilldown' ? (
               /* 3. DETAILED DRILL-DOWN & SEARCH PAGE */

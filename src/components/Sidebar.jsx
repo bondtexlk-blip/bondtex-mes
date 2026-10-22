@@ -16,6 +16,7 @@ import {
   QrCode,
   Calendar,
   Clock,
+  Truck,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -121,6 +122,26 @@ export default function Sidebar({
                 </div>
                 <span className="text-[10px] bg-amber-950/80 text-amber-400 border border-amber-800/50 px-1.5 py-0.5 rounded font-mono">
                   Machines
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveView('delivery-received');
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeView === 'delivery-received'
+                    ? 'bg-purple-600/15 text-purple-400 border border-purple-500/30 shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Truck className="w-4 h-4 text-purple-400" />
+                  <span>Delivery & Received</span>
+                </div>
+                <span className="text-[10px] bg-purple-950/80 text-purple-400 border border-purple-800/50 px-1.5 py-0.5 rounded font-mono">
+                  QR Logic
                 </span>
               </button>
 

@@ -310,4 +310,23 @@ router.get('/hourly-production', (req, res) => {
   }
 });
 
+// 21. Delivery & Received Multi-Step Workflow
+router.get('/delivery-received', (req, res) => {
+  try {
+    const data = db.getDeliveryReceivedLogs(req.query);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/delivery-received', (req, res) => {
+  try {
+    const result = db.recordDeliveryReceived(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
 export default router;
