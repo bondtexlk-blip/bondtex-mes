@@ -26,6 +26,10 @@ import {
   ShieldAlert,
   Cpu,
   RotateCcw,
+  Edit2,
+  Trash2,
+  X,
+  AlertCircle,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
@@ -50,7 +54,8 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const [activeMachine, setActiveMachine] = useState(null);
   const [selectedPo, setSelectedPo] = useState('4502991550');
   const [selectedColour, setSelectedColour] = useState('Black 093 54A2');
-  const [sizeQuantities, setSizeQuantities] = useState({});
+  // Staged entries map: key = `${poNumber}__${colour}__${size}` => quantity
+  const [stagedEntries, setStagedEntries] = useState({});
   const [handlerName, setHandlerName] = useState('Floor Dispatcher');
   const [notes, setNotes] = useState('');
 
@@ -68,6 +73,15 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [successBanner, setSuccessBanner] = useState(null);
+
+  // Edit Transaction Modal State
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editPartner, setEditPartner] = useState('Saroja');
+  const [editSubCategory, setEditSubCategory] = useState('Outsource');
+  const [editHandler, setEditHandler] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // 4. Fixed QR Scanner Interface State
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -157,44 +171,101 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     }
   };
 
-  // Handle quantity changes for a specific size
+  const getEntryKey = (po, col, sz) => `${po}__${col}__${sz}`;
+
+  // Get current quantity for a size under selected PO & Colour
+  const getSizeQuantity = (size) => {
+    const key = getEntryKey(selectedPo, selectedColour, size);
+    return stagedEntries[key] || '';
+  };
+
+  // Handle quantity changes for a specific size under current PO & Colour
   const handleQuantityChange = (size, val) => {
     const cleanNum = val.replace(/[^0-9]/g, '');
-    setSizeQuantities((prev) => ({
-      ...prev,
-      [size]: cleanNum,
-    }));
+    const key = getEntryKey(selectedPo, selectedColour, size);
+    setStagedEntries((prev) => {
+      const next = { ...prev };
+      if (!cleanNum || cleanNum === '0') {
+        delete next[key];
+      } else {
+        next[key] = cleanNum;
+      }
+      return next;
+    });
   };
 
   // Quick add helper
   const handleQuickAdd = (size, delta) => {
-    const current = Number(sizeQuantities[size]) || 0;
+    const key = getEntryKey(selectedPo, selectedColour, size);
+    const current = Number(stagedEntries[key]) || 0;
     const nextVal = Math.max(0, current + delta);
-    setSizeQuantities((prev) => ({
-      ...prev,
-      [size]: String(nextVal),
-    }));
+    setStagedEntries((prev) => {
+      const next = { ...prev };
+      if (nextVal <= 0) {
+        delete next[key];
+      } else {
+        next[key] = String(nextVal);
+      }
+      return next;
+    });
   };
 
   // Fill maximum balance
   const handleFillMaxBalance = (size, balance) => {
-    setSizeQuantities((prev) => ({
+    const key = getEntryKey(selectedPo, selectedColour, size);
+    setStagedEntries((prev) => ({
       ...prev,
-      [size]: String(balance),
+      [key]: String(balance),
     }));
   };
 
-  // Explicitly clear entered quantities
-  const handleClearInputs = () => {
-    setSizeQuantities({});
-    if (onShowToast) onShowToast('Reset size quantities', 'info');
+  // Remove a single staged entry
+  const handleRemoveStagedItem = (keyToRemove) => {
+    setStagedEntries((prev) => {
+      const next = { ...prev };
+      delete next[keyToRemove];
+      return next;
+    });
   };
 
-  // Total calculated pieces across all sizes
-  const totalEnteredQty = Object.values(sizeQuantities).reduce(
-    (sum, q) => sum + (Number(q) || 0),
-    0
-  );
+  // Explicitly clear all entered quantities
+  const handleClearInputs = () => {
+    setStagedEntries({});
+    if (onShowToast) onShowToast('Reset all staged quantities', 'info');
+  };
+
+  // All staged items across any PO, Colour, and Size
+  const allStagedItems = Object.entries(stagedEntries)
+    .filter(([_, q]) => Number(q) > 0)
+    .map(([key, q]) => {
+      const [po, col, sz] = key.split('__');
+      const orderMatch = orders.find(
+        (o) =>
+          o.poNumber === po &&
+          (o.colour || '').toLowerCase() === (col || '').toLowerCase() &&
+          String(o.size) === String(sz)
+      );
+      return {
+        key,
+        poNumber: po,
+        colour: col,
+        size: sz,
+        qty: Number(q),
+        orderMatch,
+      };
+    });
+
+  // Total calculated pieces across ALL staged items
+  const totalEnteredQty = allStagedItems.reduce((sum, item) => sum + item.qty, 0);
+
+  // Helper to count entered pieces for a specific colour under current PO
+  const getColourEnteredQty = (col) => {
+    return allStagedItems
+      .filter(
+        (item) => item.poNumber === selectedPo && (item.colour || '').toLowerCase() === (col || '').toLowerCase()
+      )
+      .reduce((sum, item) => sum + item.qty, 0);
+  };
 
   // Fixed QR Scanner: Camera handler
   const startCamera = async () => {
@@ -331,9 +402,10 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       setSelectedPo(matchedOrder.poNumber);
       setSelectedColour(matchedOrder.colour);
       if (matchedOrder.size) {
-        setSizeQuantities((prev) => ({
+        const key = getEntryKey(matchedOrder.poNumber, matchedOrder.colour, matchedOrder.size);
+        setStagedEntries((prev) => ({
           ...prev,
-          [matchedOrder.size]: prev[matchedOrder.size] || '100',
+          [key]: prev[key] || '100',
         }));
       }
       setScannerStatus(`✅ Scanned PO #${matchedOrder.poNumber} (${matchedOrder.colour})`);
@@ -352,27 +424,20 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const handleSubmitTransaction = async (e) => {
     e.preventDefault();
 
-    // Prepare items with quantity > 0
-    const items = [];
-    currentSizeOrders.forEach((orderRow) => {
-      const qty = Number(sizeQuantities[orderRow.size]) || 0;
-      if (qty > 0) {
-        items.push({
-          poNumber: orderRow.poNumber,
-          colour: orderRow.colour,
-          size: orderRow.size,
-          qty,
-        });
-      }
-    });
-
-    if (items.length === 0) {
-      if (onShowToast) onShowToast('Please enter a quantity for at least one size', 'error');
+    if (allStagedItems.length === 0) {
+      if (onShowToast) onShowToast('Please enter a quantity for at least one size before saving', 'error');
       return;
     }
 
     try {
       setSubmitting(true);
+      const items = allStagedItems.map((item) => ({
+        poNumber: item.poNumber,
+        colour: item.colour,
+        size: item.size,
+        qty: item.qty,
+      }));
+
       const payload = {
         type: selectedType,
         subCategory: selectedType === 'Delivery' ? selectedDeliverySub : 'Received',
@@ -412,7 +477,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
         if (onShowToast) onShowToast(effectMsg, 'success');
 
         // Reset entered quantities upon successful transaction
-        setSizeQuantities({});
+        setStagedEntries({});
         setNotes('');
 
         // Reload data and recalculate
@@ -424,6 +489,73 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       if (onShowToast) onShowToast(err.message || 'Failed to save transaction', 'error');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Open Edit Modal for a Transaction
+  const handleOpenEdit = (log) => {
+    setEditingTransaction(log);
+    setEditQty(String(log.qty || ''));
+    setEditPartner(log.outsourcePartner || 'Saroja');
+    setEditSubCategory(log.subCategory || 'Outsource');
+    setEditHandler(log.handlerName || '');
+    setEditNotes(log.notes || '');
+  };
+
+  // Save Transaction Edits & Re-synchronize Database Balances
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editingTransaction) return;
+    const num = Number(editQty);
+    if (!num || num <= 0) {
+      if (onShowToast) onShowToast('Please enter a valid quantity greater than zero', 'error');
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      const res = await api.updateDeliveryReceived(editingTransaction.id, {
+        qty: num,
+        outsourcePartner: editPartner,
+        subCategory: editSubCategory,
+        handlerName: editHandler,
+        notes: editNotes,
+      });
+
+      if (res && res.success) {
+        playBeep();
+        if (onShowToast) onShowToast(res.message || 'Transaction updated and balances recalculated!', 'success');
+        setEditingTransaction(null);
+        await loadData();
+      } else {
+        if (onShowToast) onShowToast(res?.message || 'Failed to update transaction', 'error');
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message || 'Error updating transaction', 'error');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete Transaction & Reverse Impacts
+  const handleDeleteTransaction = async (log) => {
+    const confirmMsg = `Are you sure you want to delete transaction #${log.id} (${formatNumber(log.qty)} pcs of PO ${log.poNumber}, Size ${log.size})?\n\nThis will permanently reverse the deduction and restore the quantity back to balances!`;
+    if (window.confirm(confirmMsg)) {
+      try {
+        setLoading(true);
+        const res = await api.deleteDeliveryReceived(log.id);
+        if (res && res.success) {
+          playBeep();
+          if (onShowToast) onShowToast(res.message || `Transaction #${log.id} deleted. Balances reversed!`, 'success');
+          await loadData();
+        } else {
+          if (onShowToast) onShowToast(res?.message || 'Failed to delete transaction', 'error');
+        }
+      } catch (err) {
+        if (onShowToast) onShowToast(err.message, 'error');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -850,26 +982,44 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                 </select>
               </div>
 
-              {/* Colour Selector */}
+              {/* Colour Selector with Multi-Selection Quantities Indicator */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-400">
-                  Select Product Colour:
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-400">
+                    Select Product Colour:
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Tap to switch colour without losing entered quantities
+                  </span>
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  {availableColours.map((col) => (
-                    <button
-                      key={col}
-                      type="button"
-                      onClick={() => setSelectedColour(col)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
-                        selectedColour.toLowerCase() === col.toLowerCase()
-                          ? 'bg-blue-600 text-white border-blue-400 shadow-md'
-                          : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {col}
-                    </button>
-                  ))}
+                  {availableColours.map((col) => {
+                    const enteredForCol = getColourEnteredQty(col);
+                    const isSelected = selectedColour.toLowerCase() === col.toLowerCase();
+                    return (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => setSelectedColour(col)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white border-blue-400 shadow-md ring-1 ring-blue-300'
+                            : 'bg-slate-950/70 text-slate-300 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <span>{col}</span>
+                        {enteredForCol > 0 && (
+                          <span
+                            className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-black ${
+                              isSelected ? 'bg-white text-blue-900' : 'bg-cyan-500/20 text-cyan-300'
+                            }`}
+                          >
+                            +{enteredForCol.toLocaleString()} pcs
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -885,9 +1035,10 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                 <div className="space-y-2">
                   {currentSizeOrders.map((orderRow) => {
                     const size = String(orderRow.size);
-                    const qtyVal = sizeQuantities[size] || '';
-                    const balance = Number(orderRow.balanceQty) || 0;
+                    const qtyVal = getSizeQuantity(size);
                     const orderQty = Number(orderRow.orderQty) || 0;
+                    const productionQty = Number(orderRow.productionQty) || 0;
+                    const calculatedBalance = Math.max(0, orderQty - productionQty);
 
                     return (
                       <div
@@ -903,7 +1054,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                               Size {size} — {orderRow.colour}
                             </div>
                             <div className="text-[10px] text-slate-400 font-mono">
-                              Plan: {formatNumber(orderQty)} | Balance: <span className="text-amber-400 font-bold">{formatNumber(balance)}</span> pcs
+                              Plan: {formatNumber(orderQty)} | Actual: {formatNumber(productionQty)} | Balance: <span className="text-amber-400 font-bold">{formatNumber(calculatedBalance)}</span> pcs
                             </div>
                           </div>
                         </div>
@@ -935,7 +1086,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleFillMaxBalance(size, balance)}
+                              onClick={() => handleFillMaxBalance(size, calculatedBalance)}
                               className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-[10px] font-bold"
                               title="Fill All Remaining Balance"
                             >
@@ -948,6 +1099,58 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   })}
                 </div>
               </div>
+
+              {/* STAGED DISPATCH ITEMS REVIEW PANEL (Holds entries across multiple colours/sizes) */}
+              {allStagedItems.length > 0 && (
+                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <PackageCheck className="w-4 h-4 text-cyan-400" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider">
+                        Staged Dispatch Review ({allStagedItems.length} line items)
+                      </span>
+                    </div>
+                    <span className="font-mono text-xs font-black text-cyan-400 bg-cyan-950 px-2.5 py-1 rounded-lg border border-cyan-500/30">
+                      Batch Total: {totalEnteredQty.toLocaleString()} pcs
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {allStagedItems.map((item) => (
+                      <div
+                        key={item.key}
+                        className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="flex items-center gap-2.5 truncate">
+                          <span className="px-2 py-0.5 rounded-lg bg-blue-600/20 text-blue-300 font-mono font-bold text-[11px] border border-blue-500/30">
+                            PO #{item.poNumber}
+                          </span>
+                          <span className="text-slate-300 font-medium truncate">
+                            {item.colour}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-slate-800 text-white font-mono font-bold text-[11px]">
+                            Sz {item.size}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="font-mono font-black text-cyan-300">
+                            {item.qty.toLocaleString()} pcs
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveStagedItem(item.key)}
+                            className="p-1 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
+                            title="Remove from batch"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Handler & Notes */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
@@ -1266,12 +1469,13 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                 <th className="py-3 px-4 text-right">Quantity</th>
                 <th className="py-3 px-4">Calculation Impact</th>
                 <th className="py-3 px-4">Operator</th>
+                <th className="py-3 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-mono">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500 text-xs">
+                  <td colSpan={11} className="py-12 text-center text-slate-500 text-xs">
                     No transactions found in ledger matching your filter.
                   </td>
                 </tr>
@@ -1351,6 +1555,27 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                       <td className="py-3 px-4 text-slate-400 font-sans whitespace-nowrap text-[11px]">
                         {log.handlerName || 'Operator'}
                       </td>
+
+                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(log)}
+                            className="p-1.5 rounded-xl bg-blue-600/15 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition shadow-sm active:scale-95"
+                            title="Edit Transaction Quantity / Details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(log)}
+                            className="p-1.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 transition shadow-sm active:scale-95"
+                            title="Delete Transaction & Reverse Balances"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -1359,6 +1584,174 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
           </table>
         </div>
       </div>
+
+      {/* ========================================================= */}
+      {/* EDIT TRANSACTION MODAL & BALANCE RECONCILIATION DIALOG    */}
+      {/* ========================================================= */}
+      {editingTransaction && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    Edit Transaction #{editingTransaction.id}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    PO #{editingTransaction.poNumber} • {editingTransaction.colour} • Size {editingTransaction.size}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingTransaction(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              {/* Transaction Type Info */}
+              <div className="p-3 rounded-2xl bg-slate-950/80 border border-slate-800 grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-slate-500 block uppercase">Transaction Type</span>
+                  <span className="font-bold text-white">
+                    {editingTransaction.type} ({editingTransaction.subCategory || 'Standard'})
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block uppercase">Originally Recorded</span>
+                  <span className="font-mono font-bold text-cyan-400">
+                    {formatNumber(editingTransaction.qty)} pcs
+                  </span>
+                </div>
+              </div>
+
+              {/* 1. Adjusted Quantity Input */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                  Adjust Quantity (pcs):
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editQty}
+                  onChange={(e) => setEditQty(e.target.value)}
+                  required
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono font-black text-lg focus:outline-none focus:border-blue-500"
+                />
+                <div className="text-[10px] text-slate-400 mt-1">
+                  Difference:{' '}
+                  <span
+                    className={
+                      Number(editQty) > Number(editingTransaction.qty)
+                        ? 'text-amber-400 font-bold'
+                        : 'text-emerald-400 font-bold'
+                    }
+                  >
+                    {Number(editQty) - Number(editingTransaction.qty) >= 0 ? '+' : ''}
+                    {Number(editQty) - Number(editingTransaction.qty)} pcs
+                  </span>{' '}
+                  (system balances and quotas will be automatically reversed and reconciled)
+                </div>
+              </div>
+
+              {/* 2. Sub-Category Selector if Delivery */}
+              {editingTransaction.type === 'Delivery' && (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                    Delivery Sub-Category:
+                  </label>
+                  <select
+                    value={editSubCategory}
+                    onChange={(e) => setEditSubCategory(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Outsource">Outsource (Deducts from Day's Target)</option>
+                    <option value="Permanent">Permanent (Deducts from Balance & Product Qty)</option>
+                  </select>
+                </div>
+              )}
+
+              {/* 3. Partner / Unit */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                  Partner / Unit Destination:
+                </label>
+                <select
+                  value={editPartner}
+                  onChange={(e) => setEditPartner(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs font-semibold focus:outline-none focus:border-blue-500"
+                >
+                  <option value="Saroja">Saroja</option>
+                  <option value="Anoja">Anoja</option>
+                  <option value="Iresh">Iresh</option>
+                  <option value="Factory">Factory</option>
+                </select>
+              </div>
+
+              {/* 4. Operator Name */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                  Operator / Handler Name:
+                </label>
+                <input
+                  type="text"
+                  value={editHandler}
+                  onChange={(e) => setEditHandler(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* 5. Notes */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                  Reference Notes:
+                </label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingTransaction(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={savingEdit || !editQty || Number(editQty) <= 0}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-bold text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingEdit ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving & Recalculating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Save & Update Balances</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

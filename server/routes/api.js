@@ -329,4 +329,28 @@ router.post('/delivery-received', (req, res) => {
   }
 });
 
+router.put('/delivery-received/:id', (req, res) => {
+  try {
+    const result = db.updateDeliveryReceived(req.params.id, req.body);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/delivery-received/:id', (req, res) => {
+  try {
+    const result = db.deleteDeliveryReceived(req.params.id);
+    if (!result.success) {
+      return res.status(404).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;

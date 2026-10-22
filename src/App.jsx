@@ -69,6 +69,14 @@ export default function App() {
 
   // Navigation & View States: 'dashboard' | 'drilldown' | 'admin' | 'worker'
   const [activeView, setActiveView] = useState('dashboard');
+  const [isRestrictedWorkerMode, setIsRestrictedWorkerMode] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('view') === 'worker';
+    } catch {
+      return false;
+    }
+  });
   const [selectedCategoryModal, setSelectedCategoryModal] = useState(null);
   const [drilldownCategory, setDrilldownCategory] = useState('All');
   const [workerMachineId, setWorkerMachineId] = useState('MCH-01');
@@ -109,6 +117,7 @@ export default function App() {
 
       if (viewParam === 'worker') {
         setActiveView('worker');
+        setIsRestrictedWorkerMode(true);
         if (machineParam) setWorkerMachineId(machineParam);
       } else if (viewParam === 'daily-production' || viewParam === 'daily') {
         setActiveView('daily-production');
@@ -204,6 +213,47 @@ export default function App() {
       }
     }
   };
+
+  // Dedicated Fullscreen Worker Portal Interface (Restricted Floor Mode for QR Scans)
+  if (activeView === 'worker') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen bg-[#070b14] text-slate-100 flex flex-col overflow-y-auto z-50 selection:bg-blue-600 selection:text-white">
+        {/* Toast Notification */}
+        {notification && (
+          <div className="fixed top-4 right-4 z-50 animate-bounce">
+            <div
+              className={`px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-semibold flex items-center gap-2 ${
+                notification.type === 'error'
+                  ? 'bg-rose-950/90 text-rose-300 border-rose-500/50'
+                  : 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        )}
+
+        <ErrorBoundary onReset={() => setActiveView('dashboard')}>
+          <WorkerPortal
+            initialMachineId={workerMachineId}
+            isRestrictedMode={isRestrictedWorkerMode}
+            onBackToDashboard={
+              isRestrictedWorkerMode ? null : () => setActiveView('dashboard')
+            }
+            onUnlockDashboard={() => {
+              setIsRestrictedWorkerMode(false);
+              setActiveView('dashboard');
+            }}
+            onShowToast={showToast}
+            onDataUpdated={loadDashboardData}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        </ErrorBoundary>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0b1120] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">

@@ -374,7 +374,11 @@ export default function OrderTable({
                             : 'text-rose-400'
                         }`}
                       >
-                        {formatNumber(order.balanceQty)}
+                        {formatNumber(
+                          order.balanceQty !== undefined
+                            ? order.balanceQty
+                            : Math.max(0, (Number(order.orderQty) || 0) - (Number(order.productionQty) || 0))
+                        )}
                       </span>
                     </td>
 

@@ -42,6 +42,7 @@ class ProductionDatabase {
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
         this.ensureSpecialMachines();
+        this.ensureOrderCalculations();
       } else {
         this.reset();
       }
@@ -51,8 +52,28 @@ class ProductionDatabase {
     }
   }
 
+  ensureOrderCalculations() {
+    this.orders.forEach((o) => {
+      o.orderQty = Number(o.orderQty) || 0;
+      o.productionQty = Number(o.productionQty) || 0;
+      o.deliveryQty = Number(o.deliveryQty) || 0;
+      o.balanceQty = Math.max(0, o.orderQty - o.productionQty);
+      o.deliveryBalanceQty = Math.max(0, o.orderQty - o.deliveryQty);
+      if (o.balanceQty === 0) {
+        o.status = 'Completed';
+      } else if (o.productionQty >= o.orderQty * 0.9) {
+        o.status = 'Ahead';
+      } else if (o.productionQty === 0) {
+        o.status = 'Scheduled';
+      } else {
+        o.status = 'Behind Plan';
+      }
+    });
+  }
+
   save() {
     try {
+      this.ensureOrderCalculations();
       fs.writeFileSync(
         DATA_FILE,
         JSON.stringify(
@@ -888,6 +909,10 @@ class ProductionDatabase {
       const latestDaily = (order.dailyLogs || []).find((dl) => dl.date === targetDate);
       const dayPlan = latestDaily ? Number(latestDaily.planQty) : Math.round(order.orderQty / 10);
 
+      const numOrderQty = Number(order.orderQty) || 0;
+      const numProductionQty = Number(order.productionQty) || 0;
+      const calculatedBalance = Math.max(0, numOrderQty - numProductionQty);
+
       return {
         id: order.id,
         poNumber: order.poNumber,
@@ -896,9 +921,9 @@ class ProductionDatabase {
         style: order.style,
         styleCode: order.styleCode,
         size: order.size,
-        orderQty: order.orderQty,
-        productionQty: order.productionQty,
-        balanceQty: order.balanceQty,
+        orderQty: numOrderQty,
+        productionQty: numProductionQty,
+        balanceQty: calculatedBalance,
         todayOutput,
         dayPlan,
         status: order.status,
@@ -1526,6 +1551,147 @@ class ProductionDatabase {
         totalReceivedToday,
         partnerBreakdown,
       },
+    };
+  }
+
+  deleteDeliveryReceived(id) {
+    if (!id) return { success: false, message: 'Missing transaction ID' };
+    const index = (this.deliveryReceivedLogs || []).findIndex((l) => l.id === id);
+    if (index === -1) {
+      return { success: false, message: `Transaction with ID '${id}' not found` };
+    }
+
+    const log = this.deliveryReceivedLogs[index];
+    const qty = Number(log.qty) || 0;
+
+    // Find the associated order
+    const order = this.orders.find((o) => {
+      const matchPo = o.poNumber === log.poNumber || o.id === log.poNumber;
+      const matchColour = !log.colour || (o.colour || '').toLowerCase() === (log.colour || '').toLowerCase();
+      const matchSize = !log.size || String(o.size).trim() === String(log.size).trim();
+      return matchPo && matchColour && matchSize;
+    }) || this.orders.find((o) => o.poNumber === log.poNumber);
+
+    if (order) {
+      if (log.type === 'Delivery') {
+        if (log.subCategory === 'Outsource') {
+          // Reverse day target deduction
+          order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - qty);
+        } else if (log.subCategory === 'Permanent') {
+          // Reverse permanent delivery deduction:
+          order.productionQty = (Number(order.productionQty) || 0) + qty;
+          order.productQty = order.productionQty;
+          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.productionQty);
+          order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - qty);
+          order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+
+          if (order.balanceQty === 0) {
+            order.status = 'Completed';
+          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
+            order.status = 'Ahead';
+          } else if (order.productionQty === 0) {
+            order.status = 'Scheduled';
+          } else {
+            order.status = 'Behind Plan';
+          }
+
+          if (order.dailyLogs) {
+            const dlIdx = order.dailyLogs.findIndex(
+              (l) => l.deliveryQty === qty && (l.notes || '').includes('Permanent Dispatch')
+            );
+            if (dlIdx !== -1) order.dailyLogs.splice(dlIdx, 1);
+          }
+        }
+      }
+    }
+
+    this.deliveryReceivedLogs.splice(index, 1);
+    this.save();
+
+    return {
+      success: true,
+      message: `Transaction #${id} successfully deleted and balance impacts reversed.`,
+      reversedQty: qty,
+      order,
+    };
+  }
+
+  updateDeliveryReceived(id, updateData = {}) {
+    if (!id) return { success: false, message: 'Missing transaction ID' };
+    const log = (this.deliveryReceivedLogs || []).find((l) => l.id === id);
+    if (!log) {
+      return { success: false, message: `Transaction with ID '${id}' not found` };
+    }
+
+    const oldQty = Number(log.qty) || 0;
+    const newQty = updateData.qty !== undefined ? Math.max(1, Number(updateData.qty) || 0) : oldQty;
+    const newPartner = updateData.outsourcePartner !== undefined ? updateData.outsourcePartner : log.outsourcePartner;
+    const newHandler = updateData.handlerName !== undefined ? updateData.handlerName : log.handlerName;
+    const newNotes = updateData.notes !== undefined ? updateData.notes : log.notes;
+    const newSubCategory = updateData.subCategory !== undefined ? updateData.subCategory : log.subCategory;
+
+    const order = this.orders.find((o) => {
+      const matchPo = o.poNumber === log.poNumber || o.id === log.poNumber;
+      const matchColour = !log.colour || (o.colour || '').toLowerCase() === (log.colour || '').toLowerCase();
+      const matchSize = !log.size || String(o.size).trim() === String(log.size).trim();
+      return matchPo && matchColour && matchSize;
+    }) || this.orders.find((o) => o.poNumber === log.poNumber);
+
+    if (order) {
+      // 1. Revert previous impact
+      if (log.type === 'Delivery') {
+        if (log.subCategory === 'Outsource') {
+          order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - oldQty);
+        } else if (log.subCategory === 'Permanent') {
+          order.productionQty = (Number(order.productionQty) || 0) + oldQty;
+          order.productQty = order.productionQty;
+          order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - oldQty);
+        }
+      }
+
+      // 2. Apply new impact
+      if (log.type === 'Delivery') {
+        if (newSubCategory === 'Outsource') {
+          order.dayTargetDeduction = (Number(order.dayTargetDeduction) || 0) + newQty;
+          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Day's Target (${newPartner || 'Outsource'})`;
+        } else if (newSubCategory === 'Permanent') {
+          order.deliveryQty = (Number(order.deliveryQty) || 0) + newQty;
+          order.productionQty = Math.max(0, (Number(order.productionQty) || 0) - newQty);
+          order.productQty = order.productionQty;
+          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.productionQty);
+          order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+
+          if (order.balanceQty === 0) {
+            order.status = 'Completed';
+          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
+            order.status = 'Ahead';
+          } else if (order.productionQty === 0) {
+            order.status = 'Scheduled';
+          } else {
+            order.status = 'Behind Plan';
+          }
+
+          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from System Balance & Product Qty (Remaining Balance: ${order.balanceQty.toLocaleString()} pcs, Product Qty: ${order.productionQty.toLocaleString()} pcs)`;
+        }
+      }
+    }
+
+    log.qty = newQty;
+    log.outsourcePartner = newPartner;
+    log.handlerName = newHandler;
+    log.notes = newNotes;
+    log.subCategory = newSubCategory;
+    log.systemBalanceAfter = order ? order.balanceQty : null;
+    log.productQtyAfter = order ? order.productionQty : null;
+    log.orderStatusAfter = order ? order.status : null;
+
+    this.save();
+
+    return {
+      success: true,
+      message: `Transaction #${id} updated and calculation impacts synchronized!`,
+      log,
+      order,
     };
   }
 }

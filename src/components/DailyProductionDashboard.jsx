@@ -420,7 +420,11 @@ export default function DailyProductionDashboard({
                               : 'text-rose-400'
                           }
                         >
-                          {formatNumber(row.balanceQty)}
+                          {formatNumber(
+                            row.balanceQty !== undefined
+                              ? row.balanceQty
+                              : Math.max(0, (Number(row.orderQty) || 0) - (Number(row.productionQty) || 0))
+                          )}
                         </span>
                         <div className="text-[10px] text-slate-500 font-sans">
                           {row.balanceQty === 0 ? 'Completed' : 'Remaining'}

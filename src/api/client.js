@@ -275,6 +275,24 @@ export const api = {
     return dbStore.recordDeliveryReceived(payload);
   },
 
+  updateDeliveryReceived: async (id, data) => {
+    const remote = await safeFetchJson(`${BASE_URL}/delivery-received/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.updateDeliveryReceived(id, data);
+  },
+
+  deleteDeliveryReceived: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/delivery-received/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.deleteDeliveryReceived(id);
+  },
+
   // 19. Export CSV URL
   getExportUrl: (filters = {}) => {
     const params = new URLSearchParams();
