@@ -24,8 +24,8 @@ export const initialCategories = [
     accentBorder: 'border-emerald-500/30',
     accentBg: 'bg-emerald-500/10',
     accentText: 'text-emerald-400',
-    supervisor: 'Sanjeewa Silva',
-    linesActive: 8,
+    supervisor: 'Not Assigned',
+    linesActive: 0,
   },
   {
     id: 'T-shirt',
@@ -38,8 +38,8 @@ export const initialCategories = [
     accentBorder: 'border-amber-500/30',
     accentBg: 'bg-amber-500/10',
     accentText: 'text-amber-400',
-    supervisor: 'Chamari Wickramasinghe',
-    linesActive: 10,
+    supervisor: 'Not Assigned',
+    linesActive: 0,
   },
   {
     id: 'Other',
@@ -52,8 +52,8 @@ export const initialCategories = [
     accentBorder: 'border-purple-500/30',
     accentBg: 'bg-purple-500/10',
     accentText: 'text-purple-400',
-    supervisor: 'Nuwan Bandara',
-    linesActive: 4,
+    supervisor: 'Not Assigned',
+    linesActive: 0,
   },
 ];
 
@@ -69,7 +69,7 @@ const getFutureDateStr = (daysAhead) => {
   return d.toISOString().split('T')[0];
 };
 
-// Exact Real Production Orders directly matching the Factory Production Sheet
+// All 23 Real Production Orders belong strictly to the Loop Category (5 Colours)
 export const rawProductionRows = [
   // PO 4502991550 | 200150259454A2 | Black 093 54A2 | Loop
   { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 21612, productionQty: 21612, deliveryQty: 21612, status: 'Completed' },
@@ -77,35 +77,71 @@ export const rawProductionRows = [
   { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 6700, productionQty: 6700, deliveryQty: 6700, status: 'Completed' },
   { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 756, productionQty: 755, deliveryQty: 755, status: 'Ahead' },
 
-  // PO 4502991532 | 200150259439H6 | Marzipan 39H6 | Strap
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 35003, productionQty: 34003, deliveryQty: 34003, status: 'Ahead' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 20874, productionQty: 18550, deliveryQty: 18550, status: 'Ahead' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 1351, productionQty: 1353, deliveryQty: 1353, status: 'Completed' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Strap', style: 'Strap Webbing Band - 39H6', styleCode: 'ST-39H6', orderQty: 447, productionQty: 450, deliveryQty: 450, status: 'Completed' },
+  // PO 4502991532 | 200150259439H6 | Marzipan 39H6 | Loop
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 35003, productionQty: 34003, deliveryQty: 34003, status: 'Ahead' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 20874, productionQty: 18550, deliveryQty: 18550, status: 'Ahead' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 1351, productionQty: 1353, deliveryQty: 1353, status: 'Completed' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 447, productionQty: 450, deliveryQty: 450, status: 'Completed' },
 
-  // PO 4502991599 | 200150259465H8 | Praline 65H8 | T-shirt
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 61714, productionQty: 41200, deliveryQty: 41200, status: 'Behind Plan' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 31682, productionQty: 11000, deliveryQty: 11000, status: 'Behind Plan' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 6408, productionQty: 1000, deliveryQty: 1000, status: 'Behind Plan' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 291, productionQty: 297, deliveryQty: 297, status: 'Completed' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'T-shirt', style: 'T-Shirt Combed Knit - 65H8', styleCode: 'TS-65H8', orderQty: 64, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  // PO 4502991599 | 200150259465H8 | Praline 65H8 | Loop
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 61714, productionQty: 41200, deliveryQty: 41200, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 31682, productionQty: 11000, deliveryQty: 11000, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 6408, productionQty: 1000, deliveryQty: 1000, status: 'Behind Plan' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 291, productionQty: 297, deliveryQty: 297, status: 'Completed' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 64, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
 
-  // PO 4502991520 | 200150259433F6 | Ganache 33F6 | Other
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 923, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 2506, productionQty: 1800, deliveryQty: 1800, status: 'Behind Plan' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 2420, productionQty: 1400, deliveryQty: 1400, status: 'Behind Plan' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 1500, productionQty: 275, deliveryQty: 275, status: 'Behind Plan' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Other', style: 'Specialty Trim Finish - 33F6', styleCode: 'OT-33F6', orderQty: 214, productionQty: 216, deliveryQty: 216, status: 'Completed' },
+  // PO 4502991520 | 200150259433F6 | Ganache 33F6 | Loop
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 923, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 2506, productionQty: 1800, deliveryQty: 1800, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 2420, productionQty: 1400, deliveryQty: 1400, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 1500, productionQty: 275, deliveryQty: 275, status: 'Behind Plan' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 214, productionQty: 216, deliveryQty: 216, status: 'Completed' },
 
-  // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Other
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 29699, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 19055, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 3260, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 451, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Other', style: 'Technical Finish Trim - 57H1', styleCode: 'OT-57H1', orderQty: 63, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Loop
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 29699, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 19055, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 3260, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 451, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 63, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
 ];
 
 export const initialMachines = [
+  {
+    id: 'MCH-01',
+    code: 'MCH-01',
+    name: 'Machine 01',
+    type: 'High Speed Elastic Loom L1',
+    category: 'Loop',
+    operatorName: 'Sunil Perera',
+    shift: 'Day Shift',
+    status: 'Active',
+    dailyTargetQty: 5000,
+    assignedStyles: ['Loop Elastic Band - 54A2', 'Loop Elastic Band - 39H6', 'Loop Elastic Band - 65H8', 'Loop Elastic Band - 33F6', 'Loop Elastic Band - 57H1'],
+    assignedColours: ['Black 093 54A2', 'Marzipan 39H6', 'Praline 65H8', 'Ganache 33F6', 'Talc 69-09-47 57H1'],
+    assignedSizes: ['10', '12', '14', '16', '18'],
+    assignedPos: ['4502991550', '4502991532', '4502991599', '4502991520', '4502991562'],
+    qrPayload: 'MCH-01',
+    notes: 'Primary elastic loop line - Handles all 5 Loop colorways',
+    todayLogs: [],
+  },
+  {
+    id: 'MCH-02',
+    code: 'MCH-02',
+    name: 'Machine 02',
+    type: 'Elastic Loop Loom L2',
+    category: 'Loop',
+    operatorName: 'Kavinda Perera',
+    shift: 'Day Shift',
+    status: 'Active',
+    dailyTargetQty: 5000,
+    assignedStyles: ['Loop Elastic Band - 54A2', 'Loop Elastic Band - 39H6', 'Loop Elastic Band - 65H8'],
+    assignedColours: ['Black 093 54A2', 'Marzipan 39H6', 'Praline 65H8'],
+    assignedSizes: ['10', '12', '14', '16', '18'],
+    assignedPos: ['4502991550', '4502991532', '4502991599'],
+    qrPayload: 'MCH-02',
+    notes: 'Secondary elastic loop line',
+    todayLogs: [],
+  },
   {
     id: 'MCH-CUT',
     code: 'MCH-CUT',
@@ -197,42 +233,6 @@ export const initialMachines = [
     todayLogs: [],
   },
   {
-    id: 'MCH-01',
-    code: 'MCH-01',
-    name: 'Machine 01',
-    type: 'High Speed Elastic Loom L1',
-    category: 'Loop',
-    operatorName: 'Sunil Perera',
-    shift: 'Day Shift',
-    status: 'Active',
-    dailyTargetQty: 5000,
-    assignedStyles: ['Loop Elastic Band - 54A2'],
-    assignedColours: ['Black 093 54A2'],
-    assignedSizes: ['10', '12', '14', '16'],
-    assignedPos: ['4502991550'],
-    qrPayload: 'MCH-01',
-    notes: 'Primary elastic loop line (PO 4502991550 - Black 093 54A2)',
-    todayLogs: [],
-  },
-  {
-    id: 'MCH-02',
-    code: 'MCH-02',
-    name: 'Machine 02',
-    type: 'Webbing Loom W2',
-    category: 'Strap',
-    operatorName: 'Pradeep Silva',
-    shift: 'Day Shift',
-    status: 'Active',
-    dailyTargetQty: 4000,
-    assignedStyles: ['Strap Webbing Band - 39H6'],
-    assignedColours: ['Marzipan 39H6'],
-    assignedSizes: ['10', '12', '14', '16'],
-    assignedPos: ['4502991532'],
-    qrPayload: 'MCH-02',
-    notes: 'Nylon bonding strap section (PO 4502991532 - Marzipan 39H6)',
-    todayLogs: [],
-  },
-  {
     id: 'MCH-03',
     code: 'MCH-03',
     name: 'Machine 03',
@@ -247,7 +247,7 @@ export const initialMachines = [
     assignedSizes: ['10', '12', '14', '16', '18'],
     assignedPos: ['4502991599'],
     qrPayload: 'MCH-03',
-    notes: 'Continuous circular knitting cylinder (PO 4502991599 - Praline 65H8)',
+    notes: 'Continuous circular knitting cylinder',
     todayLogs: [],
   },
   {
@@ -265,7 +265,7 @@ export const initialMachines = [
     assignedSizes: ['10', '12', '14', '16', '18'],
     assignedPos: ['4502991520'],
     qrPayload: 'MCH-04',
-    notes: 'Precision cold/hot slitter (PO 4502991520 - Ganache 33F6)',
+    notes: 'Precision cold/hot slitter',
     todayLogs: [],
   },
   {
@@ -283,7 +283,7 @@ export const initialMachines = [
     assignedSizes: ['10', '12', '14', '16', '18'],
     assignedPos: ['4502991562'],
     qrPayload: 'MCH-05',
-    notes: 'Heat seal and adhesive curing bed (PO 4502991562 - Talc 69-09-47 57H1)',
+    notes: 'Heat seal and adhesive curing bed',
     todayLogs: [],
   },
 ];
@@ -334,7 +334,7 @@ export const initialOrders = rawProductionRows.map((row, idx) => {
         planQty: Math.round(row.orderQty / 5),
         actualQty: row.productionQty,
         deliveryQty: row.deliveryQty,
-        notes: 'Factory verified production records',
+        notes: 'Factory verified Loop production records',
       }
     ] : [],
   };

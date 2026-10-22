@@ -10,7 +10,7 @@ import {
 } from '../data/seedData.js';
 import { firestoreSync } from '../firebase.js';
 
-const STORAGE_KEY = 'bondtex_factory_data_v6';
+const STORAGE_KEY = 'bondtex_loop_real_v7';
 
 class ClientDatabaseStore {
   constructor() {
