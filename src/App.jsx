@@ -72,7 +72,12 @@ export default function App() {
   const [selectedCategoryModal, setSelectedCategoryModal] = useState(null);
   const [drilldownCategory, setDrilldownCategory] = useState('All');
   const [workerMachineId, setWorkerMachineId] = useState('MCH-01');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return false;
+  });
   const [currentShift, setCurrentShift] = useState('All');
 
   // Modals
@@ -119,6 +124,18 @@ export default function App() {
     } catch {
       // Ignore URL parsing errors
     }
+  }, []);
+
+  // Keyboard shortcut: Ctrl+B or Cmd+B toggles navigation sidebar
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Fetch initial factory data & real-time sync
@@ -217,6 +234,8 @@ export default function App() {
         setCurrentShift={setCurrentShift}
         theme={theme}
         onToggleTheme={toggleTheme}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
       />
 
       {/* Main Layout (Sidebar + Content Area) */}

@@ -17,6 +17,7 @@ import {
   Calendar,
   Clock,
   Truck,
+  X,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -48,22 +49,34 @@ export default function Sidebar({
       {/* Mobile overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-30 lg:hidden backdrop-blur-xs"
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden backdrop-blur-xs transition-opacity duration-300"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       <aside
-        className={`fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] z-30 w-64 bg-slate-900/95 lg:bg-slate-900/60 border-r border-slate-800 p-4 flex flex-col justify-between transition-transform duration-300 lg:translate-x-0 overflow-y-auto ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed lg:sticky top-16 left-0 h-[calc(100vh-4rem)] z-30 bg-slate-900/95 lg:bg-slate-900/60 border-r border-slate-800 flex flex-col justify-between transition-all duration-300 ease-in-out overflow-y-auto shrink-0 ${
+          isOpen
+            ? 'w-64 p-4 translate-x-0 opacity-100'
+            : '-translate-x-full w-0 p-0 border-r-0 opacity-0 pointer-events-none overflow-hidden'
         }`}
       >
         <div className="space-y-6">
           {/* Main Views */}
           <div>
-            <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-              Navigation
-            </p>
+            <div className="flex items-center justify-between px-3 mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Navigation
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition lg:hidden"
+                title="Close Navigation Sidebar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
             <nav className="space-y-1">
               <button
                 onClick={() => {

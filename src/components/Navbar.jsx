@@ -22,6 +22,8 @@ export default function Navbar({
   setCurrentShift,
   theme = 'dark',
   onToggleTheme,
+  sidebarOpen,
+  onToggleSidebar,
 }) {
   const [time, setTime] = useState(new Date());
 
@@ -35,18 +37,26 @@ export default function Navbar({
       <div className="flex items-center justify-between gap-4">
         {/* Brand & Factory identity */}
         <div className="flex items-center gap-3">
-          <div
-            onClick={() => setActiveView('dashboard')}
-            className="cursor-pointer relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 shadow-lg shadow-blue-500/20 text-white font-black text-xl tracking-wider"
+          {/* Clickable Brand Logo: Opens / Toggles Navigation Panel / Sidebar */}
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            title={sidebarOpen ? "Close navigation panel (Ctrl+B)" : "Open navigation panel (Ctrl+B)"}
+            className="group relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 shadow-lg shadow-blue-500/25 hover:shadow-cyan-500/40 text-white font-black text-xl tracking-wider hover:scale-105 active:scale-95 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 cursor-pointer"
+            aria-label="Toggle Navigation Sidebar"
           >
-            <span>B</span>
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
-          </div>
+            <span className="transition-transform group-hover:scale-110">B</span>
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-slate-900 rounded-full transition-colors ${
+                sidebarOpen ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-400'
+              }`}
+            ></span>
+          </button>
           <div>
             <div className="flex items-center gap-2">
               <span
                 onClick={() => setActiveView('dashboard')}
-                className="cursor-pointer text-lg font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent"
+                className="cursor-pointer text-lg font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent hover:text-white transition"
               >
                 BONDTEX
               </span>

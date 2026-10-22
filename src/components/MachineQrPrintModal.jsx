@@ -1,6 +1,7 @@
 import React from 'react';
-import { X, Printer, QrCode, Check, ShieldCheck, Factory, User, Hash, Wifi } from 'lucide-react';
+import { X, Printer, QrCode, Check, ShieldCheck, Factory, User, Hash, Globe } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { buildMachinePortalUrl, resolveProductionHost } from '../utils/urlHelper';
 
 export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
   if (!machine) return null;
@@ -9,9 +10,9 @@ export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
     window.print();
   };
 
-  // Ensure we use the computer's network IP instead of localhost
-  const effectiveHost = networkHost || (typeof window !== 'undefined' ? window.location.origin : '');
-  const qrUrl = `${effectiveHost}/?view=worker&machine=${machine.code || machine.id}`;
+  // Dynamically uses the live deployed production URL (e.g., https://bondtexlk-f16f5.web.app or window.location.origin)
+  const effectiveHost = resolveProductionHost(networkHost);
+  const qrUrl = buildMachinePortalUrl(machine.code || machine.id, effectiveHost);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md overflow-y-auto animate-fade-in">
@@ -21,7 +22,7 @@ export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
           <div className="flex items-center gap-2">
             <QrCode className="w-5 h-5 text-blue-400" />
             <span className="text-sm font-bold text-white">
-              Permanent Machine QR Card (Wi-Fi Print Ready)
+              Permanent Machine QR Card (Mobile Scan Ready)
             </span>
           </div>
           <button
@@ -89,9 +90,9 @@ export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
                 <span className="text-[11px] font-mono font-bold text-slate-900 uppercase tracking-wider block">
                   STATIC PERMANENT QR CODE
                 </span>
-                <span className="text-[10px] text-slate-600 font-medium flex items-center justify-center gap-1 mt-0.5">
-                  <Wifi className="w-3 h-3 text-emerald-600" />
-                  <span>Wi-Fi Network Scan: {qrUrl}</span>
+                <span className="text-[10px] text-slate-600 font-medium flex items-center justify-center gap-1 mt-0.5 max-w-[320px] truncate mx-auto">
+                  <Globe className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span className="truncate">Mobile Scan: {qrUrl}</span>
                 </span>
               </div>
             </div>

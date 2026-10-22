@@ -38,6 +38,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api/client';
 import MachineQrPrintModal from './MachineQrPrintModal';
 import { formatNumber } from '../utils/formatters';
+import { buildMachinePortalUrl, resolveProductionHost, PRODUCTION_HOST } from '../utils/urlHelper';
 
 // Standard Factory Colour Swatches Map
 const COLOUR_SWATCH_MAP = {
@@ -73,8 +74,8 @@ export default function AdminPanel({
   const [saving, setSaving] = useState(false);
   const [printModalMachine, setPrintModalMachine] = useState(null);
 
-  // Network Host State for Mobile-friendly QR codes
-  const [networkHost, setNetworkHost] = useState('');
+  // Network Host State for Mobile-friendly QR codes (defaults to live production cloud URL)
+  const [networkHost, setNetworkHost] = useState(() => resolveProductionHost());
   const [detectedLocalIp, setDetectedLocalIp] = useState('');
   const [allNetworkInterfaces, setAllNetworkInterfaces] = useState([]);
 
@@ -149,17 +150,18 @@ export default function AdminPanel({
       }
 
       if (netRes && netRes.success && netRes.data) {
-        const ip = netRes.data.localIp || '127.0.0.1';
+        const ip = netRes.data.localIp || '';
         setDetectedLocalIp(ip);
         setAllNetworkInterfaces(netRes.data.allInterfaces || []);
-
-        const currentPort = typeof window !== 'undefined' && window.location.port ? window.location.port : '5000';
-        const defaultHost = `http://${ip}:${currentPort}`;
-        setNetworkHost(defaultHost);
-      } else {
-        const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000';
-        setNetworkHost(origin);
       }
+
+      // Ensure networkHost is always a phone-accessible production URL rather than localhost
+      setNetworkHost((prev) => {
+        if (prev && !prev.includes('127.0.0.1') && !prev.includes('localhost')) {
+          return prev;
+        }
+        return resolveProductionHost();
+      });
     } catch (err) {
       console.error('Error loading admin data:', err);
       if (onShowToast) onShowToast(err.message, 'error');
@@ -471,9 +473,9 @@ export default function AdminPanel({
     return true;
   });
 
-  // Compute Static permanent QR URL using effective local Wi-Fi host IP
-  const effectiveHost = (networkHost || '').trim().replace(/\/+$/, '') || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
-  const staticQrUrl = `${effectiveHost}/?view=worker&machine=${formData?.code || formData?.id || 'MCH-01'}`;
+  // Compute Static permanent QR URL using live production cloud host or custom host
+  const effectiveHost = resolveProductionHost(networkHost);
+  const staticQrUrl = buildMachinePortalUrl(formData?.code || formData?.id || 'MCH-01', effectiveHost);
 
   const assignedColoursList = formData?.assignedColours || [];
   const assignedSizesList = formData?.assignedSizes || [];
@@ -1002,40 +1004,71 @@ export default function AdminPanel({
 
             {/* Right Column: Permanent Static QR Code Generator & Network Config */}
             <div className="lg:col-span-5 space-y-5">
-              {/* Network IP Host Settings Card */}
+              {/* Network Host Settings Card */}
               <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Wifi className="w-4 h-4 text-emerald-400" />
+                    <Globe className="w-4 h-4 text-emerald-400" />
                     <span className="text-xs font-bold uppercase tracking-wider text-white">
-                      Mobile Wi-Fi Network Host IP
+                      Mobile QR Portal Target URL
                     </span>
                   </div>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-mono">
-                    Online
+                    Cloud Live
                   </span>
                 </div>
 
                 <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Mobile phones scanning this QR code will connect over your Wi-Fi network. Ensure your phone is connected to the same Wi-Fi.
+                  Encoded into station QR codes so mobile devices can scan and load the data-filling interface without <code className="text-rose-400 font-mono text-[10px]">ERR_CONNECTION_REFUSED</code> errors.
                 </p>
 
-                <div className="space-y-2 pt-1">
+                {/* Host Preset Selectors */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setNetworkHost(PRODUCTION_HOST)}
+                    className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition border flex items-center gap-1.5 ${
+                      effectiveHost === PRODUCTION_HOST
+                        ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 shadow-sm'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                    }`}
+                  >
+                    <Globe className="w-3 h-3 text-emerald-400" />
+                    <span>Cloud Live ({PRODUCTION_HOST.replace('https://', '')})</span>
+                  </button>
+
+                  {detectedLocalIp && !detectedLocalIp.includes('127.0.0.1') && (
+                    <button
+                      type="button"
+                      onClick={() => setNetworkHost(`http://${detectedLocalIp}:5000`)}
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold transition border flex items-center gap-1.5 ${
+                        effectiveHost.includes(detectedLocalIp)
+                          ? 'bg-blue-600/20 text-blue-300 border-blue-500/40 shadow-sm'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      <Wifi className="w-3 h-3 text-blue-400" />
+                      <span>Local Wi-Fi ({detectedLocalIp})</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 pt-1">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                    Target Host Address (Encoded into QR)
+                    Host Address (Encoded into QR):
                   </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
                       value={networkHost}
                       onChange={(e) => setNetworkHost(e.target.value)}
-                      placeholder="http://192.168.1.100:5000"
+                      placeholder={PRODUCTION_HOST}
                       className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-blue-500"
                     />
                     <button
                       type="button"
-                      onClick={loadData}
-                      title="Re-detect local network IP"
+                      onClick={() => setNetworkHost(resolveProductionHost())}
+                      title="Reset to live production hosting URL"
                       className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
                     >
                       <RotateCw className="w-4 h-4" />
@@ -1629,7 +1662,7 @@ export default function AdminPanel({
       {printModalMachine && (
         <MachineQrPrintModal
           machine={printModalMachine}
-          networkHost={networkHost}
+          networkHost={effectiveHost}
           onClose={() => setPrintModalMachine(null)}
         />
       )}
