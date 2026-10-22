@@ -325,21 +325,25 @@ export default function WorkerPortal({
             aria-label="Switch Machine"
             className="bg-slate-950 border border-slate-700 text-xs font-semibold rounded-xl px-2.5 py-1 text-slate-200 focus:outline-none focus:border-blue-500"
           >
-            {machinesList.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.code})
-              </option>
-            ))}
+            {machinesList.length === 0 ? (
+              <option value="">No Machines Registered</option>
+            ) : (
+              machinesList.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({m.code})
+                </option>
+              ))
+            )}
           </select>
         </div>
 
         {/* Machine Name & Header */}
         <div className="border-b border-slate-800/80 pb-3">
           <h1 className="text-xl font-extrabold text-white tracking-tight">
-            {machine?.name || 'Loading Station...'}
+            {machine?.name || (machinesList.length === 0 ? 'No Machines Configured' : 'Select Station')}
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            {machine?.type || 'Manufacturing Station'} • Quota: {formatNumber(dailyTarget)} pcs/day
+            {machine?.type || (machinesList.length === 0 ? 'Use Admin Panel to register factory machines' : 'Manufacturing Station')} • Quota: {formatNumber(dailyTarget)} pcs/day
           </p>
         </div>
 

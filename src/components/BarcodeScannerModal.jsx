@@ -17,6 +17,17 @@ export default function BarcodeScannerModal({ onClose, onOrderMatched }) {
   const [matchedOrder, setMatchedOrder] = useState(null);
   const [error, setError] = useState(null);
   const [searching, setSearching] = useState(false);
+  const [availableOrders, setAvailableOrders] = useState([]);
+
+  useEffect(() => {
+    api.getOrders({ limit: 6 })
+      .then((res) => {
+        if (res && res.orders) {
+          setAvailableOrders(res.orders);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Play warehouse scanner beep
   const playBeep = () => {
@@ -60,14 +71,7 @@ export default function BarcodeScannerModal({ onClose, onOrderMatched }) {
     }
   };
 
-  const sampleBarcodes = [
-    { code: '4502991550', label: 'Black 033 54A2 (Loop)', rm: '200150259454A2' },
-    { code: '4502991532', label: 'Marzipan 39H6 (Strap)', rm: '200150259439H6' },
-    { code: '4502991599', label: 'Praline 65H8 (T-shirt)', rm: '200150259465H8' },
-    { code: '4502991520', label: 'Ganache 33F6 (Other)', rm: '200150259433F6' },
-    { code: '4502991562', label: 'Talc 69-09-47 57H1 (Other)', rm: '200150259457H1' },
-    { code: 'BTX-4502991550-10', label: 'Full Barcode - Size 10', rm: '200150259454A2' },
-  ];
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-md overflow-y-auto animate-fade-in">
@@ -153,35 +157,37 @@ export default function BarcodeScannerModal({ onClose, onOrderMatched }) {
             </div>
           </form>
 
-          {/* Quick reference presets from screenshot */}
-          <div className="space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Quick Test Real PO Numbers from Dataset:
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              {sampleBarcodes.map((sample) => (
-                <button
-                  key={sample.code}
-                  type="button"
-                  onClick={() => {
-                    setBarcodeInput(sample.code);
-                    handleScanCode(sample.code);
-                  }}
-                  className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-slate-700/80 text-left transition text-xs group"
-                >
-                  <div className="font-mono font-bold text-cyan-400 group-hover:text-cyan-300">
-                    {sample.code}
-                  </div>
-                  <div className="text-[11px] text-slate-300 font-medium truncate mt-0.5">
-                    {sample.label}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono truncate">
-                    RM: {sample.rm}
-                  </div>
-                </button>
-              ))}
+          {/* Quick reference presets from active orders */}
+          {availableOrders.length > 0 && (
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Active Orders in System:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {availableOrders.map((order) => (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => {
+                      setBarcodeInput(order.poNumber);
+                      handleScanCode(order.poNumber);
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-750 border border-slate-700/80 text-left transition text-xs group"
+                  >
+                    <div className="font-mono font-bold text-cyan-400 group-hover:text-cyan-300">
+                      {order.poNumber}
+                    </div>
+                    <div className="text-[11px] text-slate-300 font-medium truncate mt-0.5">
+                      {order.colour} ({order.category})
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-mono truncate">
+                      RM: {order.rmMaterial}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Match Result Card */}
           {matchedOrder && (

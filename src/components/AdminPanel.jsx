@@ -385,7 +385,7 @@ export default function AdminPanel({
       empId: `EMP-${100 + nextNum}`,
       category: 'Loop',
       shift: 'Shift A',
-      assignedMachine: machines && machines.length > 0 ? `${machines[0]?.name} (${machines[0]?.code})` : 'Machine 01 (MCH-01)',
+      assignedMachine: machines && machines.length > 0 ? `${machines[0]?.name} (${machines[0]?.code})` : '',
       status: 'Active',
     });
     setWorkerModalOpen(true);

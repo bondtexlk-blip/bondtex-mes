@@ -11,12 +11,12 @@ import { api } from '../api/client';
 
 export default function NewOrderModal({ onClose, onSuccess, metadata }) {
   const [category, setCategory] = useState('Loop');
-  const [poNumber, setPoNumber] = useState('4502991550');
-  const [rmMaterial, setRmMaterial] = useState('200150259454A2');
-  const [colour, setColour] = useState('Black 093 54A2');
-  const [style, setStyle] = useState('Loop Elastic Band - 54A2');
-  const [size, setSize] = useState('10');
-  const [orderQty, setOrderQty] = useState('20000');
+  const [poNumber, setPoNumber] = useState('');
+  const [rmMaterial, setRmMaterial] = useState('');
+  const [colour, setColour] = useState('');
+  const [style, setStyle] = useState('');
+  const [size, setSize] = useState('');
+  const [orderQty, setOrderQty] = useState('');
   const [priority, setPriority] = useState('High');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [targetDate, setTargetDate] = useState(
@@ -25,20 +25,8 @@ export default function NewOrderModal({ onClose, onSuccess, metadata }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const rmDefaults = {
-    Loop: { rm: '200150259454A2', col: 'Black 093 54A2', style: 'Loop Elastic Band - 54A2', po: '4502991550' },
-    Strap: { rm: '200150259439H6', col: 'Marzipan 39H6', style: 'Strap Webbing Band - 39H6', po: '4502991532' },
-    'T-shirt': { rm: '200150259465H8', col: 'Praline 65H8', style: 'T-Shirt Combed Knit - 65H8', po: '4502991599' },
-    Other: { rm: '200150259433F6', col: 'Ganache 33F6', style: 'Specialty Trim Finish - 33F6', po: '4502991520' },
-  };
-
   const handleCategoryChange = (newCat) => {
     setCategory(newCat);
-    const def = rmDefaults[newCat] || rmDefaults.Loop;
-    setRmMaterial(def.rm);
-    setColour(def.col);
-    setStyle(def.style);
-    setPoNumber(def.po);
   };
 
   const handleSubmit = async (e) => {

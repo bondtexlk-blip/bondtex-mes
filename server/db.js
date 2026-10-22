@@ -34,11 +34,11 @@ class ProductionDatabase {
       if (fs.existsSync(DATA_FILE)) {
         const raw = fs.readFileSync(DATA_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
-        this.categories = parsed.categories || initialCategories;
-        this.orders = parsed.orders || initialOrders;
-        this.machines = parsed.machines || initialMachines;
-        this.workers = parsed.workers || initialWorkers;
-        this.productionLogs = parsed.productionLogs || initialProductionLogs;
+        this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : JSON.parse(JSON.stringify(initialCategories));
+        this.orders = Array.isArray(parsed.orders) ? parsed.orders : JSON.parse(JSON.stringify(initialOrders));
+        this.machines = Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines));
+        this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
+        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
         this.ensureSpecialMachines();
       } else {
         this.reset();
@@ -982,123 +982,9 @@ class ProductionDatabase {
     };
   }
 
-  // Ensure special required machines exist in the registry
+  // Factory reset: machine registry starts empty. No auto-injected machines.
   ensureSpecialMachines() {
-    const specialSpecs = [
-      {
-        id: 'MCH-CUT',
-        code: 'MCH-CUT',
-        name: 'Cutting Machine',
-        type: 'Strap Precision Rotary Slitter & Cutter',
-        category: 'Strap',
-        operatorName: 'Pradeep Silva',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6', 'Strap Bonded Band - 39H6'],
-        assignedColours: ['Marzipan 39H6', 'Black 093 54A2'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532', '4502991538'],
-        qrPayload: 'MCH-CUT',
-        notes: 'Dedicated strap cutting section (Strap Category)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-PUS',
-        code: 'MCH-PUS',
-        name: 'Pusing Machine',
-        type: 'Continuous Belt Pusing / Fusing Unit',
-        category: 'Strap',
-        operatorName: 'Sanjeewa Silva',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6', 'Strap Bonded Band - 39H6'],
-        assignedColours: ['Marzipan 39H6'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-PUS',
-        notes: 'Pusing adhesive fusing station (Strap Category)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-IRN',
-        code: 'MCH-IRN',
-        name: 'Iron Machine',
-        type: 'Steam Ironing & Thermal Curing Bed',
-        category: 'Strap',
-        operatorName: 'Kamal Gunaratne',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6', 'Strap Bonded Band - 39H6'],
-        assignedColours: ['Marzipan 39H6'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-IRN',
-        notes: 'Thermal curing bed (Synchronized with Compress Machine for Strap)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-CMP',
-        code: 'MCH-CMP',
-        name: 'Compress Machine',
-        type: 'High-Tension Hydraulic Strap Compressor',
-        category: 'Strap',
-        operatorName: 'Kamal Gunaratne',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6', 'Strap Bonded Band - 39H6'],
-        assignedColours: ['Marzipan 39H6'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-CMP',
-        notes: 'Hydraulic strap compressor (Synchronized with Iron Machine for Strap)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-DRY',
-        code: 'MCH-DRY',
-        name: 'Dry Cut Machine',
-        type: 'Automatic Dry Rotary Guillotine Cutter',
-        category: 'Strap',
-        operatorName: 'Anura Bandara',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6', 'Strap Bonded Band - 39H6'],
-        assignedColours: ['Marzipan 39H6', 'Black 093 54A2'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-DRY',
-        notes: 'Multiplier Logic: Size 10->x50, 12->x50, 14->x50, 16->x45, 18->x50',
-        todayLogs: [],
-      },
-    ];
-
-    let modified = false;
-
-    // Reset MCH-01 to Machine 01 (Loop division) if it was previously labeled cutting machine
-    const mch01 = this.machines.find((m) => m.id === 'MCH-01');
-    if (mch01 && mch01.name.toLowerCase().includes('cutting')) {
-      mch01.name = 'Machine 01';
-      mch01.category = 'Loop';
-      modified = true;
-    }
-
-    for (const spec of specialSpecs) {
-      const idx = this.machines.findIndex(
-        (m) => m.id === spec.id || m.code === spec.code
-      );
-      if (idx === -1) {
-        this.machines.push(spec);
-        modified = true;
-      }
-    }
-    if (modified) {
-      this.save();
-    }
+    return;
   }
 
   // Hourly Production Dashboard Aggregation
