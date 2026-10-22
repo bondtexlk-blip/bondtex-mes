@@ -86,6 +86,9 @@ export default function WorkerPortal({
         '🔒 Restricted Factory Floor Mode:\nEnter Supervisor PIN to exit to management dashboard (PIN: 1234):'
       );
       if (pin === '1234' || pin === 'bondtex' || pin === 'admin') {
+        try {
+          window.history.replaceState({}, '', window.location.pathname);
+        } catch {}
         if (onUnlockDashboard) onUnlockDashboard();
         else if (onBackToDashboard) onBackToDashboard();
         else window.location.href = window.location.pathname;
@@ -93,6 +96,9 @@ export default function WorkerPortal({
         if (onShowToast) onShowToast('Incorrect Supervisor PIN', 'error');
       }
     } else {
+      try {
+        window.history.replaceState({}, '', window.location.pathname);
+      } catch {}
       if (onBackToDashboard) onBackToDashboard();
     }
   };

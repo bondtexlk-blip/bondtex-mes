@@ -68,13 +68,37 @@ export default function App() {
   }, [theme]);
 
   // Navigation & View States: 'dashboard' | 'drilldown' | 'admin' | 'worker'
-  const [activeView, setActiveView] = useState('dashboard');
+  // When users (management/boss) open the main base URL (e.g., https://bondtexlk-f16f5.web.app),
+  // it must ALWAYS open the main full MES Dashboard / Home view.
+  // The dedicated restricted Worker Portal is ONLY triggered via active QR scan (?view=worker).
   const [isRestrictedWorkerMode, setIsRestrictedWorkerMode] = useState(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('view') === 'worker';
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('view') === 'worker';
+      }
+      return false;
     } catch {
       return false;
+    }
+  });
+
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        const params = new URLSearchParams(window.location.search);
+        const viewParam = params.get('view');
+        if (viewParam === 'worker') return 'worker';
+        if (viewParam === 'daily-production' || viewParam === 'daily') return 'daily-production';
+        if (viewParam === 'hourly-production' || viewParam === 'hourly') return 'hourly-production';
+        if (viewParam === 'delivery-received' || viewParam === 'delivery') return 'delivery-received';
+        if (viewParam === 'admin') return 'admin';
+        if (viewParam === 'drilldown') return 'drilldown';
+      }
+      // Base URL ALWAYS defaults to main executive dashboard
+      return 'dashboard';
+    } catch {
+      return 'dashboard';
     }
   });
   const [selectedCategoryModal, setSelectedCategoryModal] = useState(null);
@@ -111,27 +135,41 @@ export default function App() {
   // URL Query Param Detection on load (e.g. ?view=worker&machine=MCH-01)
   useEffect(() => {
     try {
+      if (!window.location.search) {
+        // Base URL accessed without query parameters: always default to main executive dashboard
+        setActiveView('dashboard');
+        setIsRestrictedWorkerMode(false);
+        return;
+      }
+
       const params = new URLSearchParams(window.location.search);
       const viewParam = params.get('view');
       const machineParam = params.get('machine');
 
       if (viewParam === 'worker') {
+        // Triggered exclusively by active station QR scan
         setActiveView('worker');
         setIsRestrictedWorkerMode(true);
         if (machineParam) setWorkerMachineId(machineParam);
-      } else if (viewParam === 'daily-production' || viewParam === 'daily') {
-        setActiveView('daily-production');
-      } else if (viewParam === 'hourly-production' || viewParam === 'hourly') {
-        setActiveView('hourly-production');
-      } else if (viewParam === 'delivery-received' || viewParam === 'delivery') {
-        setActiveView('delivery-received');
-      } else if (viewParam === 'admin') {
-        setActiveView('admin');
-      } else if (viewParam === 'drilldown') {
-        setActiveView('drilldown');
+      } else {
+        setIsRestrictedWorkerMode(false);
+        if (viewParam === 'daily-production' || viewParam === 'daily') {
+          setActiveView('daily-production');
+        } else if (viewParam === 'hourly-production' || viewParam === 'hourly') {
+          setActiveView('hourly-production');
+        } else if (viewParam === 'delivery-received' || viewParam === 'delivery') {
+          setActiveView('delivery-received');
+        } else if (viewParam === 'admin') {
+          setActiveView('admin');
+        } else if (viewParam === 'drilldown') {
+          setActiveView('drilldown');
+        } else {
+          setActiveView('dashboard');
+        }
       }
     } catch {
-      // Ignore URL parsing errors
+      setActiveView('dashboard');
+      setIsRestrictedWorkerMode(false);
     }
   }, []);
 
@@ -194,9 +232,10 @@ export default function App() {
     setActiveView('drilldown');
   };
 
-  // Navigate directly to worker interface for a specific machine
+  // Navigate directly to worker interface for a specific machine from inside management dashboard
   const handleNavigateToWorker = (machineId) => {
     setWorkerMachineId(machineId || 'MCH-01');
+    setIsRestrictedWorkerMode(false); // Dashboard navigation is manager preview mode (Navbar & Sidebar remain accessible)
     setActiveView('worker');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -214,8 +253,8 @@ export default function App() {
     }
   };
 
-  // Dedicated Fullscreen Worker Portal Interface (Restricted Floor Mode for QR Scans)
-  if (activeView === 'worker') {
+  // Dedicated Fullscreen Worker Portal Interface (Restricted Floor Mode ONLY when actively scanned via QR code)
+  if (isRestrictedWorkerMode && activeView === 'worker') {
     return (
       <div className="fixed inset-0 w-screen h-screen bg-[#070b14] text-slate-100 flex flex-col overflow-y-auto z-50 selection:bg-blue-600 selection:text-white">
         {/* Toast Notification */}
@@ -234,16 +273,31 @@ export default function App() {
           </div>
         )}
 
-        <ErrorBoundary onReset={() => setActiveView('dashboard')}>
+        <ErrorBoundary
+          onReset={() => {
+            setIsRestrictedWorkerMode(false);
+            setActiveView('dashboard');
+            try {
+              window.history.replaceState({}, '', window.location.pathname);
+            } catch {}
+          }}
+        >
           <WorkerPortal
             initialMachineId={workerMachineId}
-            isRestrictedMode={isRestrictedWorkerMode}
-            onBackToDashboard={
-              isRestrictedWorkerMode ? null : () => setActiveView('dashboard')
-            }
+            isRestrictedMode={true}
+            onBackToDashboard={() => {
+              setIsRestrictedWorkerMode(false);
+              setActiveView('dashboard');
+              try {
+                window.history.replaceState({}, '', window.location.pathname);
+              } catch {}
+            }}
             onUnlockDashboard={() => {
               setIsRestrictedWorkerMode(false);
               setActiveView('dashboard');
+              try {
+                window.history.replaceState({}, '', window.location.pathname);
+              } catch {}
             }}
             onShowToast={showToast}
             onDataUpdated={loadDashboardData}
@@ -447,10 +501,16 @@ export default function App() {
                 onToggleTheme={toggleTheme}
               />
             ) : (
-              /* 5. WORKER / OPERATOR MOBILE INTERFACE (QR SCAN) */
+              /* 5. WORKER / OPERATOR INTERFACE (PREVIEW IN DASHBOARD) */
               <WorkerPortal
                 initialMachineId={workerMachineId}
-                onBackToDashboard={() => setActiveView('dashboard')}
+                isRestrictedMode={false}
+                onBackToDashboard={() => {
+                  setActiveView('dashboard');
+                  try {
+                    window.history.replaceState({}, '', window.location.pathname);
+                  } catch {}
+                }}
                 onShowToast={showToast}
                 onDataUpdated={loadDashboardData}
                 theme={theme}
