@@ -11,8 +11,8 @@
       "accentBorder": "border-blue-500/30",
       "accentBg": "bg-blue-500/10",
       "accentText": "text-blue-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "supervisor": "Kavinda Perera",
+      "linesActive": 6
     },
     {
       "id": "Strap",
@@ -25,8 +25,8 @@
       "accentBorder": "border-emerald-500/30",
       "accentBg": "bg-emerald-500/10",
       "accentText": "text-emerald-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "supervisor": "Sanjeewa Silva",
+      "linesActive": 8
     },
     {
       "id": "T-shirt",
@@ -39,8 +39,8 @@
       "accentBorder": "border-amber-500/30",
       "accentBg": "bg-amber-500/10",
       "accentText": "text-amber-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "supervisor": "Chamari Wickramasinghe",
+      "linesActive": 10
     },
     {
       "id": "Other",
@@ -53,13 +53,1057 @@
       "accentBorder": "border-purple-500/30",
       "accentBg": "bg-purple-500/10",
       "accentText": "text-purple-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "supervisor": "Nuwan Bandara",
+      "linesActive": 4
     }
   ],
-  "orders": [],
-  "machines": [],
-  "workers": [],
+  "orders": [
+    {
+      "id": "ORD-001",
+      "poNumber": "4502991550",
+      "rmMaterial": "200150259454A2",
+      "colour": "Black 093 54A2",
+      "size": "10",
+      "category": "Loop",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "barcode": "BTX-4502991550-10",
+      "orderQty": 21612,
+      "productionQty": 21612,
+      "deliveryQty": 21612,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-08",
+      "targetDate": "2026-10-28",
+      "status": "Completed",
+      "priority": "High",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 4322,
+          "actualQty": 21612,
+          "deliveryQty": 21612,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-002",
+      "poNumber": "4502991550",
+      "rmMaterial": "200150259454A2",
+      "colour": "Black 093 54A2",
+      "size": "12",
+      "category": "Loop",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "barcode": "BTX-4502991550-12",
+      "orderQty": 24496,
+      "productionQty": 24496,
+      "deliveryQty": 24496,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-07",
+      "targetDate": "2026-10-29",
+      "status": "Completed",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 4899,
+          "actualQty": 24496,
+          "deliveryQty": 24496,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-003",
+      "poNumber": "4502991550",
+      "rmMaterial": "200150259454A2",
+      "colour": "Black 093 54A2",
+      "size": "14",
+      "category": "Loop",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "barcode": "BTX-4502991550-14",
+      "orderQty": 6700,
+      "productionQty": 6700,
+      "deliveryQty": 6700,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-06",
+      "targetDate": "2026-10-30",
+      "status": "Completed",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 1340,
+          "actualQty": 6700,
+          "deliveryQty": 6700,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-004",
+      "poNumber": "4502991550",
+      "rmMaterial": "200150259454A2",
+      "colour": "Black 093 54A2",
+      "size": "16",
+      "category": "Loop",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "barcode": "BTX-4502991550-16",
+      "orderQty": 756,
+      "productionQty": 755,
+      "deliveryQty": 755,
+      "balanceQty": 1,
+      "deliveryBalanceQty": 1,
+      "startDate": "2026-10-05",
+      "targetDate": "2026-10-31",
+      "status": "Ahead",
+      "priority": "High",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 151,
+          "actualQty": 755,
+          "deliveryQty": 755,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-005",
+      "poNumber": "4502991532",
+      "rmMaterial": "200150259439H6",
+      "colour": "Marzipan 39H6",
+      "size": "10",
+      "category": "Strap",
+      "style": "Strap Webbing Band - 39H6",
+      "styleCode": "ST-39H6",
+      "barcode": "BTX-4502991532-10",
+      "orderQty": 35003,
+      "productionQty": 34003,
+      "deliveryQty": 34003,
+      "balanceQty": 1000,
+      "deliveryBalanceQty": 1000,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
+      "status": "Ahead",
+      "priority": "Critical",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 7001,
+          "actualQty": 34003,
+          "deliveryQty": 34003,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-006",
+      "poNumber": "4502991532",
+      "rmMaterial": "200150259439H6",
+      "colour": "Marzipan 39H6",
+      "size": "12",
+      "category": "Strap",
+      "style": "Strap Webbing Band - 39H6",
+      "styleCode": "ST-39H6",
+      "barcode": "BTX-4502991532-12",
+      "orderQty": 20874,
+      "productionQty": 18550,
+      "deliveryQty": 18550,
+      "balanceQty": 2324,
+      "deliveryBalanceQty": 2324,
+      "startDate": "2026-10-03",
+      "targetDate": "2026-11-02",
+      "status": "Ahead",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 4175,
+          "actualQty": 18550,
+          "deliveryQty": 18550,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-007",
+      "poNumber": "4502991532",
+      "rmMaterial": "200150259439H6",
+      "colour": "Marzipan 39H6",
+      "size": "14",
+      "category": "Strap",
+      "style": "Strap Webbing Band - 39H6",
+      "styleCode": "ST-39H6",
+      "barcode": "BTX-4502991532-14",
+      "orderQty": 1351,
+      "productionQty": 1353,
+      "deliveryQty": 1353,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-02",
+      "targetDate": "2026-11-03",
+      "status": "Completed",
+      "priority": "High",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 270,
+          "actualQty": 1353,
+          "deliveryQty": 1353,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-008",
+      "poNumber": "4502991532",
+      "rmMaterial": "200150259439H6",
+      "colour": "Marzipan 39H6",
+      "size": "16",
+      "category": "Strap",
+      "style": "Strap Webbing Band - 39H6",
+      "styleCode": "ST-39H6",
+      "barcode": "BTX-4502991532-16",
+      "orderQty": 447,
+      "productionQty": 450,
+      "deliveryQty": 450,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-08",
+      "targetDate": "2026-11-04",
+      "status": "Completed",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 89,
+          "actualQty": 450,
+          "deliveryQty": 450,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-009",
+      "poNumber": "4502991599",
+      "rmMaterial": "200150259465H8",
+      "colour": "Praline 65H8",
+      "size": "10",
+      "category": "T-shirt",
+      "style": "T-Shirt Combed Knit - 65H8",
+      "styleCode": "TS-65H8",
+      "barcode": "BTX-4502991599-10",
+      "orderQty": 61714,
+      "productionQty": 41200,
+      "deliveryQty": 41200,
+      "balanceQty": 20514,
+      "deliveryBalanceQty": 20514,
+      "startDate": "2026-10-07",
+      "targetDate": "2026-10-28",
+      "status": "Behind Plan",
+      "priority": "Critical",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 12343,
+          "actualQty": 41200,
+          "deliveryQty": 41200,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-010",
+      "poNumber": "4502991599",
+      "rmMaterial": "200150259465H8",
+      "colour": "Praline 65H8",
+      "size": "12",
+      "category": "T-shirt",
+      "style": "T-Shirt Combed Knit - 65H8",
+      "styleCode": "TS-65H8",
+      "barcode": "BTX-4502991599-12",
+      "orderQty": 31682,
+      "productionQty": 11000,
+      "deliveryQty": 11000,
+      "balanceQty": 20682,
+      "deliveryBalanceQty": 20682,
+      "startDate": "2026-10-06",
+      "targetDate": "2026-10-29",
+      "status": "Behind Plan",
+      "priority": "High",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 6336,
+          "actualQty": 11000,
+          "deliveryQty": 11000,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-011",
+      "poNumber": "4502991599",
+      "rmMaterial": "200150259465H8",
+      "colour": "Praline 65H8",
+      "size": "14",
+      "category": "T-shirt",
+      "style": "T-Shirt Combed Knit - 65H8",
+      "styleCode": "TS-65H8",
+      "barcode": "BTX-4502991599-14",
+      "orderQty": 6408,
+      "productionQty": 1000,
+      "deliveryQty": 1000,
+      "balanceQty": 5408,
+      "deliveryBalanceQty": 5408,
+      "startDate": "2026-10-05",
+      "targetDate": "2026-10-30",
+      "status": "Behind Plan",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 1282,
+          "actualQty": 1000,
+          "deliveryQty": 1000,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-012",
+      "poNumber": "4502991599",
+      "rmMaterial": "200150259465H8",
+      "colour": "Praline 65H8",
+      "size": "16",
+      "category": "T-shirt",
+      "style": "T-Shirt Combed Knit - 65H8",
+      "styleCode": "TS-65H8",
+      "barcode": "BTX-4502991599-16",
+      "orderQty": 291,
+      "productionQty": 297,
+      "deliveryQty": 297,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-10-31",
+      "status": "Completed",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 58,
+          "actualQty": 297,
+          "deliveryQty": 297,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-013",
+      "poNumber": "4502991599",
+      "rmMaterial": "200150259465H8",
+      "colour": "Praline 65H8",
+      "size": "18",
+      "category": "T-shirt",
+      "style": "T-Shirt Combed Knit - 65H8",
+      "styleCode": "TS-65H8",
+      "barcode": "BTX-4502991599-18",
+      "orderQty": 64,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 64,
+      "deliveryBalanceQty": 64,
+      "startDate": "2026-10-03",
+      "targetDate": "2026-11-01",
+      "status": "Scheduled",
+      "priority": "High",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-014",
+      "poNumber": "4502991520",
+      "rmMaterial": "200150259433F6",
+      "colour": "Ganache 33F6",
+      "size": "10",
+      "category": "Other",
+      "style": "Specialty Trim Finish - 33F6",
+      "styleCode": "OT-33F6",
+      "barcode": "BTX-4502991520-10",
+      "orderQty": 923,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 923,
+      "deliveryBalanceQty": 923,
+      "startDate": "2026-10-02",
+      "targetDate": "2026-11-02",
+      "status": "Scheduled",
+      "priority": "Normal",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-015",
+      "poNumber": "4502991520",
+      "rmMaterial": "200150259433F6",
+      "colour": "Ganache 33F6",
+      "size": "12",
+      "category": "Other",
+      "style": "Specialty Trim Finish - 33F6",
+      "styleCode": "OT-33F6",
+      "barcode": "BTX-4502991520-12",
+      "orderQty": 2506,
+      "productionQty": 1800,
+      "deliveryQty": 1800,
+      "balanceQty": 706,
+      "deliveryBalanceQty": 706,
+      "startDate": "2026-10-08",
+      "targetDate": "2026-11-03",
+      "status": "Behind Plan",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 501,
+          "actualQty": 1800,
+          "deliveryQty": 1800,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-016",
+      "poNumber": "4502991520",
+      "rmMaterial": "200150259433F6",
+      "colour": "Ganache 33F6",
+      "size": "14",
+      "category": "Other",
+      "style": "Specialty Trim Finish - 33F6",
+      "styleCode": "OT-33F6",
+      "barcode": "BTX-4502991520-14",
+      "orderQty": 2420,
+      "productionQty": 1400,
+      "deliveryQty": 1400,
+      "balanceQty": 1020,
+      "deliveryBalanceQty": 1020,
+      "startDate": "2026-10-07",
+      "targetDate": "2026-11-04",
+      "status": "Behind Plan",
+      "priority": "High",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 484,
+          "actualQty": 1400,
+          "deliveryQty": 1400,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-017",
+      "poNumber": "4502991520",
+      "rmMaterial": "200150259433F6",
+      "colour": "Ganache 33F6",
+      "size": "16",
+      "category": "Other",
+      "style": "Specialty Trim Finish - 33F6",
+      "styleCode": "OT-33F6",
+      "barcode": "BTX-4502991520-16",
+      "orderQty": 1500,
+      "productionQty": 275,
+      "deliveryQty": 275,
+      "balanceQty": 1225,
+      "deliveryBalanceQty": 1225,
+      "startDate": "2026-10-06",
+      "targetDate": "2026-10-28",
+      "status": "Behind Plan",
+      "priority": "Critical",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 300,
+          "actualQty": 275,
+          "deliveryQty": 275,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-018",
+      "poNumber": "4502991520",
+      "rmMaterial": "200150259433F6",
+      "colour": "Ganache 33F6",
+      "size": "18",
+      "category": "Other",
+      "style": "Specialty Trim Finish - 33F6",
+      "styleCode": "OT-33F6",
+      "barcode": "BTX-4502991520-18",
+      "orderQty": 214,
+      "productionQty": 216,
+      "deliveryQty": 216,
+      "balanceQty": 0,
+      "deliveryBalanceQty": 0,
+      "startDate": "2026-10-05",
+      "targetDate": "2026-10-29",
+      "status": "Completed",
+      "priority": "Normal",
+      "dailyLogs": [
+        {
+          "date": "2026-10-21",
+          "planQty": 43,
+          "actualQty": 216,
+          "deliveryQty": 216,
+          "notes": "Factory verified production records"
+        }
+      ]
+    },
+    {
+      "id": "ORD-019",
+      "poNumber": "4502991562",
+      "rmMaterial": "200150259457H1",
+      "colour": "Talc 69-09-47 57H1",
+      "size": "10",
+      "category": "Other",
+      "style": "Technical Finish Trim - 57H1",
+      "styleCode": "OT-57H1",
+      "barcode": "BTX-4502991562-10",
+      "orderQty": 29699,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 29699,
+      "deliveryBalanceQty": 29699,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-10-30",
+      "status": "Scheduled",
+      "priority": "High",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-020",
+      "poNumber": "4502991562",
+      "rmMaterial": "200150259457H1",
+      "colour": "Talc 69-09-47 57H1",
+      "size": "12",
+      "category": "Other",
+      "style": "Technical Finish Trim - 57H1",
+      "styleCode": "OT-57H1",
+      "barcode": "BTX-4502991562-12",
+      "orderQty": 19055,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 19055,
+      "deliveryBalanceQty": 19055,
+      "startDate": "2026-10-03",
+      "targetDate": "2026-10-31",
+      "status": "Scheduled",
+      "priority": "Normal",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-021",
+      "poNumber": "4502991562",
+      "rmMaterial": "200150259457H1",
+      "colour": "Talc 69-09-47 57H1",
+      "size": "14",
+      "category": "Other",
+      "style": "Technical Finish Trim - 57H1",
+      "styleCode": "OT-57H1",
+      "barcode": "BTX-4502991562-14",
+      "orderQty": 3260,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 3260,
+      "deliveryBalanceQty": 3260,
+      "startDate": "2026-10-02",
+      "targetDate": "2026-11-01",
+      "status": "Scheduled",
+      "priority": "Critical",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-022",
+      "poNumber": "4502991562",
+      "rmMaterial": "200150259457H1",
+      "colour": "Talc 69-09-47 57H1",
+      "size": "16",
+      "category": "Other",
+      "style": "Technical Finish Trim - 57H1",
+      "styleCode": "OT-57H1",
+      "barcode": "BTX-4502991562-16",
+      "orderQty": 451,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 451,
+      "deliveryBalanceQty": 451,
+      "startDate": "2026-10-08",
+      "targetDate": "2026-11-02",
+      "status": "Scheduled",
+      "priority": "High",
+      "dailyLogs": []
+    },
+    {
+      "id": "ORD-023",
+      "poNumber": "4502991562",
+      "rmMaterial": "200150259457H1",
+      "colour": "Talc 69-09-47 57H1",
+      "size": "18",
+      "category": "Other",
+      "style": "Technical Finish Trim - 57H1",
+      "styleCode": "OT-57H1",
+      "barcode": "BTX-4502991562-18",
+      "orderQty": 63,
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 63,
+      "deliveryBalanceQty": 63,
+      "startDate": "2026-10-07",
+      "targetDate": "2026-11-03",
+      "status": "Scheduled",
+      "priority": "Normal",
+      "dailyLogs": []
+    }
+  ],
+  "machines": [
+    {
+      "id": "MCH-CUT",
+      "code": "MCH-CUT",
+      "name": "Cutting Machine",
+      "type": "Strap Precision Rotary Slitter & Cutter",
+      "category": "Strap",
+      "operatorName": "Pradeep Silva",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 2600,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6",
+        "Black 093 54A2"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-CUT",
+      "notes": "Dedicated strap cutting section (Strap Category)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-PUS",
+      "code": "MCH-PUS",
+      "name": "Pusing Machine",
+      "type": "Continuous Belt Pusing / Fusing Unit",
+      "category": "Strap",
+      "operatorName": "Sanjeewa Silva",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 2600,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-PUS",
+      "notes": "Pusing adhesive fusing station (Strap Category)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-IRN",
+      "code": "MCH-IRN",
+      "name": "Iron Machine",
+      "type": "Steam Ironing & Thermal Curing Bed",
+      "category": "Strap",
+      "operatorName": "Kamal Gunaratne",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 2600,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-IRN",
+      "notes": "Thermal curing bed (Synchronized with Compress Machine for Strap)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-CMP",
+      "code": "MCH-CMP",
+      "name": "Compress Machine",
+      "type": "High-Tension Hydraulic Strap Compressor",
+      "category": "Strap",
+      "operatorName": "Kamal Gunaratne",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 2600,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-CMP",
+      "notes": "Hydraulic strap compressor (Synchronized with Iron Machine for Strap)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-DRY",
+      "code": "MCH-DRY",
+      "name": "Dry Cut Machine",
+      "type": "Automatic Dry Rotary Guillotine Cutter",
+      "category": "Strap",
+      "operatorName": "Anura Bandara",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 2600,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6",
+        "Black 093 54A2"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-DRY",
+      "notes": "Multiplier Logic: Size 10->x50, 12->x50, 14->x50, 16->x45, 18->x50",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-01",
+      "code": "MCH-01",
+      "name": "Machine 01",
+      "type": "High Speed Elastic Loom L1",
+      "category": "Loop",
+      "operatorName": "Sunil Perera",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 5000,
+      "assignedStyles": [
+        "Loop Elastic Band - 54A2"
+      ],
+      "assignedColours": [
+        "Black 093 54A2"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16"
+      ],
+      "assignedPos": [
+        "4502991550"
+      ],
+      "qrPayload": "MCH-01",
+      "notes": "Primary elastic loop line (PO 4502991550 - Black 093 54A2)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-02",
+      "code": "MCH-02",
+      "name": "Machine 02",
+      "type": "Webbing Loom W2",
+      "category": "Strap",
+      "operatorName": "Pradeep Silva",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 4000,
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "assignedColours": [
+        "Marzipan 39H6"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "qrPayload": "MCH-02",
+      "notes": "Nylon bonding strap section (PO 4502991532 - Marzipan 39H6)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-03",
+      "code": "MCH-03",
+      "name": "Machine 03",
+      "type": "Santoni Circular Knit C3",
+      "category": "T-shirt",
+      "operatorName": "Chamari Wickramasinghe",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 6000,
+      "assignedStyles": [
+        "T-Shirt Combed Knit - 65H8"
+      ],
+      "assignedColours": [
+        "Praline 65H8"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991599"
+      ],
+      "qrPayload": "MCH-03",
+      "notes": "Continuous circular knitting cylinder (PO 4502991599 - Praline 65H8)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-04",
+      "code": "MCH-04",
+      "name": "Machine 04",
+      "type": "Ultrasonic Trim Slitter U4",
+      "category": "Other",
+      "operatorName": "Roshan Kumara",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 1500,
+      "assignedStyles": [
+        "Specialty Trim Finish - 33F6"
+      ],
+      "assignedColours": [
+        "Ganache 33F6"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991520"
+      ],
+      "qrPayload": "MCH-04",
+      "notes": "Precision cold/hot slitter (PO 4502991520 - Ganache 33F6)",
+      "todayLogs": []
+    },
+    {
+      "id": "MCH-05",
+      "code": "MCH-05",
+      "name": "Machine 05",
+      "type": "Multi-Bed Thermal Press T5",
+      "category": "Other",
+      "operatorName": "Dinesh Bandara",
+      "shift": "Day Shift",
+      "status": "Active",
+      "dailyTargetQty": 3000,
+      "assignedStyles": [
+        "Technical Finish Trim - 57H1"
+      ],
+      "assignedColours": [
+        "Talc 69-09-47 57H1"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedPos": [
+        "4502991562"
+      ],
+      "qrPayload": "MCH-05",
+      "notes": "Heat seal and adhesive curing bed (PO 4502991562 - Talc 69-09-47 57H1)",
+      "todayLogs": []
+    }
+  ],
+  "workers": [
+    {
+      "id": "WRK-01",
+      "name": "Sunil Perera",
+      "empId": "EMP-1041",
+      "category": "Loop",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 123 4567",
+      "assignedMachine": "MCH-01",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-02",
+      "name": "Kavinda Perera",
+      "empId": "EMP-1042",
+      "category": "Loop",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 234 5678",
+      "assignedMachine": "MCH-01",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-03",
+      "name": "Nimal Jayawardena",
+      "empId": "EMP-1043",
+      "category": "Loop",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 345 6789",
+      "assignedMachine": "MCH-01",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-04",
+      "name": "Pradeep Silva",
+      "empId": "EMP-1044",
+      "category": "Strap",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 456 7890",
+      "assignedMachine": "MCH-CUT",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-05",
+      "name": "Sanjeewa Silva",
+      "empId": "EMP-1045",
+      "category": "Strap",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 567 8901",
+      "assignedMachine": "MCH-PUS",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-06",
+      "name": "Kamal Gunaratne",
+      "empId": "EMP-1046",
+      "category": "Strap",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 678 9012",
+      "assignedMachine": "MCH-IRN",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-07",
+      "name": "Anura Bandara",
+      "empId": "EMP-1047",
+      "category": "Strap",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 789 0123",
+      "assignedMachine": "MCH-DRY",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-08",
+      "name": "Chamari Wickramasinghe",
+      "empId": "EMP-1048",
+      "category": "T-shirt",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 890 1234",
+      "assignedMachine": "MCH-03",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-09",
+      "name": "Roshan Kumara",
+      "empId": "EMP-1049",
+      "category": "Other",
+      "shift": "Day Shift",
+      "status": "Active",
+      "phone": "+94 77 901 2345",
+      "assignedMachine": "MCH-04",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    },
+    {
+      "id": "WRK-10",
+      "name": "Dinesh Bandara",
+      "empId": "EMP-1050",
+      "category": "Other",
+      "shift": "Night Shift",
+      "status": "Active",
+      "phone": "+94 77 912 3456",
+      "assignedMachine": "MCH-05",
+      "todayProduced": 0,
+      "todayOutput": 0,
+      "batchesLogged": 0
+    }
+  ],
   "productionLogs": [],
-  "lastUpdated": "2026-10-22T11:55:03.934Z"
+  "lastUpdated": "2026-10-22T12:30:31.855Z"
 }
