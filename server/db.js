@@ -27,6 +27,7 @@ class ProductionDatabase {
     this.workers = [];
     this.productionLogs = [];
     this.deliveryReceivedLogs = [];
+    this.outsourceConsignments = [];
     this.init();
   }
 
@@ -41,6 +42,7 @@ class ProductionDatabase {
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+        this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.ensureSpecialMachines();
         this.ensureOrderCalculations();
       } else {
@@ -57,8 +59,9 @@ class ProductionDatabase {
       o.orderQty = Number(o.orderQty) || 0;
       o.productionQty = Number(o.productionQty) || 0;
       o.deliveryQty = Number(o.deliveryQty) || 0;
-      o.balanceQty = Math.max(0, o.orderQty - o.productionQty);
-      o.deliveryBalanceQty = Math.max(0, o.orderQty - o.deliveryQty);
+      // Balance reduces strictly when Permanent Delivery is fulfilled to customer
+      o.balanceQty = Math.max(0, o.orderQty - o.deliveryQty);
+      o.deliveryBalanceQty = o.balanceQty;
       if (o.balanceQty === 0) {
         o.status = 'Completed';
       } else if (o.productionQty >= o.orderQty * 0.9) {
@@ -84,6 +87,7 @@ class ProductionDatabase {
             workers: this.workers,
             productionLogs: this.productionLogs,
             deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
             lastUpdated: new Date().toISOString(),
           },
           null,
@@ -629,6 +633,21 @@ class ProductionDatabase {
     return this.getMachineById(machine.id);
   }
 
+  deleteMachine(id) {
+    if (!id) return false;
+    const clean = String(id).trim().toLowerCase();
+    const index = this.machines.findIndex(
+      (m) =>
+        (m.id && m.id.toLowerCase() === clean) ||
+        (m.code && m.code.toLowerCase() === clean) ||
+        (m.name && m.name.toLowerCase() === clean)
+    );
+    if (index === -1) return false;
+    this.machines.splice(index, 1);
+    this.save();
+    return true;
+  }
+
   // Worker floor production submission
   submitWorkerProduction(data) {
     const { machineId, style, size, colour, producedQty, poNumber, shift, operatorName, timeSlot, notes } = data;
@@ -693,7 +712,8 @@ class ProductionDatabase {
     const todayStr = new Date().toISOString().split('T')[0];
     if (matchedOrder) {
       matchedOrder.productionQty += effectiveQty;
-      matchedOrder.balanceQty = Math.max(0, matchedOrder.orderQty - matchedOrder.productionQty);
+      // Balance reduces strictly when Permanent Delivery is fulfilled to customer
+      matchedOrder.balanceQty = Math.max(0, matchedOrder.orderQty - (Number(matchedOrder.deliveryQty) || 0));
 
       if (!matchedOrder.dailyLogs) matchedOrder.dailyLogs = [];
       const todayLog = matchedOrder.dailyLogs.find((l) => l.date === todayStr);
@@ -911,7 +931,9 @@ class ProductionDatabase {
 
       const numOrderQty = Number(order.orderQty) || 0;
       const numProductionQty = Number(order.productionQty) || 0;
-      const calculatedBalance = Math.max(0, numOrderQty - numProductionQty);
+      const numDeliveryQty = Number(order.deliveryQty) || 0;
+      // Balance reduces strictly when Permanent Delivery is dispatched to customer
+      const calculatedBalance = Math.max(0, numOrderQty - numDeliveryQty);
 
       return {
         id: order.id,
@@ -923,6 +945,7 @@ class ProductionDatabase {
         size: order.size,
         orderQty: numOrderQty,
         productionQty: numProductionQty,
+        deliveryQty: numDeliveryQty,
         balanceQty: calculatedBalance,
         todayOutput,
         dayPlan,
@@ -934,7 +957,8 @@ class ProductionDatabase {
     // Summary Totals
     const totalOrderQty = categoryOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
     const totalProductionQty = categoryOrders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
-    const totalBalanceQty = Math.max(0, totalOrderQty - totalProductionQty);
+    const totalDeliveryQty = categoryOrders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0);
+    const totalBalanceQty = Math.max(0, totalOrderQty - totalDeliveryQty);
     const todayTotalOutput = relevantLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
     const todayTargetQuota = tableRows.reduce((sum, r) => sum + r.dayPlan, 0);
     const targetAchievementRate = todayTargetQuota > 0 ? Math.round((todayTotalOutput / todayTargetQuota) * 100) : 0;
@@ -1249,26 +1273,39 @@ class ProductionDatabase {
 
         if (slotLogs.length > 0) {
           const primary = slotLogs[0];
-          workerName = primary.operator || primary.operatorName || workerName;
           style = primary.style || (m.assignedStyles && m.assignedStyles[0]) || '-';
           colour = primary.colour || (m.assignedColours && m.assignedColours[0]) || '-';
           size = String(primary.size || (m.assignedSizes && m.assignedSizes[0]) || '-');
           notes = primary.notes || '';
 
+          // Group by worker name to support multi-worker stations (e.g. Insert Loop with ~20 operators)
+          const workerMap = {};
           slotLogs.forEach((l) => {
+            const wName = l.operator || l.operatorName || workerName;
             const lSize = String(l.size || size).trim();
             let lMult = 1;
+            let logActual = 0;
             if (isDryCut) {
               lMult = lSize === '16' ? 45 : 50;
               multiplier = lMult;
               const input = l.rawQty || (l.qty ? Math.round(l.qty / lMult) : 0);
               rawQty += input;
-              actualOutput += l.qty || (input * lMult);
+              logActual = l.qty || (input * lMult);
+              actualOutput += logActual;
             } else {
               rawQty += Number(l.qty) || 0;
-              actualOutput += Number(l.qty) || 0;
+              logActual = Number(l.qty) || 0;
+              actualOutput += logActual;
             }
+            workerMap[wName] = (workerMap[wName] || 0) + logActual;
           });
+
+          const workersList = Object.entries(workerMap).map(([name, qty]) => ({ name, qty }));
+          if (workersList.length > 1) {
+            workerName = workersList.map((w) => `${w.name}: ${w.qty.toLocaleString()}`).join(' | ');
+          } else if (workersList.length === 1) {
+            workerName = workersList[0].name;
+          }
         }
 
         const variance = actualOutput - expectedHourlyTarget;
@@ -1351,16 +1388,63 @@ class ProductionDatabase {
     const totalTargetQuota = machineTables.reduce((sum, mt) => sum + mt.totals.totalTarget, 0);
     const overallNetVariance = totalHourlyOutput - totalTargetQuota;
 
+    // Build Summary Matrix:
+    // Rows: All machines from top to bottom
+    // Col 1: Machine (Code & Name)
+    // Col 2: Colour
+    // Col 3: Size
+    // Cols 4..N: Hourly time slots horizontally
+    // Last Col: Total Output / Daily Target
+    const summaryMatrix = machineTables.map((mt) => {
+      const loggedColours = [...new Set(mt.slots.map((s) => s.colour).filter((c) => c && c !== '-'))];
+      const loggedSizes = [...new Set(mt.slots.map((s) => s.size).filter((sz) => sz && sz !== '-'))];
+
+      const machineRaw = targetMachines.find((m) => m.code === mt.code || m.id === mt.id) || mt;
+      const colour = loggedColours.length > 0
+        ? loggedColours.join(', ')
+        : (machineRaw.assignedColours && machineRaw.assignedColours[0]) || '-';
+
+      const size = loggedSizes.length > 0
+        ? loggedSizes.join(', ')
+        : (machineRaw.assignedSizes && machineRaw.assignedSizes.join(', ')) || '-';
+
+      const slotOutputs = {};
+      mt.slots.forEach((s) => {
+        slotOutputs[s.id] = {
+          qty: s.actualOutput,
+          workerName: s.workerName,
+          status: s.status,
+        };
+      });
+
+      return {
+        id: mt.id,
+        code: mt.code,
+        name: mt.name,
+        category: mt.category,
+        operatorName: mt.operatorName,
+        colour,
+        size,
+        slotOutputs,
+        totalProduced: mt.totals.totalProduced,
+        dailyTarget: mt.totals.totalTarget,
+        variance: mt.totals.netVariance,
+        achievementRate: mt.totals.achievementRate,
+      };
+    });
+
     return {
       shift,
       date,
       workingHours,
+      slots: activeSlots,
       summary: {
         totalHourlyOutput,
         totalTargetQuota,
         overallNetVariance,
         activeMachinesCount: machineTables.length,
       },
+      summaryMatrix,
       machines: machineTables,
     };
   }
@@ -1408,25 +1492,41 @@ class ProductionDatabase {
 
       if (type === 'Delivery') {
         if (subCategory === 'Outsource') {
-          // 1. Outsource Delivery: Deduct from day's target
+          // 1. Outsource Delivery: Deduct from day's target. Does NOT reduce factory production qty or order balance qty!
+          // Goods are processed externally and must return to the plant. Consignment is opened in Received page.
           dayTargetDeduction = numQty;
           if (order) {
             order.dayTargetDeduction = (Number(order.dayTargetDeduction) || 0) + numQty;
           }
-          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target (${outsourcePartner || 'Outsource'})`;
+          const consignment = {
+            id: `OUT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+            dispatchDate: todayStr,
+            dispatchTimestamp: new Date().toISOString(),
+            partner: outsourcePartner || 'Saroja',
+            poNumber: order ? order.poNumber : targetPo,
+            colour: order ? order.colour : (targetColour || 'All'),
+            size: order ? String(order.size) : (targetSize || 'All'),
+            sentQty: numQty,
+            receivedQty: 0,
+            remainingQty: numQty,
+            status: 'Pending Return',
+            handlerName,
+            notes: notes || `Outsource batch sent to ${outsourcePartner || 'Partner'}`,
+            receiveHistory: [],
+          };
+          if (!this.outsourceConsignments) this.outsourceConsignments = [];
+          this.outsourceConsignments.unshift(consignment);
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target. Consignment #${consignment.id} opened for ${outsourcePartner || 'Partner'} (Pending Return in Received page)`;
         } else if (subCategory === 'Permanent') {
-          // 2. Permanent Delivery: Deduct from both system balance and product quantity, allowing tracking of order completion status
+          // 2. Permanent Delivery (Customer Dispatch): Fulfills the order and deducts remaining balance qty.
+          // Does NOT reduce productionQty (manufactured output is preserved).
           balanceDeduction = numQty;
           if (order) {
             order.deliveryQty = (Number(order.deliveryQty) || 0) + numQty;
-            // Deduct from product quantity
-            order.productionQty = Math.max(0, (Number(order.productionQty) || 0) - numQty);
-            order.productQty = order.productionQty;
-            // Deduct from system balance
-            order.balanceQty = Math.max(0, (Number(order.balanceQty) || 0) - numQty);
-            order.deliveryBalanceQty = Math.max(0, (Number(order.deliveryBalanceQty || order.orderQty) || 0) - numQty);
+            order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+            order.deliveryBalanceQty = order.balanceQty;
 
-            if (order.balanceQty === 0 || order.deliveryQty >= (Number(order.orderQty) || 0)) {
+            if (order.balanceQty === 0) {
               order.status = 'Completed';
             } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
               order.status = 'Ahead';
@@ -1441,7 +1541,7 @@ class ProductionDatabase {
               notes: `Permanent Dispatch (${numQty} pcs)`,
             });
           }
-          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from System Balance & Product Qty (Remaining Balance: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs, Product Qty: ${order ? order.productionQty.toLocaleString() : 'N/A'} pcs)`;
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Remaining Balance (Remaining Balance: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs, Total Delivered: ${order ? order.deliveryQty.toLocaleString() : 'N/A'} pcs)`;
         }
       } else {
         // Received Flow
@@ -1480,6 +1580,97 @@ class ProductionDatabase {
       success: true,
       message: `${type} transaction recorded successfully!`,
       logs: createdLogs,
+    };
+  }
+
+  // Outsource Consignments Query (Pending Returns on Received page)
+  getOutsourceConsignments(params = {}) {
+    const { partner = 'All', status = 'All', search = '' } = params;
+    let list = this.outsourceConsignments || [];
+
+    if (partner !== 'All') {
+      list = list.filter((c) => (c.partner || '').toLowerCase() === partner.toLowerCase());
+    }
+    if (status !== 'All') {
+      list = list.filter((c) => (c.status || '').toLowerCase() === status.toLowerCase());
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((c) =>
+        (c.poNumber || '').toLowerCase().includes(q) ||
+        (c.partner || '').toLowerCase().includes(q) ||
+        (c.colour || '').toLowerCase().includes(q) ||
+        (c.size || '').toLowerCase().includes(q) ||
+        (c.id || '').toLowerCase().includes(q)
+      );
+    }
+
+    return {
+      success: true,
+      data: list,
+      totalCount: list.length,
+      pendingCount: (this.outsourceConsignments || []).filter((c) => c.status !== 'Completed').length,
+    };
+  }
+
+  // Confirm receipt of returned outsource pieces (handles partial deliveries)
+  receiveOutsourceConsignment(id, data = {}) {
+    if (!id) return { success: false, message: 'Missing consignment ID' };
+    const consignment = (this.outsourceConsignments || []).find((c) => c.id === id);
+    if (!consignment) {
+      return { success: false, message: `Outsource consignment '${id}' not found` };
+    }
+
+    const returnQty = Math.max(1, Number(data.receivedQty || data.qty) || 0);
+    const handler = data.handlerName || 'Store Inbound';
+    const noteText = data.notes || '';
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    consignment.receivedQty = (Number(consignment.receivedQty) || 0) + returnQty;
+    consignment.remainingQty = Math.max(0, (Number(consignment.sentQty) || 0) - consignment.receivedQty);
+    consignment.status = consignment.remainingQty === 0 ? 'Completed' : 'Partially Received';
+
+    if (!consignment.receiveHistory) consignment.receiveHistory = [];
+    consignment.receiveHistory.push({
+      date: todayStr,
+      timestamp: new Date().toISOString(),
+      qty: returnQty,
+      handlerName: handler,
+      notes: noteText,
+    });
+
+    // Automatically record Received transaction in audit ledger
+    const rcvLog = {
+      id: `DLR-RCV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      type: 'Received',
+      subCategory: 'Outsource Return',
+      outsourcePartner: consignment.partner,
+      poNumber: consignment.poNumber,
+      colour: consignment.colour,
+      size: consignment.size,
+      qty: returnQty,
+      calculationEffect: `Received ${returnQty.toLocaleString()} pcs returned from ${consignment.partner} (Remaining pending: ${consignment.remainingQty.toLocaleString()} pcs)`,
+      dayTargetDeduction: 0,
+      balanceDeduction: 0,
+      productQtyAfter: null,
+      systemBalanceAfter: null,
+      orderStatusAfter: null,
+      date: todayStr,
+      timestamp: new Date().toISOString(),
+      handlerName: handler,
+      notes: noteText || `Return against consignment #${consignment.id}`,
+    };
+
+    if (!this.deliveryReceivedLogs) this.deliveryReceivedLogs = [];
+    this.deliveryReceivedLogs.unshift(rcvLog);
+
+    this.save();
+
+    return {
+      success: true,
+      message: `Confirmed receipt of ${returnQty.toLocaleString()} pcs from ${consignment.partner}!`,
+      consignment,
+      log: rcvLog,
     };
   }
 
@@ -1577,20 +1768,19 @@ class ProductionDatabase {
         if (log.subCategory === 'Outsource') {
           // Reverse day target deduction
           order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - qty);
+          // Also remove open consignment if unreceived
+          const cIdx = (this.outsourceConsignments || []).findIndex((c) => c.poNumber === log.poNumber && c.sentQty === qty && c.receivedQty === 0);
+          if (cIdx !== -1) this.outsourceConsignments.splice(cIdx, 1);
         } else if (log.subCategory === 'Permanent') {
-          // Reverse permanent delivery deduction:
-          order.productionQty = (Number(order.productionQty) || 0) + qty;
-          order.productQty = order.productionQty;
-          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.productionQty);
+          // Reverse permanent delivery deduction without touching productionQty!
           order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - qty);
-          order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.deliveryBalanceQty = order.balanceQty;
 
           if (order.balanceQty === 0) {
             order.status = 'Completed';
-          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
+          } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
             order.status = 'Ahead';
-          } else if (order.productionQty === 0) {
-            order.status = 'Scheduled';
           } else {
             order.status = 'Behind Plan';
           }
@@ -1643,9 +1833,9 @@ class ProductionDatabase {
         if (log.subCategory === 'Outsource') {
           order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - oldQty);
         } else if (log.subCategory === 'Permanent') {
-          order.productionQty = (Number(order.productionQty) || 0) + oldQty;
-          order.productQty = order.productionQty;
           order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - oldQty);
+          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.deliveryBalanceQty = order.balanceQty;
         }
       }
 
@@ -1656,22 +1846,18 @@ class ProductionDatabase {
           log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Day's Target (${newPartner || 'Outsource'})`;
         } else if (newSubCategory === 'Permanent') {
           order.deliveryQty = (Number(order.deliveryQty) || 0) + newQty;
-          order.productionQty = Math.max(0, (Number(order.productionQty) || 0) - newQty);
-          order.productQty = order.productionQty;
-          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.productionQty);
-          order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.deliveryBalanceQty = order.balanceQty;
 
           if (order.balanceQty === 0) {
             order.status = 'Completed';
-          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
+          } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
             order.status = 'Ahead';
-          } else if (order.productionQty === 0) {
-            order.status = 'Scheduled';
           } else {
             order.status = 'Behind Plan';
           }
 
-          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from System Balance & Product Qty (Remaining Balance: ${order.balanceQty.toLocaleString()} pcs, Product Qty: ${order.productionQty.toLocaleString()} pcs)`;
+          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Remaining Balance (Remaining Balance: ${order.balanceQty.toLocaleString()} pcs, Total Delivered: ${order.deliveryQty.toLocaleString()} pcs)`;
         }
       }
     }
@@ -1693,6 +1879,7 @@ class ProductionDatabase {
       log,
       order,
     };
+  }
   }
 }
 

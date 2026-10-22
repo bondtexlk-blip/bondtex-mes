@@ -160,6 +160,16 @@ export const api = {
     return { success: true, data: saved, message: 'Machine configuration saved successfully' };
   },
 
+  deleteMachine: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/machines/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (remote && remote.success) return remote;
+    const success = dbStore.deleteMachine(id);
+    if (!success) throw new Error(`Machine '${id}' not found`);
+    return { success: true, message: `Machine '${id}' deleted successfully` };
+  },
+
   // 13. Worker Production Batch Submission (from Mobile Floor QR Scan)
   submitWorkerBatch: async (batchData) => {
     const remote = await safeFetchJson(`${BASE_URL}/worker/submit`, {
@@ -291,6 +301,27 @@ export const api = {
     });
     if (remote && remote.success) return remote;
     return dbStore.deleteDeliveryReceived(id);
+  },
+
+  // 18B. Outsource Consignments Management & Inbound Return Confirmation
+  getOutsourceConsignments: async (params = {}) => {
+    const q = new URLSearchParams();
+    if (params.partner) q.append('partner', params.partner);
+    if (params.status) q.append('status', params.status);
+    if (params.search) q.append('search', params.search);
+    const remote = await safeFetchJson(`${BASE_URL}/outsource-consignments?${q.toString()}`);
+    if (remote && remote.success) return remote;
+    return dbStore.getOutsourceConsignments(params);
+  },
+
+  receiveOutsourceConsignment: async (id, data = {}) => {
+    const remote = await safeFetchJson(`${BASE_URL}/outsource-consignments/${encodeURIComponent(id)}/receive`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.receiveOutsourceConsignment(id, data);
   },
 
   // 19. Export CSV URL

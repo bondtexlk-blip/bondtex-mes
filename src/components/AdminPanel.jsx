@@ -458,6 +458,27 @@ export default function AdminPanel({
     }
   };
 
+  // Delete Machine Station
+  const handleDeleteMachine = async (machine) => {
+    if (!machine) return;
+    const mName = machine.name || 'Machine';
+    const mCode = machine.code || machine.id || '';
+    if (!window.confirm(`Are you sure you want to delete machine station "${mName}" (${mCode})? This will permanently remove its QR entry.`)) {
+      return;
+    }
+    try {
+      const res = await api.deleteMachine(machine.id || machine.code);
+      if (res && res.success) {
+        if (onShowToast) onShowToast(`Machine ${mName} deleted successfully!`);
+        await loadData();
+      } else {
+        if (onShowToast) onShowToast(res?.message || 'Failed to delete machine', 'error');
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message || 'Error deleting machine', 'error');
+    }
+  };
+
   // Filtered workers list
   const filteredWorkers = (workers || []).filter((w) => {
     if (!w) return false;
@@ -1295,6 +1316,14 @@ export default function AdminPanel({
                           title="Open Worker Floor Portal"
                         >
                           <Smartphone className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMachine(m)}
+                          className="p-1.5 rounded-lg bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/20 transition"
+                          title="Delete Machine Station"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

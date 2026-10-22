@@ -37,6 +37,7 @@ export default function HourlyProductionDashboard({
 }) {
   const [shift, setShift] = useState('Day Shift');
   const [selectedMachineFilter, setSelectedMachineFilter] = useState('All');
+  const [viewMode, setViewMode] = useState('summary'); // 'summary' | 'stations'
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
@@ -62,6 +63,36 @@ export default function HourlyProductionDashboard({
     loadHourlyData();
   }, [shift]);
 
+  const defaultDaySlots = [
+    { id: '07:45-08:45', label: '07:45 - 08:45', display: '7.45 - 8.45' },
+    { id: '08:45-09:45', label: '08:45 - 09:45', display: '8.45 - 9.45' },
+    { id: '09:45-10:45', label: '09:45 - 10:45', display: '9.45 - 10.45' },
+    { id: '10:45-11:45', label: '10:45 - 11:45', display: '10.45 - 11.45' },
+    { id: '11:45-12:45', label: '11:45 - 12:45', display: '11.45 - 12.45' },
+    { id: '12:45-14:15', label: '12:45 - 14:15', display: '12.45 - 2.15' },
+    { id: '14:15-15:15', label: '14:15 - 15:15', display: '2.15 - 3.15' },
+    { id: '15:15-16:30', label: '15:15 - 16:30', display: '3.15 - 4.30' },
+    { id: '16:30-17:30', label: '16:30 - 17:30', display: '4.30 - 5.30' },
+    { id: '17:30-18:30', label: '17:30 - 18:30', display: '5.30 - 6.30' },
+    { id: '18:30-19:30', label: '18:30 - 19:30', display: '6.30 - 7.30' },
+    { id: '19:30-20:30', label: '19:30 - 20:30', display: '7.30 - 8.30' },
+    { id: '21:00-21:30', label: '21:00 - 21:30', display: '9.00 - 9.30' },
+  ];
+  const defaultNightSlots = [
+    { id: '21:30-22:30', label: '21:30 - 22:30', display: '9.30 - 10.30' },
+    { id: '22:30-23:30', label: '22:30 - 23:30', display: '10.30 - 11.30' },
+    { id: '23:30-00:30', label: '23:30 - 00:30', display: '11.30 - 12.30' },
+    { id: '00:30-01:30', label: '00:30 - 01:30', display: '12.30 - 1.30' },
+    { id: '01:30-02:30', label: '01:30 - 02:30', display: '1.30 - 2.30' },
+    { id: '02:30-03:30', label: '02:30 - 03:30', display: '2.30 - 3.30' },
+    { id: '03:30-04:30', label: '03:30 - 04:30', display: '3.30 - 4.30' },
+    { id: '04:30-05:30', label: '04:30 - 05:30', display: '4.30 - 5.30' },
+    { id: '05:30-06:30', label: '05:30 - 06:30', display: '5.30 - 6.30' },
+    { id: '06:30-07:30', label: '06:30 - 07:30', display: '6.30 - 7.30' },
+  ];
+
+  const timeSlots = data?.slots || (shift === 'Night Shift' ? defaultNightSlots : defaultDaySlots);
+  const summaryMatrix = data?.summaryMatrix || [];
   const machines = data?.machines || [];
   const summary = data?.summary || {
     totalHourlyOutput: 0,
@@ -102,8 +133,37 @@ export default function HourlyProductionDashboard({
             </p>
           </div>
 
-          {/* Top Controls: Shift Selector, Theme & Refresh */}
+          {/* Top Controls: View Toggle, Shift Selector, Theme & Refresh */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* View Mode Toggle: Summary Matrix vs Station Cards */}
+            <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setViewMode('summary')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
+                  viewMode === 'summary'
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Summary View</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('stations')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
+                  viewMode === 'stations'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                <span>Detailed Stations</span>
+              </button>
+            </div>
+
             {/* Shift Switcher */}
             <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
               <button
@@ -315,8 +375,163 @@ export default function HourlyProductionDashboard({
         </div>
       </div>
 
-      {/* 4. Machine-wise Stacked Breakdown Tables */}
-      <div className="space-y-8">
+      {/* 4. Main Body: Summary Matrix Table OR Detailed Stations View */}
+      {viewMode === 'summary' ? (
+        <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl overflow-hidden animate-fade-in">
+          {/* Summary Matrix Card Header */}
+          <div className="p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>Machines Hourly Production Summary Matrix</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Top-to-bottom machine stations listing with assigned Colour, Size, and horizontal hourly slot output.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 px-3 py-1 rounded-xl">
+                {(summaryMatrix.length > 0 ? summaryMatrix : machines).length} Active Stations
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-950/95 border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider font-bold select-none">
+                  <th className="py-3.5 px-4 whitespace-nowrap sticky left-0 bg-slate-950 z-20 border-r border-slate-800 shadow-sm">
+                    Machine / Station
+                  </th>
+                  <th className="py-3.5 px-3.5 whitespace-nowrap border-r border-slate-800/60">
+                    Colour
+                  </th>
+                  <th className="py-3.5 px-3 text-center whitespace-nowrap border-r border-slate-800/60">
+                    Size
+                  </th>
+                  {timeSlots.map((slot) => (
+                    <th
+                      key={slot.id}
+                      className="py-3.5 px-3 text-center whitespace-nowrap font-mono text-[10px] border-r border-slate-800/40"
+                    >
+                      {slot.display || slot.label}
+                    </th>
+                  ))}
+                  <th className="py-3.5 px-4 text-right whitespace-nowrap sticky right-0 bg-slate-950 z-20 border-l border-slate-800 shadow-sm">
+                    Total Output / Quota
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-sans">
+                {(summaryMatrix.length > 0 ? summaryMatrix : machines).map((row) => {
+                  const mName = row.name || 'Machine';
+                  const mCode = row.code || row.id || '';
+                  const mColour = row.colour || (row.assignedColours && row.assignedColours[0]) || '-';
+                  const mSize = row.size || (row.assignedSizes && row.assignedSizes.join(', ')) || '-';
+                  const mProduced = row.totalProduced !== undefined ? row.totalProduced : (row.totals?.totalProduced || 0);
+                  const mTarget = row.dailyTarget !== undefined ? row.dailyTarget : (row.dailyTargetQty || 2500);
+                  const mAchieve = mTarget > 0 ? Math.round((mProduced / mTarget) * 100) : 0;
+
+                  return (
+                    <tr
+                      key={row.id || mCode}
+                      className="hover:bg-slate-800/40 transition group"
+                    >
+                      {/* Col 1: Machine */}
+                      <td className="py-3.5 px-4 whitespace-nowrap font-bold text-white sticky left-0 bg-slate-900 group-hover:bg-slate-850 z-10 border-r border-slate-800 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate max-w-[150px]">{mName}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
+                            {mCode}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-normal">
+                          {row.operatorName || 'Floor Worker'}
+                        </div>
+                      </td>
+
+                      {/* Col 2: Colour */}
+                      <td className="py-3.5 px-3.5 whitespace-nowrap border-r border-slate-800/60">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-medium text-slate-300">
+                          <span
+                            className="w-2 h-2 rounded-full border border-white/20"
+                            style={{
+                              backgroundColor:
+                                (mColour || '').toLowerCase().includes('black')
+                                  ? '#18181b'
+                                  : (mColour || '').toLowerCase().includes('marzipan')
+                                  ? '#d4a373'
+                                  : (mColour || '').toLowerCase().includes('praline')
+                                  ? '#bc6c25'
+                                  : (mColour || '').toLowerCase().includes('ganache')
+                                  ? '#4a2c1d'
+                                  : (mColour || '').toLowerCase().includes('talc')
+                                  ? '#e7e5e4'
+                                  : '#38bdf8',
+                            }}
+                          ></span>
+                          <span className="truncate max-w-[110px]">{mColour}</span>
+                        </span>
+                      </td>
+
+                      {/* Col 3: Size */}
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap border-r border-slate-800/60">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-white font-mono text-[11px] font-bold">
+                          {mSize}
+                        </span>
+                      </td>
+
+                      {/* Cols 4..N: Time Slots */}
+                      {timeSlots.map((slot) => {
+                        const cellData = row.slotOutputs?.[slot.id] || (row.slots?.find((s) => s.id === slot.id));
+                        const qty = typeof cellData === 'object' ? (cellData?.qty || cellData?.actualOutput || 0) : (Number(cellData) || 0);
+                        const workerLabel = cellData?.workerName || '';
+
+                        return (
+                          <td
+                            key={slot.id}
+                            className={`py-3 px-2 text-center whitespace-nowrap border-r border-slate-800/40 font-mono text-xs ${
+                              qty > 0 ? 'bg-cyan-950/20' : ''
+                            }`}
+                            title={workerLabel ? `Worker: ${workerLabel}` : undefined}
+                          >
+                            {qty > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <span className="font-black text-cyan-300">
+                                  {formatNumber(qty)}
+                                </span>
+                                {workerLabel && (
+                                  <span className="text-[9px] text-slate-400 font-sans max-w-[85px] truncate">
+                                    {workerLabel}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-600 font-mono">-</span>
+                            )}
+                          </td>
+                        );
+                      })}
+
+                      {/* Last Col: Total Output / Quota */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap sticky right-0 bg-slate-900 group-hover:bg-slate-850 z-10 border-l border-slate-800 shadow-sm">
+                        <div className="font-mono font-black text-emerald-400 text-sm">
+                          {formatNumber(mProduced)} <span className="text-[10px] font-normal text-slate-400">pcs</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          Target: {formatNumber(mTarget)} ({mAchieve}%)
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Detailed Station Cards View */
+        <div className="space-y-8 animate-fade-in">
         {loading && !data ? (
           <div className="rounded-3xl bg-slate-900 border border-slate-800 p-16 text-center text-slate-400">
             <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
@@ -648,7 +863,8 @@ export default function HourlyProductionDashboard({
             );
           })
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

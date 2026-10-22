@@ -33,11 +33,20 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
+import { QRCodeSVG } from 'qrcode.react';
+import { resolveProductionHost } from '../utils/urlHelper';
 
 export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToView, theme = 'dark' }) {
   // 1. Multi-Step Workflow State
   // Type: 'Delivery' | 'Received'
   const [selectedType, setSelectedType] = useState('Delivery');
+
+  // Outsource Consignments (Awaiting Return on Received Page)
+  const [consignments, setConsignments] = useState([]);
+  const [receivingConsignmentId, setReceivingConsignmentId] = useState(null);
+  const [receiveInputQty, setReceiveInputQty] = useState({});
+  const [receiveHandler, setReceiveHandler] = useState('Store Inbound');
+  const [receiveNotes, setReceiveNotes] = useState('');
 
   // Delivery Sub-Category: 'Outsource' | 'Permanent'
   const [selectedDeliverySub, setSelectedDeliverySub] = useState('Outsource');
@@ -110,14 +119,15 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     }
   };
 
-  // Load orders, machines and transaction history
+  // Load orders, machines, transaction history, and active outsource consignments
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ordersRes, logsRes, machinesRes] = await Promise.all([
+      const [ordersRes, logsRes, machinesRes, consignmentsRes] = await Promise.all([
         api.getOrders({ limit: 100 }),
         api.getDeliveryReceivedLogs(),
         api.getMachines().catch(() => ({ success: false })),
+        api.getOutsourceConsignments().catch(() => ({ success: false, data: [] })),
       ]);
 
       if (ordersRes && ordersRes.orders) {
@@ -136,10 +146,53 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       if (machinesRes && machinesRes.data) {
         setMachines(machinesRes.data);
       }
+
+      if (consignmentsRes && consignmentsRes.data) {
+        setConsignments(consignmentsRes.data);
+      }
     } catch (err) {
       console.error('Error loading delivery/received data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Confirm Inbound Return of Outsource Consignment (with customizable pieces for partial return)
+  const handleConfirmReturn = async (consignment) => {
+    if (!consignment) return;
+    const defaultPcs = Number(consignment.remainingQty) || 0;
+    const entered = receiveInputQty[consignment.id];
+    const returnQty = entered !== undefined && entered !== '' ? Number(entered) : defaultPcs;
+
+    if (!returnQty || returnQty <= 0) {
+      if (onShowToast) onShowToast('Please enter a valid piece count greater than 0', 'error');
+      return;
+    }
+
+    try {
+      setReceivingConsignmentId(consignment.id);
+      const res = await api.receiveOutsourceConsignment(consignment.id, {
+        receivedQty: returnQty,
+        handlerName: receiveHandler || 'Store Inbound',
+        notes: receiveNotes || `Outsource batch return from ${consignment.partner}`,
+      });
+
+      if (res && res.success) {
+        playBeep();
+        if (onShowToast) onShowToast(res.message || `Received ${returnQty.toLocaleString()} pcs from ${consignment.partner}!`, 'success');
+        setReceiveInputQty((prev) => {
+          const next = { ...prev };
+          delete next[consignment.id];
+          return next;
+        });
+        await loadData();
+      } else {
+        if (onShowToast) onShowToast(res?.message || 'Failed to confirm return', 'error');
+      }
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message || 'Error confirming return', 'error');
+    } finally {
+      setReceivingConsignmentId(null);
     }
   };
 
@@ -906,32 +959,144 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
               </div>
             )}
 
-            {/* STEP 3B: RECEIVED SOURCE SELECTION (if Received) */}
+            {/* STEP 3B: RECEIVED SOURCE & OUTSOURCE CONSIGNMENTS SELECTION (if Received) */}
             {selectedType === 'Received' && (
-              <div className="space-y-3 pt-4 border-t border-slate-800 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">
-                      2
+              <div className="space-y-4 pt-4 border-t border-slate-800 animate-fade-in">
+                {/* ACTIVE OUTSOURCE CONSIGNMENTS AWAITING RETURN */}
+                <div className="p-4 rounded-2xl bg-purple-950/30 border border-purple-500/30 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <ArrowDownToLine className="w-4 h-4 text-purple-400" />
+                        <span>Active Outsource Consignments (Awaiting Return)</span>
+                      </h4>
+                      <p className="text-[11px] text-purple-300/80 mt-0.5">
+                        Track dispatched lots sent to Saroja, Anoja, & Iresh. Confirm returned pieces below (supports partial returns).
+                      </p>
+                    </div>
+                    <span className="self-start sm:self-auto text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-500/30">
+                      {(consignments || []).filter((c) => c.status !== 'Completed').length} Pending Lots
                     </span>
-                    <span>Received From Source:</span>
-                  </label>
+                  </div>
+
+                  {(consignments || []).filter((c) => c.status !== 'Completed').length === 0 ? (
+                    <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400">
+                      No pending outsource consignments awaiting return. All partner dispatches are reconciled!
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                      {(consignments || []).filter((c) => c.status !== 'Completed').map((c) => {
+                        const defaultPcs = c.remainingQty;
+                        const currentVal = receiveInputQty[c.id] !== undefined ? receiveInputQty[c.id] : defaultPcs;
+                        const isSaving = receivingConsignmentId === c.id;
+
+                        return (
+                          <div
+                            key={c.id}
+                            className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 hover:border-purple-500/40 transition space-y-2.5"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-lg bg-purple-600/20 text-purple-300 font-mono font-bold text-[11px] border border-purple-500/30">
+                                  {c.partner}
+                                </span>
+                                <span className="font-mono text-white text-xs font-bold">
+                                  PO #{c.poNumber}
+                                </span>
+                                <span className="text-slate-300 text-xs">
+                                  {c.colour} (Sz {c.size})
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {c.dispatchDate}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-3 text-xs">
+                                <div className="text-slate-400 text-[11px]">
+                                  Sent: <strong className="text-white font-mono">{c.sentQty?.toLocaleString()}</strong>
+                                </div>
+                                <div className="text-emerald-400 text-[11px]">
+                                  Received: <strong className="font-mono">{c.receivedQty?.toLocaleString()}</strong>
+                                </div>
+                                <div className="text-amber-400 text-[11px]">
+                                  Pending: <strong className="font-mono">{c.remainingQty?.toLocaleString()}</strong> pcs
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Return Confirmation Inputs */}
+                            <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
+                              <div className="flex-1 flex items-center gap-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase shrink-0">
+                                  Returned Pcs:
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={currentVal}
+                                  onChange={(e) =>
+                                    setReceiveInputQty((prev) => ({
+                                      ...prev,
+                                      [c.id]: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Enter returned pieces..."
+                                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-purple-200 font-mono font-bold focus:outline-none focus:border-purple-500"
+                                />
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={isSaving}
+                                onClick={() => handleConfirmReturn(c)}
+                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50 shadow-md shadow-emerald-600/20 shrink-0"
+                              >
+                                {isSaving ? (
+                                  <>
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                    <span>Saving...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Confirm Receipt</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {['Saroja', 'Anoja', 'Iresh', 'Factory'].map((src) => (
-                    <button
-                      key={src}
-                      type="button"
-                      onClick={() => setReceivedSource(src)}
-                      className={`p-2.5 rounded-xl border text-center transition text-xs font-bold ${
-                        receivedSource === src
-                          ? 'bg-purple-600 text-white border-purple-400 shadow-md'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      {src}
-                    </button>
-                  ))}
+
+                {/* MANUAL AD-HOC INBOUND SECTION */}
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-[10px]">
+                        2
+                      </span>
+                      <span>Or Manual Inbound Entry (Ad-hoc Source):</span>
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {['Saroja', 'Anoja', 'Iresh', 'Factory'].map((src) => (
+                      <button
+                        key={src}
+                        type="button"
+                        onClick={() => setReceivedSource(src)}
+                        className={`p-2.5 rounded-xl border text-center transition text-xs font-bold ${
+                          receivedSource === src
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-md'
+                            : 'bg-slate-950/60 border-slate-800 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {src}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -1194,7 +1359,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     <span className="font-mono font-bold text-white">
                       {totalEnteredQty.toLocaleString()} pcs
                     </span>{' '}
-                    from the <strong>Day's Target</strong>.
+                    from the <strong>Day's Target</strong>. Production Qty & System Balance are NOT reduced (goods are sent outside and logged for return in the Received page).
                   </div>
                 ) : (
                   <div className="text-xs text-emerald-300/90 leading-relaxed">
@@ -1202,7 +1367,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     <span className="font-mono font-bold text-white">
                       {totalEnteredQty.toLocaleString()} pcs
                     </span>{' '}
-                    from both the <strong>System Balance</strong> and the <strong>Product Quantity</strong>, updating order completion status!
+                    from the <strong>Remaining Balance</strong> to fulfill the order! (Manufactured Production Qty is preserved).
                   </div>
                 )
               ) : (
@@ -1240,7 +1405,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     {selectedType === 'Delivery'
                       ? selectedDeliverySub === 'Outsource'
                         ? `Save Outsource Delivery (-${totalEnteredQty.toLocaleString()} pcs Target)`
-                        : `Save Permanent Delivery (-${totalEnteredQty.toLocaleString()} pcs Balance & Product Qty)`
+                        : `Save Permanent Delivery (-${totalEnteredQty.toLocaleString()} pcs Balance)`
                       : `Save Received Batch (+${totalEnteredQty.toLocaleString()} pcs)`}
                   </span>
                 </>
@@ -1303,19 +1468,23 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   className="w-full h-full object-cover rounded-xl"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center p-4 text-center space-y-2">
-                  <div className="flex items-center gap-1 opacity-70">
-                    <div className="w-1.5 h-12 bg-cyan-400"></div>
-                    <div className="w-0.5 h-12 bg-cyan-400"></div>
-                    <div className="w-2.5 h-12 bg-cyan-400"></div>
-                    <div className="w-1 h-12 bg-cyan-400"></div>
-                    <div className="w-3 h-12 bg-cyan-400"></div>
-                    <div className="w-0.5 h-12 bg-cyan-400"></div>
-                    <div className="w-2 h-12 bg-cyan-400"></div>
+                <div className="flex flex-col items-center justify-center p-3 text-center space-y-2">
+                  <div className="p-2 rounded-xl bg-white shadow-lg inline-block">
+                    <QRCodeSVG
+                      value={`${resolveProductionHost()}/?view=delivery-received`}
+                      size={110}
+                      level="M"
+                      includeMargin={false}
+                    />
                   </div>
-                  <span className="text-[10px] text-slate-400 uppercase tracking-widest font-mono">
-                    Scan Gun Laser Sensor Active
-                  </span>
+                  <div className="text-center">
+                    <span className="text-[10px] text-cyan-300 font-bold block">
+                      Delivery & Received Direct QR
+                    </span>
+                    <span className="text-[9px] text-slate-400 font-mono">
+                      Scan with mobile to open this workflow
+                    </span>
+                  </div>
                 </div>
               )}
 

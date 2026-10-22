@@ -217,6 +217,19 @@ router.post('/machines', (req, res) => {
   }
 });
 
+// 15B. Delete Machine Station (Admin QR Page)
+router.delete('/machines/:id', (req, res) => {
+  try {
+    const success = db.deleteMachine(req.params.id);
+    if (!success) {
+      return res.status(404).json({ success: false, message: `Machine '${req.params.id}' not found` });
+    }
+    res.json({ success: true, message: `Machine '${req.params.id}' removed successfully` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 16. Worker Production Batch Submission (from Mobile Floor QR Scan)
 router.post('/worker/submit', (req, res) => {
   try {
@@ -346,6 +359,28 @@ router.delete('/delivery-received/:id', (req, res) => {
     const result = db.deleteDeliveryReceived(req.params.id);
     if (!result.success) {
       return res.status(404).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 22. Outsource Consignments Management & Inbound Return Confirmation
+router.get('/outsource-consignments', (req, res) => {
+  try {
+    const result = db.getOutsourceConsignments(req.query);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/outsource-consignments/:id/receive', (req, res) => {
+  try {
+    const result = db.receiveOutsourceConsignment(req.params.id, req.body);
+    if (!result.success) {
+      return res.status(400).json(result);
     }
     res.json(result);
   } catch (error) {
