@@ -24,6 +24,8 @@ import {
   Check,
   ArrowRight,
   ShieldAlert,
+  Cpu,
+  RotateCcw,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
@@ -42,8 +44,10 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   // Received Source: 'Saroja' | 'Anoja' | 'Iresh' | 'Factory'
   const [receivedSource, setReceivedSource] = useState('Saroja');
 
-  // 2. Orders & Selection State
+  // 2. Orders, Machines & Selection State
   const [orders, setOrders] = useState([]);
+  const [machines, setMachines] = useState([]);
+  const [activeMachine, setActiveMachine] = useState(null);
   const [selectedPo, setSelectedPo] = useState('4502991550');
   const [selectedColour, setSelectedColour] = useState('Black 093 54A2');
   const [sizeQuantities, setSizeQuantities] = useState({});
@@ -92,13 +96,14 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     }
   };
 
-  // Load orders and transaction history
+  // Load orders, machines and transaction history
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ordersRes, logsRes] = await Promise.all([
+      const [ordersRes, logsRes, machinesRes] = await Promise.all([
         api.getOrders({ limit: 100 }),
         api.getDeliveryReceivedLogs(),
+        api.getMachines().catch(() => ({ success: false })),
       ]);
 
       if (ordersRes && ordersRes.orders) {
@@ -112,6 +117,10 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       if (logsRes && logsRes.logs) {
         setLogs(logsRes.logs);
         if (logsRes.summary) setSummary(logsRes.summary);
+      }
+
+      if (machinesRes && machinesRes.data) {
+        setMachines(machinesRes.data);
       }
     } catch (err) {
       console.error('Error loading delivery/received data:', err);
@@ -136,13 +145,15 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     (o) => !selectedColour || o.colour.toLowerCase() === selectedColour.toLowerCase()
   );
 
-  // Switch PO & auto-select its first colour
+  // Switch PO & auto-select its first colour (without resetting entered quantities)
   const handleSelectPo = (po) => {
     setSelectedPo(po);
     const poItems = orders.filter((o) => o.poNumber === po);
-    if (poItems.length > 0) {
+    if (
+      poItems.length > 0 &&
+      (!selectedColour || !poItems.some((o) => o.colour.toLowerCase() === selectedColour.toLowerCase()))
+    ) {
       setSelectedColour(poItems[0].colour);
-      setSizeQuantities({});
     }
   };
 
@@ -173,6 +184,12 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     }));
   };
 
+  // Explicitly clear entered quantities
+  const handleClearInputs = () => {
+    setSizeQuantities({});
+    if (onShowToast) onShowToast('Reset size quantities', 'info');
+  };
+
   // Total calculated pieces across all sizes
   const totalEnteredQty = Object.values(sizeQuantities).reduce(
     (sum, q) => sum + (Number(q) || 0),
@@ -192,7 +209,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
         videoRef.current.srcObject = stream;
         videoRef.current.play();
       }
-      setScannerStatus('Camera Live • Position QR / Barcode in frame');
+      setScannerStatus('Camera Live • Position Machine / PO QR in frame');
     } catch (err) {
       console.warn('Camera access unavailable:', err);
       setCameraActive(false);
@@ -210,22 +227,100 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     setScannerStatus('Ready • Awaiting Scan');
   };
 
-  // Process Scanned Code (either from input or camera or test buttons)
+  // Process Scanned Code (Machine QR / PO QR / Barcode / Test Preset)
   const handleProcessScan = (codeRaw) => {
-    const code = (codeRaw || barcodeInput || '').trim();
-    if (!code) return;
+    const rawInput = (codeRaw || barcodeInput || '').trim();
+    if (!rawInput) return;
 
     playBeep();
-    setLastScannedCode(code);
+    setLastScannedCode(rawInput);
 
-    // Look for matching order by barcode or PO #
-    // Barcode format: BTX-4502991550-10 or 4502991550
+    // 1. Extract Machine Code or PO Number from URLs or Raw Strings
+    let candidateCode = rawInput;
+    let urlMachine = null;
+    let urlPo = null;
+
+    try {
+      if (rawInput.startsWith('http://') || rawInput.startsWith('https://')) {
+        const parsedUrl = new URL(rawInput);
+        urlMachine = parsedUrl.searchParams.get('machine');
+        urlPo = parsedUrl.searchParams.get('po') || parsedUrl.searchParams.get('order');
+      } else if (rawInput.includes('machine=')) {
+        const match = rawInput.match(/machine=([^&#\s]+)/i);
+        if (match) urlMachine = decodeURIComponent(match[1]);
+      } else if (rawInput.includes('po=')) {
+        const match = rawInput.match(/po=([^&#\s]+)/i);
+        if (match) urlPo = decodeURIComponent(match[1]);
+      }
+    } catch {
+      // Continue with raw text
+    }
+
+    const machineSearchTerm = (urlMachine || candidateCode).trim().toLowerCase();
+
+    // 2. Machine QR Detection & Auto-Binding
+    const matchedMachine = machines.find((m) => {
+      return (
+        (m.code && m.code.toLowerCase() === machineSearchTerm) ||
+        (m.id && m.id.toLowerCase() === machineSearchTerm) ||
+        (m.name && m.name.toLowerCase() === machineSearchTerm) ||
+        (m.qrPayload && m.qrPayload.toLowerCase() === machineSearchTerm)
+      );
+    });
+
+    if (matchedMachine) {
+      setActiveMachine(matchedMachine);
+      if (matchedMachine.operatorName) {
+        setHandlerName(matchedMachine.operatorName);
+      }
+
+      // Auto-assign matching PO & Colour from machine's assigned scope
+      let targetPo = null;
+      if (matchedMachine.assignedPos && matchedMachine.assignedPos.length > 0) {
+        targetPo = matchedMachine.assignedPos.find((p) => orders.some((o) => o.poNumber === p));
+      }
+      if (!targetPo && matchedMachine.category) {
+        const catOrder = orders.find(
+          (o) => (o.category || '').toLowerCase() === matchedMachine.category.toLowerCase()
+        );
+        if (catOrder) targetPo = catOrder.poNumber;
+      }
+      if (!targetPo && orders.length > 0) {
+        targetPo = orders[0].poNumber;
+      }
+
+      if (targetPo) {
+        setSelectedPo(targetPo);
+        const poOrders = orders.filter((o) => o.poNumber === targetPo);
+        const machineCol = (matchedMachine.assignedColours || []).find((c) =>
+          poOrders.some((o) => o.colour.toLowerCase() === c.toLowerCase())
+        );
+        if (machineCol) {
+          setSelectedColour(machineCol);
+        } else if (poOrders.length > 0) {
+          setSelectedColour(poOrders[0].colour);
+        }
+      }
+
+      setScannerStatus(`✅ Station Linked: ${matchedMachine.name} (${matchedMachine.code})`);
+      if (onShowToast) {
+        onShowToast(`Station Linked: ${matchedMachine.name} (${matchedMachine.code}) • Data Form Ready`, 'success');
+      }
+      setBarcodeInput('');
+      return;
+    }
+
+    // 3. Purchase Order / Barcode Detection
+    const poSearchTerm = (urlPo || candidateCode).trim();
     let matchedOrder = orders.find(
-      (o) => o.barcode === code || o.poNumber === code || o.id === code
+      (o) =>
+        o.barcode === poSearchTerm ||
+        o.poNumber === poSearchTerm ||
+        o.id === poSearchTerm
     );
 
-    if (!matchedOrder && code.includes('-')) {
-      const parts = code.split('-');
+    if (!matchedOrder && poSearchTerm.includes('-')) {
+      const parts = poSearchTerm.split('-');
       const possiblePo = parts.find((p) => orders.some((o) => o.poNumber === p));
       if (possiblePo) {
         matchedOrder = orders.find((o) => o.poNumber === possiblePo);
@@ -236,15 +331,18 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       setSelectedPo(matchedOrder.poNumber);
       setSelectedColour(matchedOrder.colour);
       if (matchedOrder.size) {
-        setSizeQuantities({ [matchedOrder.size]: '100' });
+        setSizeQuantities((prev) => ({
+          ...prev,
+          [matchedOrder.size]: prev[matchedOrder.size] || '100',
+        }));
       }
       setScannerStatus(`✅ Scanned PO #${matchedOrder.poNumber} (${matchedOrder.colour})`);
       if (onShowToast) {
-        onShowToast(`Scanned: PO ${matchedOrder.poNumber} • ${matchedOrder.colour} (Size ${matchedOrder.size})`);
+        onShowToast(`Scanned: PO ${matchedOrder.poNumber} • ${matchedOrder.colour} (Size ${matchedOrder.size})`, 'success');
       }
     } else {
-      setScannerStatus(`⚠️ Code '${code}' scanned - not in registered POs`);
-      if (onShowToast) onShowToast(`Unrecognized barcode: ${code}`, 'error');
+      setScannerStatus(`⚠️ Unrecognized QR / Barcode: '${rawInput}'`);
+      if (onShowToast) onShowToast(`Unrecognized barcode or machine QR: ${rawInput}`, 'error');
     }
 
     setBarcodeInput('');
@@ -278,11 +376,16 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       const payload = {
         type: selectedType,
         subCategory: selectedType === 'Delivery' ? selectedDeliverySub : 'Received',
-        outsourcePartner: selectedType === 'Delivery' && selectedDeliverySub === 'Outsource' ? selectedPartner : (selectedType === 'Received' ? receivedSource : null),
+        outsourcePartner:
+          selectedType === 'Delivery' && selectedDeliverySub === 'Outsource'
+            ? selectedPartner
+            : selectedType === 'Received'
+            ? receivedSource
+            : null,
         poNumber: selectedPo,
         colour: selectedColour,
         items,
-        notes,
+        notes: activeMachine ? `${notes ? notes + ' | ' : ''}[Station: ${activeMachine.name}]` : notes,
         handlerName,
       };
 
@@ -290,11 +393,12 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
       if (res && res.success) {
         playBeep();
-        const effectMsg = selectedType === 'Delivery'
-          ? (selectedDeliverySub === 'Outsource'
+        const effectMsg =
+          selectedType === 'Delivery'
+            ? selectedDeliverySub === 'Outsource'
               ? `Deducted ${totalEnteredQty.toLocaleString()} pcs from Day's Target (Outsourced to ${selectedPartner})`
-              : `Deducted ${totalEnteredQty.toLocaleString()} pcs from System Balance (Permanent Dispatch)`)
-          : `Received ${totalEnteredQty.toLocaleString()} pcs into warehouse (from ${receivedSource})`;
+              : `Deducted ${totalEnteredQty.toLocaleString()} pcs from System Balance & Product Quantity (Permanent Dispatch)`
+            : `Received ${totalEnteredQty.toLocaleString()} pcs into warehouse (from ${receivedSource})`;
 
         setSuccessBanner({
           type: selectedType,
@@ -307,7 +411,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
         if (onShowToast) onShowToast(effectMsg, 'success');
 
-        // Reset entered quantities
+        // Reset entered quantities upon successful transaction
         setSizeQuantities({});
         setNotes('');
 
@@ -323,14 +427,21 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     }
   };
 
-  // Test Barcodes Preset List
+  // Test Barcodes & Machine Presets
   const testBarcodes = [
-    { label: 'PO 4502991550 (Black)', code: '4502991550' },
-    { label: 'PO 4502991532 (Marzipan)', code: '4502991532' },
-    { label: 'PO 4502991599 (Praline)', code: '4502991599' },
-    { label: 'PO 4502991520 (Ganache)', code: '4502991520' },
-    { label: 'PO 4502991562 (Talc)', code: '4502991562' },
-    { label: 'Full Barcode (Sz 10)', code: 'BTX-4502991550-10' },
+    { label: 'Station: MCH-01 (Loop 01)', code: 'MCH-01', type: 'machine' },
+    { label: 'Station: MCH-CUT (Cutting)', code: 'MCH-CUT', type: 'machine' },
+    { label: 'Station: MCH-PUS (Pusing)', code: 'MCH-PUS', type: 'machine' },
+    { label: 'Station: MCH-IRN (Iron)', code: 'MCH-IRN', type: 'machine' },
+    { label: 'Station: MCH-CMP (Compress)', code: 'MCH-CMP', type: 'machine' },
+    { label: 'Station: MCH-DRY (Dry Cut)', code: 'MCH-DRY', type: 'machine' },
+    { label: 'QR URL (?machine=MCH-01)', code: '/?view=worker&machine=MCH-01', type: 'machine' },
+    { label: 'PO 4502991550 (Black)', code: '4502991550', type: 'po' },
+    { label: 'PO 4502991532 (Marzipan)', code: '4502991532', type: 'po' },
+    { label: 'PO 4502991599 (Praline)', code: '4502991599', type: 'po' },
+    { label: 'PO 4502991520 (Ganache)', code: '4502991520', type: 'po' },
+    { label: 'PO 4502991562 (Talc)', code: '4502991562', type: 'po' },
+    { label: 'Full Barcode (Sz 10)', code: 'BTX-4502991550-10', type: 'po' },
   ];
 
   // Filter logs for table
@@ -474,6 +585,35 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
             onSubmit={handleSubmitTransaction}
             className="rounded-3xl bg-slate-900/90 border border-slate-800 p-6 shadow-2xl space-y-6 backdrop-blur-sm"
           >
+            {/* ACTIVE SCANNED MACHINE / STATION BADGE */}
+            {activeMachine && (
+              <div className="p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg animate-fade-in">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-white flex items-center gap-2">
+                      <span>Station: {activeMachine.name}</span>
+                      <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-cyan-900/80 text-cyan-300 border border-cyan-500/40">
+                        {activeMachine.code || activeMachine.id}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-cyan-300/80 mt-0.5">
+                      Operator: <strong className="text-white">{activeMachine.operatorName || 'Floor Operator'}</strong> • {activeMachine.category} Division • {activeMachine.shift || 'Shift A'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveMachine(null)}
+                  className="self-start sm:self-auto text-[11px] text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 hover:border-slate-600 transition"
+                >
+                  Unlink Station
+                </button>
+              </div>
+            )}
+
             {/* STEP 1: INITIAL SELECTION (Delivery vs Received) */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -483,7 +623,14 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   </span>
                   <span>Step 1: Initial Selection</span>
                 </label>
-                <span className="text-[11px] text-slate-400">Choose Transaction Type</span>
+                <div className="flex items-center gap-2">
+                  {totalEnteredQty > 0 && (
+                    <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950/80 px-2 py-0.5 rounded-lg border border-cyan-500/30">
+                      Preserved: {totalEnteredQty.toLocaleString()} pcs
+                    </span>
+                  )}
+                  <span className="text-[11px] text-slate-400">Choose Transaction Type</span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -587,7 +734,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     </div>
                     <div>
                       <div className="font-extrabold text-xs">Permanent</div>
-                      <div className="text-[10px] text-emerald-400 font-semibold">Deducts from System Balance</div>
+                      <div className="text-[10px] text-emerald-400 font-semibold">Deducts from Balance & Product Qty</div>
                     </div>
                   </button>
                 </div>
@@ -666,7 +813,20 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   </span>
                   <span>Step 4: Product & Quantity Parameters</span>
                 </label>
-                <span className="text-[11px] text-slate-400">PO, Colour & Sizes</span>
+                <div className="flex items-center gap-2">
+                  {totalEnteredQty > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearInputs}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[10px] font-bold hover:bg-rose-500/25 transition"
+                      title="Clear entered quantities"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      <span>Reset Quantities</span>
+                    </button>
+                  )}
+                  <span className="text-[11px] text-slate-400">PO, Colour & Sizes</span>
+                </div>
               </div>
 
               {/* PO Number Selector */}
@@ -700,10 +860,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     <button
                       key={col}
                       type="button"
-                      onClick={() => {
-                        setSelectedColour(col);
-                        setSizeQuantities({});
-                      }}
+                      onClick={() => setSelectedColour(col)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border ${
                         selectedColour.toLowerCase() === col.toLowerCase()
                           ? 'bg-blue-600 text-white border-blue-400 shadow-md'
@@ -721,7 +878,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                 <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
                   <span>Enter Quantities for Available Sizes (pcs):</span>
                   <span className="text-[11px] text-cyan-400 font-mono">
-                    Total: {totalEnteredQty.toLocaleString()} pcs
+                    Total: {totalEnteredQty.toLocaleString()} pcs (Preserved)
                   </span>
                 </label>
 
@@ -842,7 +999,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     <span className="font-mono font-bold text-white">
                       {totalEnteredQty.toLocaleString()} pcs
                     </span>{' '}
-                    from the <strong>System Balance</strong>, advancing order completion status!
+                    from both the <strong>System Balance</strong> and the <strong>Product Quantity</strong>, updating order completion status!
                   </div>
                 )
               ) : (
@@ -880,7 +1037,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     {selectedType === 'Delivery'
                       ? selectedDeliverySub === 'Outsource'
                         ? `Save Outsource Delivery (-${totalEnteredQty.toLocaleString()} pcs Target)`
-                        : `Save Permanent Delivery (-${totalEnteredQty.toLocaleString()} pcs Balance)`
+                        : `Save Permanent Delivery (-${totalEnteredQty.toLocaleString()} pcs Balance & Product Qty)`
                       : `Save Received Batch (+${totalEnteredQty.toLocaleString()} pcs)`}
                   </span>
                 </>
@@ -1010,9 +1167,9 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
             {/* Quick Test Presets */}
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                Quick Test Verified POs:
+                Quick Test Machines & POs:
               </span>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
                 {testBarcodes.map((preset) => (
                   <button
                     key={preset.code}
@@ -1020,8 +1177,15 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     onClick={() => handleProcessScan(preset.code)}
                     className="p-2 rounded-xl bg-slate-950/70 hover:bg-slate-800 border border-slate-800 text-left transition group"
                   >
-                    <div className="font-mono text-[11px] font-bold text-cyan-400 group-hover:text-cyan-300 truncate">
-                      {preset.code}
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-[11px] font-bold text-cyan-400 group-hover:text-cyan-300 truncate">
+                        {preset.code}
+                      </span>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
+                        preset.type === 'machine' ? 'bg-cyan-500/20 text-cyan-300' : 'bg-blue-500/20 text-blue-300'
+                      }`}>
+                        {preset.type === 'machine' ? 'Machine' : 'PO'}
+                      </span>
                     </div>
                     <div className="text-[10px] text-slate-400 truncate mt-0.5">
                       {preset.label}
@@ -1179,7 +1343,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                           isOutsource
                             ? `Deducted ${formatNumber(log.qty)} pcs from Day's Target`
                             : isPermanent
-                            ? `Deducted ${formatNumber(log.qty)} pcs from System Balance`
+                            ? `Deducted ${formatNumber(log.qty)} pcs from System Balance & Product Qty`
                             : `Received ${formatNumber(log.qty)} pcs`
                         )}
                       </td>

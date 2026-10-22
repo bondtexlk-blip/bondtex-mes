@@ -1053,14 +1053,18 @@ class ClientDatabaseStore {
           }
           calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target (${outsourcePartner || 'Outsource'})`;
         } else if (subCategory === 'Permanent') {
-          // 2. Permanent Delivery: Deduct from system balance, allowing tracking of order completion status
+          // 2. Permanent Delivery: Deduct from both system balance and product quantity, allowing tracking of order completion status
           balanceDeduction = numQty;
           if (order) {
             order.deliveryQty = (Number(order.deliveryQty) || 0) + numQty;
-            order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
-            order.deliveryBalanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+            // Deduct from product quantity
+            order.productionQty = Math.max(0, (Number(order.productionQty) || 0) - numQty);
+            order.productQty = order.productionQty;
+            // Deduct from system balance
+            order.balanceQty = Math.max(0, (Number(order.balanceQty) || 0) - numQty);
+            order.deliveryBalanceQty = Math.max(0, (Number(order.deliveryBalanceQty || order.orderQty) || 0) - numQty);
 
-            if (order.balanceQty === 0) {
+            if (order.balanceQty === 0 || order.deliveryQty >= (Number(order.orderQty) || 0)) {
               order.status = 'Completed';
             } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
               order.status = 'Ahead';
@@ -1075,7 +1079,7 @@ class ClientDatabaseStore {
               notes: `Permanent Dispatch (${numQty} pcs)`,
             });
           }
-          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from System Balance (Remaining: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs)`;
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from System Balance & Product Qty (Remaining Balance: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs, Product Qty: ${order ? order.productionQty.toLocaleString() : 'N/A'} pcs)`;
         }
       } else {
         // Received Flow
@@ -1094,6 +1098,7 @@ class ClientDatabaseStore {
         calculationEffect,
         dayTargetDeduction,
         balanceDeduction,
+        productQtyAfter: order ? order.productionQty : null,
         systemBalanceAfter: order ? order.balanceQty : null,
         orderStatusAfter: order ? order.status : null,
         date: todayStr,
