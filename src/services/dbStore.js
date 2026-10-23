@@ -318,6 +318,18 @@ class ClientDatabaseStore {
         this.machines.push(spec);
       }
     }
+
+    const mch06 = this.machines.find((m) => m.id === 'MCH-06' || m.code === 'MCH-06');
+    if (mch06) {
+      mch06.assignedStyles = [
+        'Loop Elastic Band - 54A2',
+        'Loop Elastic Band - 39H6',
+        'Loop Elastic Band - 65H8',
+        'Loop Elastic Band - 33F6',
+        'Loop Elastic Band - 57H1',
+      ];
+      mch06.assignedPos = ['4502991550', '4502991532', '4502991599', '4502991520', '4502991562'];
+    }
   }
 
   // Categories summary calculation
@@ -695,27 +707,47 @@ class ClientDatabaseStore {
 
     let matchedOrder = null;
     const normColour = (colour || '').toLowerCase().trim();
-    if (poNumber && size && normColour) {
+    const strSize = String(size || '').trim();
+
+    // 1. If PO, Size, and Colour are all provided (Exact match)
+    if (poNumber && strSize && normColour) {
       matchedOrder = this.orders.find(
         (o) =>
           o.poNumber === poNumber &&
-          String(o.size) === String(size) &&
-          (o.colour || '').toLowerCase().trim() === normColour
+          String(o.size) === strSize &&
+          ((o.colour || '').toLowerCase().trim() === normColour ||
+           (o.colour || '').toLowerCase().includes(normColour) ||
+           normColour.includes((o.colour || '').toLowerCase().trim()))
       );
     }
-    if (!matchedOrder && poNumber) {
-      matchedOrder = this.orders.find((o) => o.poNumber === poNumber && String(o.size) === String(size));
+
+    // 2. If Colour and Size are provided (Matches exact order for floor entry)
+    if (!matchedOrder && normColour && strSize) {
+      matchedOrder = this.orders.find(
+        (o) =>
+          String(o.size) === strSize &&
+          ((o.colour || '').toLowerCase().trim() === normColour ||
+           (o.colour || '').toLowerCase().includes(normColour) ||
+           normColour.includes((o.colour || '').toLowerCase().trim()))
+      );
     }
-    if (!matchedOrder && style && size) {
+
+    // 3. If Style and Size match
+    if (!matchedOrder && style && strSize) {
       matchedOrder = this.orders.find(
         (o) =>
           (o.style === style || o.styleCode === style) &&
-          String(o.size) === String(size) &&
-          (!colour || (o.colour || '').toLowerCase().trim() === normColour)
+          String(o.size) === strSize &&
+          (!normColour || (o.colour || '').toLowerCase().trim() === normColour)
       );
     }
-    if (!matchedOrder && size) {
-      matchedOrder = this.orders.find((o) => String(o.size) === String(size) && o.category.toLowerCase() === machine.category.toLowerCase());
+
+    // 4. Fallback to PO and Size only if no colour was provided
+    if (!matchedOrder && poNumber && strSize && !normColour) {
+      matchedOrder = this.orders.find((o) => o.poNumber === poNumber && String(o.size) === strSize);
+    }
+    if (!matchedOrder && strSize && !normColour) {
+      matchedOrder = this.orders.find((o) => String(o.size) === strSize && o.category.toLowerCase() === machine.category.toLowerCase());
     }
 
     const isLoopInsert =
@@ -998,8 +1030,8 @@ class ClientDatabaseStore {
         const matchPo = l.poNumber === order.poNumber;
         const matchSize = String(l.size) === String(order.size);
         const lColour = (l.colour || '').toLowerCase().trim();
-        const matchColour = !orderColour || !lColour || lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour);
-        return matchPo && matchSize && matchColour;
+        const matchColour = Boolean(orderColour && lColour && (lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour)));
+        return matchSize && (matchColour || (matchPo && !lColour));
       });
       const todayOutput = orderLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
       const latestDaily = (order.dailyLogs || []).find((dl) => dl.date === targetDate);
@@ -1017,8 +1049,8 @@ class ClientDatabaseStore {
         const matchPo = l.poNumber === order.poNumber;
         const matchSize = String(l.size) === String(order.size);
         const lColour = (l.colour || '').toLowerCase().trim();
-        const matchColour = !orderColour || !lColour || lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour);
-        return matchPo && matchSize && matchColour;
+        const matchColour = Boolean(orderColour && lColour && (lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour)));
+        return matchSize && (matchColour || (matchPo && !lColour));
       });
       const todayDelivered = orderDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 

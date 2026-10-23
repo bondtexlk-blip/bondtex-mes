@@ -115,6 +115,25 @@ export default function WorkerPortal({
   const [producedQty, setProducedQty] = useState('');
   const [notes, setNotes] = useState('');
 
+  // Auto-resolve Style and PO Number based on colour in Loop production
+  const resolveStyleAndPoForColour = (col) => {
+    const c = (col || '').toLowerCase();
+    if (c.includes('talc')) return { style: 'Loop Elastic Band - 57H1', poNumber: '4502991562' };
+    if (c.includes('black')) return { style: 'Loop Elastic Band - 54A2', poNumber: '4502991550' };
+    if (c.includes('marzipan')) return { style: 'Loop Elastic Band - 39H6', poNumber: '4502991532' };
+    if (c.includes('praline')) return { style: 'Loop Elastic Band - 65H8', poNumber: '4502991599' };
+    if (c.includes('ganache')) return { style: 'Loop Elastic Band - 33F6', poNumber: '4502991520' };
+    return null;
+  };
+
+  const handleColourChange = (newColour) => {
+    setSelectedColour(newColour);
+    const resolved = resolveStyleAndPoForColour(newColour);
+    if (resolved) {
+      setSelectedStyle(resolved.style);
+    }
+  };
+
   // Audio Beep Feedback
   const playBeep = () => {
     try {
@@ -176,15 +195,25 @@ export default function WorkerPortal({
         }
 
         // Prepopulate first assigned style, colour, and size
-        if (m.assignedStyles && m.assignedStyles.length > 0 && !selectedStyle) {
+        if (m.assignedColours && m.assignedColours.length > 0 && !selectedColour) {
+          const initCol = m.assignedColours[0];
+          setSelectedColour(initCol);
+          const resolved = resolveStyleAndPoForColour(initCol);
+          if (resolved) {
+            setSelectedStyle(resolved.style);
+          } else if (m.assignedStyles && m.assignedStyles.length > 0) {
+            const firstStyle =
+              typeof m.assignedStyles[0] === 'string'
+                ? m.assignedStyles[0]
+                : m.assignedStyles[0]?.name || m.assignedStyles[0]?.code || 'Style';
+            setSelectedStyle(firstStyle);
+          }
+        } else if (m.assignedStyles && m.assignedStyles.length > 0 && !selectedStyle) {
           const firstStyle =
             typeof m.assignedStyles[0] === 'string'
               ? m.assignedStyles[0]
               : m.assignedStyles[0]?.name || m.assignedStyles[0]?.code || 'Style';
           setSelectedStyle(firstStyle);
-        }
-        if (m.assignedColours && m.assignedColours.length > 0 && !selectedColour) {
-          setSelectedColour(m.assignedColours[0]);
         }
         if (m.assignedSizes && m.assignedSizes.length > 0 && !selectedSize) {
           setSelectedSize(m.assignedSizes[0]);
@@ -276,11 +305,16 @@ export default function WorkerPortal({
 
     try {
       setSubmitting(true);
+      const resolved = resolveStyleAndPoForColour(selectedColour);
+      const effectivePo = resolved?.poNumber || '';
+      const effectiveStyle = resolved?.style || selectedStyle;
+
       const payload = {
         machineId: machine.code || machine.id,
-        style: selectedStyle,
+        style: effectiveStyle,
         size: selectedSize,
         colour: selectedColour,
+        poNumber: effectivePo,
         producedQty: effectiveBatchOutput,
         rawQty: currentInputQty,
         multiplier: dryCutMultiplier,
@@ -710,7 +744,7 @@ export default function WorkerPortal({
                   </label>
                   <select
                     value={selectedColour}
-                    onChange={(e) => setSelectedColour(e.target.value)}
+                    onChange={(e) => handleColourChange(e.target.value)}
                     required
                     aria-label="Assigned Colour Selector"
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-3 text-white font-bold text-xs focus:outline-none focus:border-cyan-500"
