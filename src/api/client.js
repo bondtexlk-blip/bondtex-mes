@@ -334,6 +334,13 @@ export const api = {
     });
     return `${BASE_URL}/export/csv?${params.toString()}`;
   },
+  // 20. Realtime Cross-Device Multi-Screen Sync Listener (Laptop <-> Phone)
+  subscribe: (listener) => dbStore.subscribe(listener),
+
+  // 21. Trigger Manual Cloud Sync from Firebase Realtime Database
+  syncCloud: async () => {
+    return dbStore.pullCloudState ? dbStore.pullCloudState() : null;
+  },
 };
 
 export default api;

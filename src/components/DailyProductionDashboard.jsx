@@ -80,6 +80,12 @@ export default function DailyProductionDashboard({
 
   useEffect(() => {
     loadDailyData();
+    const unsubscribe = api.subscribe(() => {
+      loadDailyData();
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [category]);
 
   const summary = data?.summary || {

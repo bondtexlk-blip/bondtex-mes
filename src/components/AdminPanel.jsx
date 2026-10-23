@@ -172,6 +172,12 @@ export default function AdminPanel({
 
   useEffect(() => {
     loadData();
+    const unsubscribe = api.subscribe(() => {
+      loadData();
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   // Sync available colours if metadata updates

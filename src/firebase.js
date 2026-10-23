@@ -136,4 +136,115 @@ export const firestoreSync = {
   },
 };
 
+export const REALTIME_DB_URL = 'https://bondtexlk-f16f5-default-rtdb.firebaseio.com';
+
+/**
+ * High-speed Realtime Database Sync Engine for multi-device live synchronization (Laptop, Phone, Tablet)
+ */
+export const firebaseRealtime = {
+  async pushState(state) {
+    try {
+      const url = `${REALTIME_DB_URL}/state.json`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state),
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Realtime cloud push note (offline):', err?.message);
+      return null;
+    }
+  },
+
+  async pullState() {
+    try {
+      const url = `${REALTIME_DB_URL}/state.json`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn('Realtime cloud pull note (offline):', err?.message);
+      return null;
+    }
+  },
+
+  listenToChanges(onUpdate) {
+    if (typeof window === 'undefined') return () => {};
+
+    let eventSource = null;
+    let pollInterval = null;
+    let stopped = false;
+
+    const connectStream = () => {
+      if (stopped) return;
+      try {
+        if (window.EventSource) {
+          eventSource = new EventSource(`${REALTIME_DB_URL}/state.json`);
+          eventSource.addEventListener('put', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              if (payload && payload.data) {
+                if (payload.path === '/' || !payload.path) {
+                  onUpdate(payload.data);
+                }
+              }
+            } catch (err) {
+              console.warn('SSE message parse error:', err);
+            }
+          });
+
+          eventSource.onerror = () => {
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+            if (!stopped) setTimeout(connectStream, 4000);
+          };
+        }
+      } catch (err) {
+        console.warn('EventSource initialization note:', err);
+      }
+    };
+
+    connectStream();
+
+    // Periodic fallback poll (every 4 seconds) to ensure mobile phones wake up and sync instantly on unlock
+    pollInterval = setInterval(async () => {
+      if (stopped) return;
+      try {
+        const cloudState = await firebaseRealtime.pullState();
+        if (cloudState && cloudState.lastUpdated) {
+          onUpdate(cloudState);
+        }
+      } catch {
+        // ignore
+      }
+    }, 4000);
+
+    // Sync immediately on window focus / tab visibility change (e.g. user opens phone or switches back to tab)
+    const handleFocus = async () => {
+      try {
+        const cloudState = await firebaseRealtime.pullState();
+        if (cloudState && cloudState.lastUpdated) {
+          onUpdate(cloudState);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    });
+
+    return () => {
+      stopped = true;
+      if (eventSource) eventSource.close();
+      if (pollInterval) clearInterval(pollInterval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  },
+};
+
 export default firebaseConfig;

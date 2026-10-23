@@ -198,7 +198,11 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
   useEffect(() => {
     loadData();
+    const unsubscribe = api.subscribe(() => {
+      loadData();
+    });
     return () => {
+      if (unsubscribe) unsubscribe();
       stopCamera();
     };
   }, []);

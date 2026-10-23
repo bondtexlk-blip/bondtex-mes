@@ -200,6 +200,12 @@ export default function WorkerPortal({
 
   useEffect(() => {
     fetchMachineDetails(initialMachineId);
+    const unsubscribe = api.subscribe(() => {
+      fetchMachineDetails(initialMachineId);
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [initialMachineId]);
 
   // Handle Quick Add Quantity

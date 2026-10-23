@@ -8,7 +8,7 @@ import {
   initialOrders,
   initialProductionLogs,
 } from '../data/seedData.js';
-import { firestoreSync } from '../firebase.js';
+import { firestoreSync, firebaseRealtime } from '../firebase.js';
 
 const STORAGE_KEY = 'bondtex_loop_real_v9';
 
@@ -21,10 +21,101 @@ class ClientDatabaseStore {
     this.productionLogs = [];
     this.deliveryReceivedLogs = [];
     this.outsourceConsignments = [];
+    this.subscribers = [];
+    this.lastSaved = null;
+    this.deviceId = 'srv';
     this.init();
   }
 
+  // Subscribe to live database updates from any device (laptop, phone, tablet)
+  subscribe(listener) {
+    if (typeof listener === 'function') {
+      this.subscribers.push(listener);
+      return () => {
+        this.subscribers = this.subscribers.filter((l) => l !== listener);
+      };
+    }
+    return () => {};
+  }
+
+  notifySubscribers() {
+    this.subscribers.forEach((cb) => {
+      try {
+        cb();
+      } catch (err) {
+        console.error('Subscriber callback notification error:', err);
+      }
+    });
+  }
+
+  // Apply real-time cloud state pushed from Firebase Realtime Database
+  applyCloudState(cloudState) {
+    if (!cloudState) return;
+    if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastSaved) return;
+
+    if (Array.isArray(cloudState.categories) && cloudState.categories.length) {
+      this.categories = cloudState.categories;
+    }
+    if (Array.isArray(cloudState.orders) && cloudState.orders.length) {
+      this.orders = cloudState.orders;
+    }
+    if (Array.isArray(cloudState.machines)) {
+      this.machines = cloudState.machines;
+    }
+    if (Array.isArray(cloudState.workers)) {
+      this.workers = cloudState.workers;
+    }
+    if (Array.isArray(cloudState.productionLogs)) {
+      this.productionLogs = cloudState.productionLogs;
+    }
+    if (Array.isArray(cloudState.deliveryReceivedLogs)) {
+      this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs;
+    }
+    if (Array.isArray(cloudState.outsourceConsignments)) {
+      this.outsourceConsignments = cloudState.outsourceConsignments;
+    }
+
+    this.ensureSpecialMachines();
+    this.ensureOrderCalculations();
+    this.lastSaved = cloudState.lastUpdated || new Date().toISOString();
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            categories: this.categories,
+            orders: this.orders,
+            machines: this.machines,
+            workers: this.workers,
+            productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
+            lastSaved: this.lastSaved,
+          })
+        );
+      } catch {
+        // ignore storage quota errors
+      }
+    }
+
+    this.notifySubscribers();
+  }
+
   init() {
+    this.subscribers = [];
+    this.deviceId =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('bondtex_dev_id') ||
+          (() => {
+            const id = 'DEV-' + Math.random().toString(36).slice(2, 9) + '-' + Date.now();
+            try {
+              localStorage.setItem('bondtex_dev_id', id);
+            } catch {}
+            return id;
+          })()
+        : 'srv';
+
     try {
       const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
       if (saved) {
@@ -36,14 +127,35 @@ class ClientDatabaseStore {
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+        this.lastSaved = parsed.lastSaved || null;
       } else {
-        this.reset();
+        this.reset(false);
       }
     } catch {
-      this.reset();
+      this.reset(false);
     }
     this.ensureSpecialMachines();
     this.ensureOrderCalculations();
+
+    // Connect to Firebase Realtime Database for live cross-device sync (Laptop <-> Phone)
+    if (typeof window !== 'undefined') {
+      // 1. Initial Cloud Pull (ensures phone or laptop always opens with latest cloud data)
+      firebaseRealtime
+        .pullState()
+        .then((cloudState) => {
+          if (cloudState && Array.isArray(cloudState.orders) && cloudState.orders.length > 0) {
+            this.applyCloudState(cloudState);
+          }
+        })
+        .catch(() => {});
+
+      // 2. Realtime SSE Listener (when laptop saves, phone updates immediately in real-time)
+      this.unsubscribeCloud = firebaseRealtime.listenToChanges((cloudState) => {
+        if (cloudState && cloudState.lastDeviceId !== this.deviceId) {
+          this.applyCloudState(cloudState);
+        }
+      });
+    }
   }
 
   ensureOrderCalculations() {
@@ -66,30 +178,41 @@ class ClientDatabaseStore {
     });
   }
 
-  save() {
+  save(broadcastToCloud = true) {
     try {
       this.ensureOrderCalculations();
+      const nowIso = new Date().toISOString();
+      this.lastSaved = nowIso;
+
+      const payload = {
+        categories: this.categories,
+        orders: this.orders,
+        machines: this.machines,
+        workers: this.workers,
+        productionLogs: this.productionLogs,
+        deliveryReceivedLogs: this.deliveryReceivedLogs,
+        outsourceConsignments: this.outsourceConsignments || [],
+        lastSaved: nowIso,
+        lastUpdated: nowIso,
+        lastDeviceId: this.deviceId,
+      };
+
       if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            categories: this.categories,
-            orders: this.orders,
-            machines: this.machines,
-            workers: this.workers,
-            productionLogs: this.productionLogs,
-            deliveryReceivedLogs: this.deliveryReceivedLogs,
-            outsourceConsignments: this.outsourceConsignments || [],
-            lastSaved: new Date().toISOString(),
-          })
-        );
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       }
+
+      // Automatically broadcast state to Firebase Realtime Database
+      if (broadcastToCloud && typeof window !== 'undefined') {
+        firebaseRealtime.pushState(payload);
+      }
+
+      this.notifySubscribers();
     } catch (e) {
       console.warn('Failed to save state to localStorage:', e);
     }
   }
 
-  reset() {
+  reset(broadcastToCloud = true) {
     this.categories = JSON.parse(JSON.stringify(initialCategories));
     this.orders = JSON.parse(JSON.stringify(initialOrders));
     this.machines = JSON.parse(JSON.stringify(initialMachines));
@@ -98,7 +221,7 @@ class ClientDatabaseStore {
     this.deliveryReceivedLogs = [];
     this.outsourceConsignments = [];
     this.ensureSpecialMachines();
-    this.save();
+    this.save(broadcastToCloud);
     return { success: true, count: this.orders.length };
   }
 

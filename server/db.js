@@ -1885,7 +1885,6 @@ class ProductionDatabase {
       order,
     };
   }
-  }
 }
 
 export const db = new ProductionDatabase();

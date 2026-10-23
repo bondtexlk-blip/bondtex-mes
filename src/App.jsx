@@ -210,6 +210,11 @@ export default function App() {
 
   useEffect(() => {
     loadDashboardData();
+    // Subscribe to live multi-device cross-synchronization (Laptop <-> Phone)
+    const unsubscribe = api.subscribe(() => {
+      loadDashboardData();
+    });
+    return unsubscribe;
   }, []);
 
   // When a category card or sidebar category is clicked (e.g. Loop)

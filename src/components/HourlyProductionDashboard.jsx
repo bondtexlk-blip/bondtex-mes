@@ -61,6 +61,12 @@ export default function HourlyProductionDashboard({
 
   useEffect(() => {
     loadHourlyData();
+    const unsubscribe = api.subscribe(() => {
+      loadHourlyData();
+    });
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [shift]);
 
   const defaultDaySlots = [

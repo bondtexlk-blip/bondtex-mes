@@ -63,6 +63,13 @@ export default function Navbar({
               <span className="text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/30">
                 MES v2.4
               </span>
+              <span
+                title="Real-time multi-device cloud synchronization active (Laptop & Phone stay in sync)"
+                className="hidden sm:inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Cloud Sync Active
+              </span>
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
               Apparel & Narrow Fabric Manufacturing Suite
