@@ -413,21 +413,23 @@ export default function DailyProductionDashboard({
                       <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono font-bold text-xs">
                         <span
                           className={
-                            row.balanceQty === 0
+                            row.balanceQty < 0
+                              ? 'text-rose-400 font-black'
+                              : row.balanceQty === 0
                               ? 'text-emerald-400'
                               : row.balanceQty < row.orderQty * 0.2
                               ? 'text-amber-400'
-                              : 'text-rose-400'
+                              : 'text-slate-300'
                           }
                         >
                           {formatNumber(
                             row.balanceQty !== undefined
                               ? row.balanceQty
-                              : Math.max(0, (Number(row.orderQty) || 0) - (Number(row.productionQty) || 0))
+                              : (Number(row.orderQty) || 0) - (Number(row.productionQty) || 0)
                           )}
                         </span>
                         <div className="text-[10px] text-slate-500 font-sans">
-                          {row.balanceQty === 0 ? 'Completed' : 'Remaining'}
+                          {row.balanceQty <= 0 ? 'Completed' : 'Remaining'}
                         </div>
                       </td>
 

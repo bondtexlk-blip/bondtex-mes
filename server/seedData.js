@@ -306,8 +306,8 @@ export const initialProductionLogs = [];
 export const initialOrders = rawProductionRows.map((row, idx) => {
   const id = `ORD-${String(idx + 1).padStart(3, '0')}`;
   const barcode = `BTX-${row.poNumber}-${row.size}`;
-  const balanceQty = Math.max(0, row.orderQty - row.productionQty);
-  const deliveryBalanceQty = Math.max(0, row.orderQty - row.deliveryQty);
+  const balanceQty = row.orderQty - row.productionQty;
+  const deliveryBalanceQty = row.orderQty - row.deliveryQty;
 
   return {
     id,
@@ -326,7 +326,7 @@ export const initialOrders = rawProductionRows.map((row, idx) => {
     deliveryBalanceQty,
     startDate: getPastDateStr(14 + (idx % 7)),
     targetDate: getFutureDateStr(6 + (idx % 8)),
-    status: row.status,
+    status: balanceQty <= 0 ? 'Completed' : row.status,
     priority: idx % 3 === 0 ? 'High' : idx % 4 === 0 ? 'Critical' : 'Normal',
     dailyLogs: row.productionQty > 0 ? [
       {

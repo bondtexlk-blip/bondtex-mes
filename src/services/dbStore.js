@@ -10,7 +10,7 @@ import {
 } from '../data/seedData.js';
 import { firestoreSync } from '../firebase.js';
 
-const STORAGE_KEY = 'bondtex_loop_real_v7';
+const STORAGE_KEY = 'bondtex_loop_real_v8';
 
 class ClientDatabaseStore {
   constructor() {
@@ -50,11 +50,11 @@ class ClientDatabaseStore {
     this.orders.forEach((o) => {
       o.orderQty = Number(o.orderQty) || 0;
       o.productionQty = Number(o.productionQty) || 0;
-      o.deliveryQty = Number(o.deliveryQty) || 0;
-      // Balance reduces strictly when Permanent Delivery is fulfilled to customer
-      o.balanceQty = Math.max(0, o.orderQty - o.deliveryQty);
+      o.deliveryQty = Number(o.deliveryQty) || o.productionQty;
+      // Balance allows negative values when actual/delivery exceeds order plan
+      o.balanceQty = o.orderQty - o.deliveryQty;
       o.deliveryBalanceQty = o.balanceQty;
-      if (o.balanceQty === 0) {
+      if (o.balanceQty <= 0) {
         o.status = 'Completed';
       } else if (o.productionQty >= o.orderQty * 0.9) {
         o.status = 'Ahead';
@@ -211,8 +211,8 @@ class ClientDatabaseStore {
       const orderQty = catOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
       const productionQty = catOrders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
       const deliveryQty = catOrders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0);
-      const balanceQty = Math.max(0, orderQty - productionQty);
-      const deliveryBalanceQty = Math.max(0, orderQty - deliveryQty);
+      const balanceQty = orderQty - productionQty;
+      const deliveryBalanceQty = orderQty - deliveryQty;
 
       const statusCounts = {
         onTrack: catOrders.filter((o) => o.status === 'On Track').length,
@@ -293,8 +293,8 @@ class ClientDatabaseStore {
     const totalOrderQty = categories.reduce((acc, c) => acc + c.orderQty, 0);
     const totalProductionQty = categories.reduce((acc, c) => acc + c.productionQty, 0);
     const totalDeliveryQty = categories.reduce((acc, c) => acc + c.deliveryQty, 0);
-    const totalBalanceQty = Math.max(0, totalOrderQty - totalProductionQty);
-    const totalDeliveryBalance = Math.max(0, totalOrderQty - totalDeliveryQty);
+    const totalBalanceQty = totalOrderQty - totalProductionQty;
+    const totalDeliveryBalance = totalOrderQty - totalDeliveryQty;
 
     return {
       totalOrderQty,
@@ -401,10 +401,10 @@ class ClientDatabaseStore {
 
     order.productionQty += actual;
     order.deliveryQty += delivery;
-    order.balanceQty = Math.max(0, order.orderQty - order.productionQty);
-    order.deliveryBalanceQty = Math.max(0, order.orderQty - order.deliveryQty);
+    order.balanceQty = order.orderQty - order.productionQty;
+    order.deliveryBalanceQty = order.orderQty - order.deliveryQty;
 
-    if (order.balanceQty === 0) order.status = 'Completed';
+    if (order.balanceQty <= 0) order.status = 'Completed';
     else if (order.productionQty >= order.orderQty * 0.9) order.status = 'Ahead';
 
     if (!order.dailyLogs) order.dailyLogs = [];
@@ -585,7 +585,7 @@ class ClientDatabaseStore {
     const todayStr = new Date().toISOString().split('T')[0];
     if (matchedOrder) {
       matchedOrder.productionQty += effectiveQty;
-      matchedOrder.balanceQty = Math.max(0, matchedOrder.orderQty - matchedOrder.productionQty);
+      matchedOrder.balanceQty = matchedOrder.orderQty - matchedOrder.productionQty;
 
       if (!matchedOrder.dailyLogs) matchedOrder.dailyLogs = [];
       const todayLog = matchedOrder.dailyLogs.find((l) => l.date === todayStr);
@@ -601,7 +601,7 @@ class ClientDatabaseStore {
         });
       }
 
-      if (matchedOrder.balanceQty === 0) matchedOrder.status = 'Completed';
+      if (matchedOrder.balanceQty <= 0) matchedOrder.status = 'Completed';
       else if (matchedOrder.productionQty >= matchedOrder.orderQty * 0.9) matchedOrder.status = 'Ahead';
     }
 
@@ -750,8 +750,8 @@ class ClientDatabaseStore {
       const numOrderQty = Number(order.orderQty) || 0;
       const numProductionQty = Number(order.productionQty) || 0;
       const numDeliveryQty = Number(order.deliveryQty) || 0;
-      // Balance reduces strictly when Permanent Delivery is fulfilled to customer
-      const calculatedBalance = Math.max(0, numOrderQty - numDeliveryQty);
+      // Balance allows negative values when actual/delivery exceeds order plan
+      const calculatedBalance = numOrderQty - numDeliveryQty;
 
       return {
         id: order.id,
@@ -775,7 +775,7 @@ class ClientDatabaseStore {
     const totalOrderQty = categoryOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
     const totalProductionQty = categoryOrders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
     const totalDeliveryQty = categoryOrders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0);
-    const totalBalanceQty = Math.max(0, totalOrderQty - totalDeliveryQty);
+    const totalBalanceQty = totalOrderQty - totalDeliveryQty;
     const todayTotalOutput = relevantLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
     const todayTargetQuota = tableRows.reduce((sum, r) => sum + r.dayPlan, 0);
     const targetAchievementRate = todayTargetQuota > 0 ? Math.round((todayTotalOutput / todayTargetQuota) * 100) : 0;
@@ -1172,18 +1172,20 @@ class ClientDatabaseStore {
           this.outsourceConsignments.unshift(consignment);
           calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target. Consignment #${consignment.id} opened for ${outsourcePartner || 'Partner'} (Pending Return in Received page)`;
         } else if (subCategory === 'Permanent') {
-          // 2. Permanent Delivery (Customer Dispatch): Fulfills the order and deducts remaining balance qty.
-          // Does NOT reduce productionQty (manufactured output is preserved).
+          // Permanent Delivery increases Actual/Invoiced & reduces Balance to produce
           balanceDeduction = numQty;
           if (order) {
+            order.productionQty = (Number(order.productionQty) || 0) + numQty;
             order.deliveryQty = (Number(order.deliveryQty) || 0) + numQty;
-            order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+            order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
             order.deliveryBalanceQty = order.balanceQty;
 
-            if (order.balanceQty === 0) {
+            if (order.balanceQty <= 0) {
               order.status = 'Completed';
-            } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
+            } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
               order.status = 'Ahead';
+            } else {
+              order.status = 'Behind Plan';
             }
 
             if (!order.dailyLogs) order.dailyLogs = [];
@@ -1425,14 +1427,15 @@ class ClientDatabaseStore {
           const cIdx = (this.outsourceConsignments || []).findIndex((c) => c.poNumber === log.poNumber && c.sentQty === qty && c.receivedQty === 0);
           if (cIdx !== -1) this.outsourceConsignments.splice(cIdx, 1);
         } else if (log.subCategory === 'Permanent') {
-          // Reverse permanent delivery deduction without touching productionQty!
-          order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - qty);
-          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          // Reverse permanent delivery deduction and production
+          order.productionQty = (Number(order.productionQty) || 0) - qty;
+          order.deliveryQty = (Number(order.deliveryQty) || 0) - qty;
+          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
           order.deliveryBalanceQty = order.balanceQty;
 
-          if (order.balanceQty === 0) {
+          if (order.balanceQty <= 0) {
             order.status = 'Completed';
-          } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
+          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
             order.status = 'Ahead';
           } else {
             order.status = 'Behind Plan';
@@ -1486,8 +1489,9 @@ class ClientDatabaseStore {
         if (log.subCategory === 'Outsource') {
           order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - oldQty);
         } else if (log.subCategory === 'Permanent') {
-          order.deliveryQty = Math.max(0, (Number(order.deliveryQty) || 0) - oldQty);
-          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.productionQty = (Number(order.productionQty) || 0) - oldQty;
+          order.deliveryQty = (Number(order.deliveryQty) || 0) - oldQty;
+          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
           order.deliveryBalanceQty = order.balanceQty;
         }
       }
@@ -1498,13 +1502,14 @@ class ClientDatabaseStore {
           order.dayTargetDeduction = (Number(order.dayTargetDeduction) || 0) + newQty;
           log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Day's Target (${newPartner || 'Outsource'})`;
         } else if (newSubCategory === 'Permanent') {
+          order.productionQty = (Number(order.productionQty) || 0) + newQty;
           order.deliveryQty = (Number(order.deliveryQty) || 0) + newQty;
-          order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
+          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
           order.deliveryBalanceQty = order.balanceQty;
 
-          if (order.balanceQty === 0) {
+          if (order.balanceQty <= 0) {
             order.status = 'Completed';
-          } else if (order.deliveryQty >= (Number(order.orderQty) || 0) * 0.9) {
+          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
             order.status = 'Ahead';
           } else {
             order.status = 'Behind Plan';

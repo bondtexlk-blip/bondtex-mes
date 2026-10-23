@@ -367,17 +367,19 @@ export default function OrderTable({
                     <td className="py-3 px-3.5 text-right whitespace-nowrap">
                       <span
                         className={`font-mono font-bold text-xs ${
-                          order.balanceQty === 0
+                          order.balanceQty < 0
+                            ? 'text-rose-400 font-black'
+                            : order.balanceQty === 0
                             ? 'text-emerald-400'
                             : order.balanceQty < order.orderQty * 0.2
                             ? 'text-amber-400'
-                            : 'text-rose-400'
+                            : 'text-slate-300'
                         }`}
                       >
                         {formatNumber(
                           order.balanceQty !== undefined
                             ? order.balanceQty
-                            : Math.max(0, (Number(order.orderQty) || 0) - (Number(order.productionQty) || 0))
+                            : (Number(order.orderQty) || 0) - (Number(order.productionQty) || 0)
                         )}
                       </span>
                     </td>

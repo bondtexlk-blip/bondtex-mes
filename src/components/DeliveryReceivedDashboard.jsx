@@ -1201,9 +1201,15 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   {currentSizeOrders.map((orderRow) => {
                     const size = String(orderRow.size);
                     const qtyVal = getSizeQuantity(size);
+                    const enteredNum = Math.max(0, Number(qtyVal) || 0);
                     const orderQty = Number(orderRow.orderQty) || 0;
                     const productionQty = Number(orderRow.productionQty) || 0;
-                    const calculatedBalance = Math.max(0, orderQty - productionQty);
+                    const baseBalance = orderQty - productionQty;
+
+                    // Real-time dynamic calculation as operator types
+                    const isPermanent = selectedType === 'Delivery' && selectedDeliverySub === 'Permanent';
+                    const displayActual = isPermanent && enteredNum > 0 ? productionQty + enteredNum : productionQty;
+                    const displayBalance = isPermanent && enteredNum > 0 ? orderQty - displayActual : baseBalance;
 
                     return (
                       <div
@@ -1219,7 +1225,28 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                               Size {size} — {orderRow.colour}
                             </div>
                             <div className="text-[10px] text-slate-400 font-mono">
-                              Plan: {formatNumber(orderQty)} | Actual: {formatNumber(productionQty)} | Balance: <span className="text-amber-400 font-bold">{formatNumber(calculatedBalance)}</span> pcs
+                              Plan: {formatNumber(orderQty)} | Actual:{' '}
+                              <span className={enteredNum > 0 && isPermanent ? 'text-emerald-400 font-bold' : ''}>
+                                {formatNumber(displayActual)}
+                              </span>{' '}
+                              {enteredNum > 0 && isPermanent && (
+                                <span className="text-emerald-400 font-bold">
+                                  (+{formatNumber(enteredNum)})
+                                </span>
+                              )}{' '}
+                              | Balance:{' '}
+                              <span
+                                className={`font-bold ${
+                                  displayBalance < 0
+                                    ? 'text-rose-400 font-black'
+                                    : displayBalance === 0
+                                    ? 'text-emerald-400'
+                                    : 'text-amber-400'
+                                }`}
+                              >
+                                {displayBalance < 0 ? `-${formatNumber(Math.abs(displayBalance))}` : formatNumber(displayBalance)}
+                              </span>{' '}
+                              pcs
                             </div>
                           </div>
                         </div>
@@ -1251,9 +1278,9 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleFillMaxBalance(size, calculatedBalance)}
+                              onClick={() => handleFillMaxBalance(size, baseBalance > 0 ? baseBalance : 0)}
                               className="px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 text-[10px] font-bold"
-                              title="Fill All Remaining Balance"
+                              title="Fill Remaining Balance"
                             >
                               Max
                             </button>
@@ -1363,11 +1390,11 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                   </div>
                 ) : (
                   <div className="text-xs text-emerald-300/90 leading-relaxed">
-                    📦 <strong>Permanent Delivery (Customer Dispatch)</strong>: Deducts{' '}
-                    <span className="font-mono font-bold text-white">
-                      {totalEnteredQty.toLocaleString()} pcs
+                    📦 <strong>Permanent Delivery (Customer Dispatch)</strong>: Adds{' '}
+                    <span className="font-mono font-bold text-emerald-400">
+                      +{totalEnteredQty.toLocaleString()} pcs
                     </span>{' '}
-                    from the <strong>Remaining Balance</strong> to fulfill the order! (Manufactured Production Qty is preserved).
+                    to <strong>Actual Invoiced</strong> & Deducts from <strong>Remaining Balance</strong> to fulfill the order!
                   </div>
                 )
               ) : (

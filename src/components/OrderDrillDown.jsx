@@ -107,7 +107,7 @@ export default function OrderDrillDown({
   const totalOrderQty = orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
   const totalProductionQty = orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
   const totalDeliveryQty = orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0);
-  const totalBalanceQty = Math.max(0, totalOrderQty - totalProductionQty);
+  const totalBalanceQty = totalOrderQty - totalProductionQty;
 
   return (
     <div className="space-y-5 animate-fade-in">
