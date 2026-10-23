@@ -55,6 +55,8 @@ export default function DailyProductionDashboard({
   onToggleTheme,
 }) {
   const [category, setCategory] = useState('Loop');
+  const todayIso = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayIso);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedLogModal, setSelectedLogModal] = useState(null);
@@ -118,7 +120,7 @@ export default function DailyProductionDashboard({
   const loadDailyData = async () => {
     try {
       setLoading(true);
-      const res = await api.getDailyProduction(category);
+      const res = await api.getDailyProduction({ category, date: selectedDate });
       if (res.success && res.data) {
         setData(res.data);
       }
@@ -138,7 +140,7 @@ export default function DailyProductionDashboard({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [category]);
+  }, [category, selectedDate]);
 
   const summary = data?.summary || {
     totalOrderQty: 0,
@@ -190,6 +192,28 @@ export default function DailyProductionDashboard({
 
           {/* Action buttons & Category selector */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Production Date Selector */}
+            <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+              <Calendar className="w-4 h-4 text-cyan-400 shrink-0" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                title="Select Production Date to inspect historical data"
+              />
+              {selectedDate !== todayIso && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayIso)}
+                  className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 text-[11px] font-bold border border-cyan-500/30 transition"
+                  title="Jump back to Today"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
             {/* Category Pills */}
             <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
               {categories.map((cat) => (
@@ -243,7 +267,7 @@ export default function DailyProductionDashboard({
         <div className="p-5 rounded-2xl bg-slate-900/90 border border-cyan-500/30 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400">
-              Today's Permanent Delivery
+              {selectedDate === todayIso ? "Today's Permanent Delivery" : `${selectedDate} Permanent Delivery`}
             </span>
             <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
               <PackageCheck className="w-3.5 h-3.5" />
@@ -258,7 +282,7 @@ export default function DailyProductionDashboard({
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
             <span>Dispatched to Client</span>
             <span className="text-cyan-400 font-bold font-mono">
-              {summary.totalPermanentDispatches || 0} batches today
+              {summary.totalPermanentDispatches || 0} batches {selectedDate === todayIso ? 'today' : 'recorded'}
             </span>
           </div>
         </div>

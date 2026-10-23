@@ -676,22 +676,42 @@ class ClientDatabaseStore {
 
     const isDryCut = (machine.name || '').toLowerCase().includes('dry cut') || (machine.code || '').toLowerCase().includes('dry');
     let multiplier = 1;
-    let rawQty = qty;
-    let effectiveQty = qty;
+    let rawQty = 0;
+    let effectiveQty = 0;
 
     if (isDryCut) {
       const sz = String(size || '').trim();
       multiplier = sz === '16' ? 45 : 50;
+      if (data.rawQty !== undefined && data.rawQty !== null && Number(data.rawQty) > 0) {
+        rawQty = Number(data.rawQty);
+      } else {
+        rawQty = Number(data.producedQty || data.quantity || data.qty) || 0;
+      }
       effectiveQty = rawQty * multiplier;
+    } else {
+      rawQty = Number(data.rawQty || data.producedQty || data.quantity || data.qty) || 0;
+      effectiveQty = rawQty;
     }
 
     let matchedOrder = null;
-    if (poNumber) {
+    const normColour = (colour || '').toLowerCase().trim();
+    if (poNumber && size && normColour) {
+      matchedOrder = this.orders.find(
+        (o) =>
+          o.poNumber === poNumber &&
+          String(o.size) === String(size) &&
+          (o.colour || '').toLowerCase().trim() === normColour
+      );
+    }
+    if (!matchedOrder && poNumber) {
       matchedOrder = this.orders.find((o) => o.poNumber === poNumber && String(o.size) === String(size));
     }
     if (!matchedOrder && style && size) {
       matchedOrder = this.orders.find(
-        (o) => (o.style === style || o.styleCode === style) && String(o.size) === String(size) && (!colour || o.colour === colour)
+        (o) =>
+          (o.style === style || o.styleCode === style) &&
+          String(o.size) === String(size) &&
+          (!colour || (o.colour || '').toLowerCase().trim() === normColour)
       );
     }
     if (!matchedOrder && size) {
@@ -973,7 +993,14 @@ class ClientDatabaseStore {
     const todayPermanentTotal = todayPermanentDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
     const tableRows = categoryOrders.map((order) => {
-      const orderLogs = relevantLogs.filter((l) => l.poNumber === order.poNumber && String(l.size) === String(order.size));
+      const orderColour = (order.colour || '').toLowerCase().trim();
+      const orderLogs = relevantLogs.filter((l) => {
+        const matchPo = l.poNumber === order.poNumber;
+        const matchSize = String(l.size) === String(order.size);
+        const lColour = (l.colour || '').toLowerCase().trim();
+        const matchColour = !orderColour || !lColour || lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour);
+        return matchPo && matchSize && matchColour;
+      });
       const todayOutput = orderLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
       const latestDaily = (order.dailyLogs || []).find((dl) => dl.date === targetDate);
       const dayPlan = latestDaily ? Number(latestDaily.planQty) : Math.round(order.orderQty / 10);
@@ -986,9 +1013,13 @@ class ClientDatabaseStore {
       const calculatedBalance = numOrderQty - numDeliveryQty;
 
       // Permanent delivery logged today for this specific order
-      const orderDeliveries = todayPermanentDeliveries.filter(
-        (l) => l.poNumber === order.poNumber && String(l.size) === String(order.size)
-      );
+      const orderDeliveries = todayPermanentDeliveries.filter((l) => {
+        const matchPo = l.poNumber === order.poNumber;
+        const matchSize = String(l.size) === String(order.size);
+        const lColour = (l.colour || '').toLowerCase().trim();
+        const matchColour = !orderColour || !lColour || lColour === orderColour || lColour.includes(orderColour) || orderColour.includes(lColour);
+        return matchPo && matchSize && matchColour;
+      });
       const todayDelivered = orderDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
       return {

@@ -244,7 +244,13 @@ export default function WorkerPortal({
   const isDryCut =
     (machine?.name || '').toLowerCase().includes('dry cut') ||
     (machine?.code || '').toLowerCase().includes('dry');
-  const dryCutMultiplier = isDryCut ? (String(selectedSize).trim() === '16' ? 45 : 50) : 1;
+  const getDryCutMultiplier = (sz) => {
+    const s = String(sz || '').trim();
+    if (s === '16') return 45;
+    if (['10', '12', '14', '18'].includes(s)) return 50;
+    return 50;
+  };
+  const dryCutMultiplier = isDryCut ? getDryCutMultiplier(selectedSize) : 1;
   const currentInputQty = parseInt(producedQty, 10) || 0;
   const effectiveBatchOutput = isDryCut ? currentInputQty * dryCutMultiplier : currentInputQty;
 
@@ -793,9 +799,9 @@ export default function WorkerPortal({
                   className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-500 rounded-2xl px-5 py-4 text-white font-mono font-black text-2xl sm:text-3xl focus:outline-none shadow-inner text-center sm:text-left"
                 />
 
-                {/* Touch Screen Quick Increments (+50, +100, +250, +500, +1000) */}
+                {/* Touch Screen Quick Increments (+50, +100, +250, +500, +1000 for pcs, or units for Dry Cut) */}
                 <div className="grid grid-cols-5 gap-2 pt-1">
-                  {[50, 100, 250, 500, 1000].map((amt) => (
+                  {(isDryCut ? [5, 10, 20, 50, 100] : [50, 100, 250, 500, 1000]).map((amt) => (
                     <button
                       type="button"
                       key={amt}

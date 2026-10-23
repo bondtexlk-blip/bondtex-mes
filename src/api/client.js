@@ -240,12 +240,21 @@ export const api = {
 
   // 16. Dedicated Daily Production Dashboard (Loop focus)
   getDailyProduction: async (category = 'Loop', date = '') => {
+    let cat = 'Loop';
+    let dt = '';
+    if (typeof category === 'object' && category !== null) {
+      cat = category.category || 'Loop';
+      dt = category.date || '';
+    } else {
+      cat = category || 'Loop';
+      dt = date || '';
+    }
     const params = new URLSearchParams();
-    if (category) params.append('category', category);
-    if (date) params.append('date', date);
+    if (cat) params.append('category', cat);
+    if (dt) params.append('date', dt);
     const remote = await safeFetchJson(`${BASE_URL}/daily-production?${params.toString()}`);
     if (remote && remote.success) return remote;
-    const data = dbStore.getDailyProduction({ category, date });
+    const data = dbStore.getDailyProduction({ category: cat, date: dt });
     return { success: true, data };
   },
 
