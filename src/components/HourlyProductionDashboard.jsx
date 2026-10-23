@@ -25,9 +25,21 @@ import {
   Sun,
   Moon,
   Info,
+  Pencil,
+  Trash2,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
+
+export function getMachineUnit(m) {
+  const name = (m?.name || m?.machineName || '').toLowerCase();
+  const code = (m?.code || m?.id || m?.machineId || '').toLowerCase();
+  if (name.includes('cutting') || (code.includes('cut') && !name.includes('dry'))) return 'Straps';
+  if (name.includes('fusing') || name.includes('pusing') || code.includes('pus')) return 'Straps';
+  if (name.includes('iron') || code.includes('irn')) return 'Straps';
+  return 'pcs';
+}
 
 export default function HourlyProductionDashboard({
   onNavigateToWorker,
@@ -41,6 +53,67 @@ export default function HourlyProductionDashboard({
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
+
+  // Editable hourly production log state
+  const [editingLogModal, setEditingLogModal] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editOperator, setEditOperator] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const handleOpenEdit = (log, machineInfo, slotInfo) => {
+    setEditingLogModal({
+      log,
+      machine: machineInfo,
+      slot: slotInfo,
+    });
+    setEditQty(log?.qty || '');
+    setEditOperator(log?.operator || log?.operatorName || machineInfo?.operatorName || '');
+    setEditNotes(log?.notes || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingLogModal || !editingLogModal.log) return;
+    const num = Number(editQty);
+    if (isNaN(num) || num < 0) {
+      if (onShowToast) onShowToast('Please enter a valid quantity', 'error');
+      return;
+    }
+    try {
+      setIsSubmittingEdit(true);
+      await api.updateProductionLog(editingLogModal.log.id, {
+        qty: num,
+        operator: editOperator,
+        notes: editNotes,
+      });
+      if (onShowToast) {
+        const unit = getMachineUnit(editingLogModal.machine);
+        onShowToast(`Updated to ${num.toLocaleString()} ${unit} successfully!`, 'success');
+      }
+      setEditingLogModal(null);
+      await loadHourlyData();
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message, 'error');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteLog = async () => {
+    if (!editingLogModal || !editingLogModal.log) return;
+    if (!window.confirm('Are you sure you want to delete this hourly production entry?')) return;
+    try {
+      setIsSubmittingEdit(true);
+      await api.deleteProductionLog(editingLogModal.log.id);
+      if (onShowToast) onShowToast('Hourly production log deleted successfully!', 'success');
+      setEditingLogModal(null);
+      await loadHourlyData();
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message, 'error');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
 
   // Fetch machine-wise hourly production data
   const loadHourlyData = async () => {
@@ -484,20 +557,41 @@ export default function HourlyProductionDashboard({
                         const cellData = row.slotOutputs?.[slot.id] || (row.slots?.find((s) => s.id === slot.id));
                         const qty = typeof cellData === 'object' ? (cellData?.qty || cellData?.actualOutput || 0) : (Number(cellData) || 0);
                         const workerLabel = cellData?.workerName || '';
+                        const slotLogs = cellData?.logs || [];
+                        const targetUnit = getMachineUnit(row);
 
                         return (
                           <td
                             key={slot.id}
+                            onClick={() => {
+                              if (qty > 0) {
+                                const logToEdit = slotLogs.length > 0
+                                  ? slotLogs[0]
+                                  : {
+                                      id: `LOG-SLOT-${row.code || row.id}-${slot.id}`,
+                                      machineId: row.code || row.id,
+                                      machineName: row.name,
+                                      timeSlot: slot.label,
+                                      qty,
+                                      operator: workerLabel,
+                                      size: row.size,
+                                      colour: row.colour,
+                                      notes: 'Slot output',
+                                    };
+                                handleOpenEdit(logToEdit, row, slot);
+                              }
+                            }}
                             className={`py-3 px-2 text-center whitespace-nowrap border-r border-slate-800/40 font-mono text-xs ${
-                              qty > 0 ? 'bg-cyan-950/20' : ''
+                              qty > 0 ? 'bg-cyan-950/30 hover:bg-cyan-900/50 cursor-pointer transition-colors group/cell' : ''
                             }`}
-                            title={workerLabel ? `Worker: ${workerLabel}` : undefined}
+                            title={qty > 0 ? `Click to edit ${qty} ${targetUnit} (${workerLabel})` : undefined}
                           >
                             {qty > 0 ? (
                               <div className="flex flex-col items-center">
-                                <span className="font-black text-cyan-300">
-                                  {formatNumber(qty)}
-                                </span>
+                                <div className="flex items-center gap-1 font-black text-cyan-300">
+                                  <span>{formatNumber(qty)}</span>
+                                  <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-100 text-cyan-400 transition" />
+                                </div>
                                 {workerLabel && (
                                   <span className="text-[9px] text-slate-400 font-sans max-w-[85px] truncate">
                                     {workerLabel}
@@ -514,10 +608,13 @@ export default function HourlyProductionDashboard({
                       {/* Last Col: Total Output / Quota */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap sticky right-0 bg-slate-900 group-hover:bg-slate-850 z-10 border-l border-slate-800 shadow-sm">
                         <div className="font-mono font-black text-emerald-400 text-sm">
-                          {formatNumber(mProduced)} <span className="text-[10px] font-normal text-slate-400">pcs</span>
+                          {formatNumber(mProduced)}{' '}
+                          <span className="text-[10px] font-normal text-slate-400">
+                            {getMachineUnit(row)}
+                          </span>
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono">
-                          Target: {formatNumber(mTarget)} ({mAchieve}%)
+                          Target: {formatNumber(mTarget)} {getMachineUnit(row)} ({mAchieve}%)
                         </div>
                       </td>
                     </tr>
@@ -543,6 +640,7 @@ export default function HourlyProductionDashboard({
           filteredMachines.map((machine) => {
             const isDryCut = machine.isDryCut;
             const isSynced = machine.isSyncedStrap;
+            const unit = getMachineUnit(machine);
             const hourlyTarget = machine.expectedHourlyTarget || Math.round(machine.dailyTargetQty / workingHours);
             const totals = machine.totals || {
               totalTarget: machine.dailyTargetQty,
@@ -589,7 +687,7 @@ export default function HourlyProductionDashboard({
                     </div>
 
                     <p className="text-xs text-slate-400">
-                      Operator: <span className="text-white font-semibold">{machine.operatorName || 'Floor Worker'}</span> • Shift: <span className="text-slate-300 font-mono">{machine.shift}</span> • Daily Target: <span className="font-mono text-emerald-400 font-bold">{formatNumber(machine.dailyTargetQty)} pcs</span>
+                      Operator: <span className="text-white font-semibold">{machine.operatorName || 'Floor Worker'}</span> • Shift: <span className="text-slate-300 font-mono">{machine.shift}</span> • Daily Target: <span className="font-mono text-emerald-400 font-bold">{formatNumber(machine.dailyTargetQty)} {unit}</span>
                     </p>
                   </div>
 
@@ -600,7 +698,7 @@ export default function HourlyProductionDashboard({
                         Hourly Target Pace
                       </span>
                       <span className="text-sm font-mono font-black text-cyan-400">
-                        {formatNumber(hourlyTarget)} pcs / hr
+                        {formatNumber(hourlyTarget)} {unit} / hr
                       </span>
                       <span className="text-[10px] text-slate-500 block font-mono">
                         ({formatNumber(machine.dailyTargetQty)} ÷ {workingHours}h)
@@ -755,15 +853,38 @@ export default function HourlyProductionDashboard({
 
                             {/* 7. Expected Hourly Target */}
                             <td className="py-3.5 px-3.5 text-right whitespace-nowrap font-mono font-bold text-slate-400">
-                              {formatNumber(slot.hourlyTarget)} pcs
+                              {formatNumber(slot.hourlyTarget)} {unit}
                             </td>
 
-                            {/* 8. Actual Produced Output */}
+                            {/* 8. Actual Produced Output (Clickable to Edit) */}
                             <td className="py-3.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-sm">
                               {slot.actualOutput > 0 ? (
-                                <span className="text-white">{formatNumber(slot.actualOutput)} pcs</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const logToEdit = slot.logs && slot.logs.length > 0
+                                      ? slot.logs[0]
+                                      : {
+                                          id: `LOG-SLOT-${machine.code || machine.id}-${slot.id}`,
+                                          machineId: machine.code || machine.id,
+                                          machineName: machine.name,
+                                          timeSlot: slot.timeSlot,
+                                          qty: slot.actualOutput,
+                                          operator: slot.workerName || machine.operatorName,
+                                          size: slot.size,
+                                          colour: slot.colour,
+                                          notes: slot.notes || '',
+                                        };
+                                    handleOpenEdit(logToEdit, machine, slot);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-500/30 transition group/btn"
+                                  title={`Click to edit ${slot.actualOutput} ${unit}`}
+                                >
+                                  <span>{formatNumber(slot.actualOutput)} {unit}</span>
+                                  <Pencil className="w-3 h-3 text-cyan-400 opacity-60 group-hover/btn:opacity-100" />
+                                </button>
                               ) : (
-                                <span className="text-slate-600 font-normal">0 pcs</span>
+                                <span className="text-slate-600 font-normal">0 {unit}</span>
                               )}
                             </td>
 
@@ -788,7 +909,7 @@ export default function HourlyProductionDashboard({
                                   ) : null}
                                   <span>
                                     {isAhead ? '+' : ''}
-                                    {formatNumber(slot.variance)} pcs ({isAhead ? '+' : ''}
+                                    {formatNumber(slot.variance)} {unit} ({isAhead ? '+' : ''}
                                     {slot.variancePct}%)
                                   </span>
                                 </span>
@@ -833,10 +954,10 @@ export default function HourlyProductionDashboard({
                           </>
                         )}
                         <td className="py-4 px-3.5 text-right font-black text-slate-300">
-                          {formatNumber(totals.totalTarget)} pcs
+                          {formatNumber(totals.totalTarget)} {unit}
                         </td>
                         <td className="py-4 px-3.5 text-right font-black text-emerald-400 text-sm">
-                          {formatNumber(totals.totalProduced)} pcs
+                          {formatNumber(totals.totalProduced)} {unit}
                         </td>
                         <td className="py-4 px-3.5 text-right font-black">
                           <span
@@ -845,7 +966,7 @@ export default function HourlyProductionDashboard({
                             }
                           >
                             {totals.netVariance >= 0 ? '+' : ''}
-                            {formatNumber(totals.netVariance)} pcs
+                            {formatNumber(totals.netVariance)} {unit}
                           </span>
                         </td>
                         <td className="py-4 px-4 text-center">
@@ -861,6 +982,122 @@ export default function HourlyProductionDashboard({
             );
           })
         )}
+        </div>
+      )}
+
+      {/* Edit Hourly Production Log Modal */}
+      {editingLogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-scale-up">
+            <div className="p-5 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-400">
+                  Floor Entry Management
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Edit Hourly Output ({getMachineUnit(editingLogModal.machine)})
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingLogModal(null)}
+                className="p-2 rounded-xl bg-slate-800/80 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Station / Machine:</span>
+                  <span className="font-bold text-white font-mono">
+                    {editingLogModal.machine?.name || editingLogModal.log?.machineName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Time Window:</span>
+                  <span className="font-bold text-cyan-400 font-mono">
+                    {editingLogModal.slot?.display || editingLogModal.slot?.label || editingLogModal.log?.timeSlot}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Component Unit:</span>
+                  <span className="font-bold text-amber-400 font-mono">
+                    {getMachineUnit(editingLogModal.machine)}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Produced Quantity ({getMachineUnit(editingLogModal.machine)}):
+                </label>
+                <input
+                  type="number"
+                  value={editQty}
+                  onChange={(e) => setEditQty(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-bold text-white font-mono focus:outline-none focus:border-blue-500"
+                  placeholder="Enter quantity"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Operator Name:
+                </label>
+                <input
+                  type="text"
+                  value={editOperator}
+                  onChange={(e) => setEditOperator(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Worker name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Notes:
+                </label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Optional floor notes"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={handleDeleteLog}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/30 transition flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingLogModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={isSubmittingEdit}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 transition"
+                >
+                  {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

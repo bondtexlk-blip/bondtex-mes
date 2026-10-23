@@ -164,16 +164,21 @@ class ClientDatabaseStore {
   ensureOrderCalculations() {
     this.orders.forEach((o) => {
       o.orderQty = Number(o.orderQty) || 0;
-      o.productionQty = Number(o.productionQty) || 0;
-      o.deliveryQty = Number(o.deliveryQty) || o.productionQty;
+      o.deliveryQty = Number(o.deliveryQty) || 0;
+      o.productionQty = Number(o.productionQty) || o.deliveryQty;
+      if (o.floorProductionQty === undefined || o.floorProductionQty === null) {
+        o.floorProductionQty = o.productionQty;
+      } else {
+        o.floorProductionQty = Number(o.floorProductionQty) || 0;
+      }
       // Balance allows negative values when actual/delivery exceeds order plan
       o.balanceQty = o.orderQty - o.deliveryQty;
       o.deliveryBalanceQty = o.balanceQty;
       if (o.balanceQty <= 0) {
         o.status = 'Completed';
-      } else if (o.productionQty >= o.orderQty * 0.9) {
+      } else if (o.deliveryQty >= o.orderQty * 0.9) {
         o.status = 'Ahead';
-      } else if (o.productionQty === 0) {
+      } else if (o.deliveryQty === 0) {
         o.status = 'Scheduled';
       } else {
         o.status = 'Behind Plan';
@@ -693,10 +698,22 @@ class ClientDatabaseStore {
       matchedOrder = this.orders.find((o) => String(o.size) === String(size) && o.category.toLowerCase() === machine.category.toLowerCase());
     }
 
+    const isLoopInsert =
+      (machine.name || '').toLowerCase().includes('loop insert') ||
+      (machine.name || '').toLowerCase().includes('insert loop') ||
+      ((machine.name || '').toLowerCase().includes('insert') && (machine.name || '').toLowerCase().includes('loop')) ||
+      (machine.code || '').toLowerCase() === 'mch-06';
+
     const todayStr = new Date().toISOString().split('T')[0];
     if (matchedOrder) {
-      matchedOrder.productionQty += effectiveQty;
-      matchedOrder.balanceQty = matchedOrder.orderQty - matchedOrder.productionQty;
+      if (matchedOrder.floorProductionQty === undefined || matchedOrder.floorProductionQty === null) {
+        matchedOrder.floorProductionQty = Number(matchedOrder.productionQty) || 0;
+      }
+      // ONLY Loop Insert increases floorProductionQty!
+      if (isLoopInsert) {
+        matchedOrder.floorProductionQty += effectiveQty;
+      }
+      // matchedOrder.productionQty is NOT touched here; only Permanent Delivery updates it!
 
       if (!matchedOrder.dailyLogs) matchedOrder.dailyLogs = [];
       const todayLog = matchedOrder.dailyLogs.find((l) => l.date === todayStr);
@@ -711,9 +728,6 @@ class ClientDatabaseStore {
           notes: `Batch from ${machine.name} (${operatorName || machine.operatorName}) - ${timeSlot || 'Slot'}`,
         });
       }
-
-      if (matchedOrder.balanceQty <= 0) matchedOrder.status = 'Completed';
-      else if (matchedOrder.productionQty >= matchedOrder.orderQty * 0.9) matchedOrder.status = 'Ahead';
     }
 
     const logEntry = {
@@ -826,6 +840,121 @@ class ClientDatabaseStore {
     return true;
   }
 
+  updateProductionLog(logId, updatedData = {}) {
+    if (!logId) return null;
+    const logIndex = (this.productionLogs || []).findIndex((l) => l.id === logId);
+    if (logIndex === -1) return null;
+
+    const oldLog = this.productionLogs[logIndex];
+    const oldQty = Number(oldLog.qty) || 0;
+    const newQty = updatedData.qty !== undefined ? Number(updatedData.qty) : oldQty;
+    const qtyDelta = newQty - oldQty;
+
+    const updatedLog = {
+      ...oldLog,
+      ...updatedData,
+      qty: newQty,
+      rawQty: updatedData.rawQty !== undefined ? Number(updatedData.rawQty) : newQty,
+      operator: updatedData.operator || updatedData.operatorName || oldLog.operator,
+      operatorName: updatedData.operatorName || updatedData.operator || oldLog.operatorName,
+      notes: updatedData.notes !== undefined ? updatedData.notes : oldLog.notes,
+    };
+    this.productionLogs[logIndex] = updatedLog;
+
+    // Update inside machine.todayLogs
+    const mach = this.machines.find(
+      (m) =>
+        m.code === oldLog.machineId ||
+        m.id === oldLog.machineId ||
+        (m.name || '').toLowerCase() === (oldLog.machineName || '').toLowerCase()
+    );
+    if (mach && Array.isArray(mach.todayLogs)) {
+      const mIdx = mach.todayLogs.findIndex(
+        (l) => l.id === logId || (l.timeSlot === oldLog.timeSlot && l.size === oldLog.size && Number(l.qty) === oldQty)
+      );
+      if (mIdx !== -1) {
+        mach.todayLogs[mIdx] = {
+          ...mach.todayLogs[mIdx],
+          ...updatedData,
+          qty: newQty,
+          rawQty: updatedLog.rawQty,
+          operator: updatedLog.operator,
+          operatorName: updatedLog.operatorName,
+          notes: updatedLog.notes,
+        };
+      }
+    }
+
+    // Check if machine is Loop Insert (only Loop Insert updates floorProductionQty)
+    const isLoopInsert =
+      (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
+      (mach?.name || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
+      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop')) ||
+      (mach?.code || oldLog.machineId || '').toLowerCase() === 'mch-06';
+
+    if (isLoopInsert && qtyDelta !== 0) {
+      const order = this.orders.find(
+        (o) => o.poNumber === oldLog.poNumber && String(o.size) === String(oldLog.size)
+      );
+      if (order) {
+        if (order.floorProductionQty === undefined || order.floorProductionQty === null) {
+          order.floorProductionQty = Number(order.productionQty) || 0;
+        }
+        order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) + qtyDelta);
+      }
+    }
+
+    this.save();
+    return updatedLog;
+  }
+
+  deleteProductionLog(logId) {
+    if (!logId) return false;
+    const logIndex = (this.productionLogs || []).findIndex((l) => l.id === logId);
+    if (logIndex === -1) return false;
+
+    const oldLog = this.productionLogs[logIndex];
+    const oldQty = Number(oldLog.qty) || 0;
+
+    // Remove from global log
+    this.productionLogs.splice(logIndex, 1);
+
+    // Remove from machine.todayLogs
+    const mach = this.machines.find(
+      (m) =>
+        m.code === oldLog.machineId ||
+        m.id === oldLog.machineId ||
+        (m.name || '').toLowerCase() === (oldLog.machineName || '').toLowerCase()
+    );
+    if (mach && Array.isArray(mach.todayLogs)) {
+      const mIdx = mach.todayLogs.findIndex(
+        (l) => l.id === logId || (l.timeSlot === oldLog.timeSlot && l.size === oldLog.size && Number(l.qty) === oldQty)
+      );
+      if (mIdx !== -1) {
+        mach.todayLogs.splice(mIdx, 1);
+      }
+    }
+
+    // If machine is Loop Insert, deduct from floorProductionQty
+    const isLoopInsert =
+      (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
+      (mach?.name || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
+      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop')) ||
+      (mach?.code || oldLog.machineId || '').toLowerCase() === 'mch-06';
+
+    if (isLoopInsert) {
+      const order = this.orders.find(
+        (o) => o.poNumber === oldLog.poNumber && String(o.size) === String(oldLog.size)
+      );
+      if (order && order.floorProductionQty !== undefined) {
+        order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - oldQty);
+      }
+    }
+
+    this.save();
+    return true;
+  }
+
   getDailyProduction(params = {}) {
     const category = params.category || 'Loop';
     const targetDate = params.date || new Date().toISOString().split('T')[0];
@@ -835,6 +964,14 @@ class ClientDatabaseStore {
       (l) => l.category?.toLowerCase() === category.toLowerCase() && l.date === targetDate
     );
 
+    // Today's Permanent Deliveries (dispatched from Delivery & Received page)
+    const todayPermanentDeliveries = (this.deliveryReceivedLogs || []).filter((l) => {
+      const matchDate = !l.date || l.date === targetDate;
+      const isPermanent = l.type === 'Delivery' && (l.subCategory === 'Permanent' || !l.subCategory);
+      return isPermanent && matchDate;
+    });
+    const todayPermanentTotal = todayPermanentDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
     const tableRows = categoryOrders.map((order) => {
       const orderLogs = relevantLogs.filter((l) => l.poNumber === order.poNumber && String(l.size) === String(order.size));
       const todayOutput = orderLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
@@ -843,9 +980,16 @@ class ClientDatabaseStore {
 
       const numOrderQty = Number(order.orderQty) || 0;
       const numProductionQty = Number(order.productionQty) || 0;
+      const numFloorProductionQty = Number(order.floorProductionQty !== undefined ? order.floorProductionQty : order.productionQty) || 0;
       const numDeliveryQty = Number(order.deliveryQty) || 0;
       // Balance allows negative values when actual/delivery exceeds order plan
       const calculatedBalance = numOrderQty - numDeliveryQty;
+
+      // Permanent delivery logged today for this specific order
+      const orderDeliveries = todayPermanentDeliveries.filter(
+        (l) => l.poNumber === order.poNumber && String(l.size) === String(order.size)
+      );
+      const todayDelivered = orderDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
       return {
         id: order.id,
@@ -856,10 +1000,12 @@ class ClientDatabaseStore {
         styleCode: order.styleCode,
         size: order.size,
         orderQty: numOrderQty,
+        floorProductionQty: numFloorProductionQty,
         productionQty: numProductionQty,
         deliveryQty: numDeliveryQty,
         balanceQty: calculatedBalance,
         todayOutput,
+        todayDelivered,
         dayPlan,
         status: order.status,
         logsCount: orderLogs.length,
@@ -867,12 +1013,16 @@ class ClientDatabaseStore {
     });
 
     const totalOrderQty = categoryOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+    const totalFloorProductionQty = categoryOrders.reduce(
+      (sum, o) => sum + (Number(o.floorProductionQty !== undefined ? o.floorProductionQty : o.productionQty) || 0),
+      0
+    );
     const totalProductionQty = categoryOrders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
     const totalDeliveryQty = categoryOrders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0);
     const totalBalanceQty = totalOrderQty - totalDeliveryQty;
     const todayTotalOutput = relevantLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
     const todayTargetQuota = tableRows.reduce((sum, r) => sum + r.dayPlan, 0);
-    const targetAchievementRate = todayTargetQuota > 0 ? Math.round((todayTotalOutput / todayTargetQuota) * 100) : 0;
+    const targetAchievementRate = todayTargetQuota > 0 ? Math.round((todayPermanentTotal / todayTargetQuota) * 100) : 0;
 
     const activeOperators = [...new Set(relevantLogs.map((l) => l.operatorName).filter(Boolean))];
     const activeMachines = [...new Set(relevantLogs.map((l) => l.machineName || l.machineId).filter(Boolean))];
@@ -917,14 +1067,18 @@ class ClientDatabaseStore {
       date: targetDate,
       summary: {
         totalOrderQty,
+        totalFloorProductionQty,
         totalProductionQty,
+        totalDeliveryQty,
         totalBalanceQty,
+        todayPermanentTotal,
         todayTotalOutput,
         todayTargetQuota,
         targetAchievementRate,
         activeOperatorsCount: activeOperators.length,
         activeMachinesCount: activeMachines.length,
         totalBatchesToday: relevantLogs.length,
+        totalPermanentDispatches: todayPermanentDeliveries.length,
       },
       tableRows,
       charts: {
@@ -1084,6 +1238,7 @@ class ClientDatabaseStore {
           status,
           notes,
           entriesCount: slotLogs.length,
+          logs: slotLogs,
         };
       });
 
@@ -1150,6 +1305,8 @@ class ClientDatabaseStore {
           qty: s.actualOutput,
           workerName: s.workerName,
           status: s.status,
+          logs: s.logs || [],
+          slotLabel: s.timeSlot,
         };
       });
 

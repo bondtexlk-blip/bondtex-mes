@@ -262,6 +262,26 @@ export const api = {
     return { success: true, data };
   },
 
+  updateProductionLog: async (logId, data) => {
+    const remote = await safeFetchJson(`${BASE_URL}/production-logs/${encodeURIComponent(logId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    const updated = dbStore.updateProductionLog(logId, data);
+    return { success: true, data: updated };
+  },
+
+  deleteProductionLog: async (logId) => {
+    const remote = await safeFetchJson(`${BASE_URL}/production-logs/${encodeURIComponent(logId)}`, {
+      method: 'DELETE',
+    });
+    if (remote && remote.success) return remote;
+    const ok = dbStore.deleteProductionLog(logId);
+    return { success: ok };
+  },
+
   // 18. Delivery & Received Workflow API
   getDeliveryReceivedLogs: async (params = {}) => {
     const q = new URLSearchParams();

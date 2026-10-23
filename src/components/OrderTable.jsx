@@ -163,7 +163,18 @@ export default function OrderTable({
                 </div>
               </th>
 
-              {/* 8. Production Qty */}
+              {/* 8. Floor Production Qty (Loop Insert Output) */}
+              <th
+                onClick={() => onSort('floorProductionQty')}
+                className="py-3.5 px-3.5 text-right cursor-pointer hover:text-slate-200 transition text-cyan-400"
+              >
+                <div className="flex items-center justify-end gap-1">
+                  <span>Floor Qty</span>
+                  {renderSortIcon('floorProductionQty')}
+                </div>
+              </th>
+
+              {/* 9. Production Qty (Permanent Delivery) */}
               <th
                 onClick={() => onSort('productionQty')}
                 className="py-3.5 px-3.5 text-right cursor-pointer hover:text-slate-200 transition"
@@ -211,7 +222,7 @@ export default function OrderTable({
           <tbody className="divide-y divide-slate-800/60 font-sans">
             {loading ? (
               <tr>
-                <td colSpan={12} className="py-12 text-center text-slate-400">
+                <td colSpan={13} className="py-12 text-center text-slate-400">
                   <div className="flex items-center justify-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                     <span>Loading production records...</span>
@@ -220,7 +231,7 @@ export default function OrderTable({
               </tr>
             ) : paginatedOrders.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-12 text-center text-slate-400">
+                <td colSpan={13} className="py-12 text-center text-slate-400">
                   <div className="max-w-xs mx-auto space-y-2">
                     <p className="font-semibold text-slate-300">No matching orders found</p>
                     <p className="text-xs text-slate-500">
@@ -336,7 +347,14 @@ export default function OrderTable({
                       </span>
                     </td>
 
-                    {/* 8. Production Qty */}
+                    {/* 8. Floor Production Qty (Loop Insert Output) */}
+                    <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                      <span className="font-mono font-bold text-cyan-300 text-xs">
+                        {formatNumber(order.floorProductionQty !== undefined ? order.floorProductionQty : order.productionQty)}
+                      </span>
+                    </td>
+
+                    {/* 9. Production Qty (Permanent Delivery) */}
                     <td className="py-3 px-3.5 text-right whitespace-nowrap">
                       <div>
                         <span className="font-mono font-bold text-emerald-400 text-xs">

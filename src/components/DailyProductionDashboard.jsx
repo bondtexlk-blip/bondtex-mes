@@ -25,6 +25,8 @@ import {
   Factory,
   Sun,
   Moon,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -59,6 +61,56 @@ export default function DailyProductionDashboard({
   const [showCompleteLogsModal, setShowCompleteLogsModal] = useState(false);
   const [logSearchQuery, setLogSearchQuery] = useState('');
   const [chartView, setChartView] = useState('timeline'); // 'timeline' | 'size'
+
+  // Editable hourly production log state
+  const [editingLogModal, setEditingLogModal] = useState(null);
+  const [editQty, setEditQty] = useState('');
+  const [editOperator, setEditOperator] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const handleOpenEditLog = (log) => {
+    setEditingLogModal(log);
+    setEditQty(log.qty || '');
+    setEditOperator(log.operator || log.operatorName || '');
+    setEditNotes(log.notes || '');
+  };
+
+  const handleSaveEditLog = async () => {
+    if (!editingLogModal) return;
+    const num = Number(editQty);
+    if (isNaN(num) || num < 0) {
+      if (onShowToast) onShowToast('Please enter a valid quantity', 'error');
+      return;
+    }
+    try {
+      setIsSubmittingEdit(true);
+      await api.updateProductionLog(editingLogModal.id, {
+        qty: num,
+        operator: editOperator,
+        notes: editNotes,
+      });
+      if (onShowToast) onShowToast(`Log updated to ${num} pcs successfully!`, 'success');
+      setEditingLogModal(null);
+      await loadDailyData();
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message, 'error');
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDeleteLog = async (logId) => {
+    if (!window.confirm('Are you sure you want to delete this production log entry?')) return;
+    try {
+      await api.deleteProductionLog(logId);
+      if (onShowToast) onShowToast('Production log deleted successfully!', 'success');
+      setEditingLogModal(null);
+      await loadDailyData();
+    } catch (err) {
+      if (onShowToast) onShowToast(err.message, 'error');
+    }
+  };
 
   const categories = ['Loop', 'Strap', 'T-shirt', 'Other'];
 
@@ -185,28 +237,28 @@ export default function DailyProductionDashboard({
         </div>
       </div>
 
-      {/* Summary KPI Cards for Today's Floor Production */}
+      {/* Summary KPI Cards for Today's Floor Production & Permanent Deliveries */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* Today Total Output */}
-        <div className="p-5 rounded-2xl bg-slate-900/90 border border-blue-500/30 shadow-xl space-y-2">
+        {/* Today Permanent Delivery Output (Strictly from Delivery Page Permanent Dispatches) */}
+        <div className="p-5 rounded-2xl bg-slate-900/90 border border-cyan-500/30 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-blue-400">
-              Today's Output (QR)
+            <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400">
+              Today's Permanent Delivery
             </span>
-            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/30">
-              <Activity className="w-3.5 h-3.5" />
+            <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+              <PackageCheck className="w-3.5 h-3.5" />
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-white font-mono">
-              {formatNumber(summary.todayTotalOutput)}
+              {formatNumber(summary.todayPermanentTotal || 0)}
             </span>
             <span className="text-xs text-slate-400">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Quota: {formatNumber(summary.todayTargetQuota)} pcs</span>
-            <span className="text-emerald-400 font-bold font-mono">
-              {summary.targetAchievementRate}% Quota
+            <span>Dispatched to Client</span>
+            <span className="text-cyan-400 font-bold font-mono">
+              {summary.totalPermanentDispatches || 0} batches today
             </span>
           </div>
         </div>
@@ -233,11 +285,11 @@ export default function DailyProductionDashboard({
           </div>
         </div>
 
-        {/* Total Production Qty */}
+        {/* Total Cumulative Delivered / Produced */}
         <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-400">
-              Cumulative Produced
+              Cumulative Delivered
             </span>
             <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
               <Factory className="w-3.5 h-3.5" />
@@ -245,14 +297,14 @@ export default function DailyProductionDashboard({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono">
-              {formatNumber(summary.totalProductionQty)}
+              {formatNumber(summary.totalProductionQty || summary.totalDeliveryQty)}
             </span>
             <span className="text-xs text-slate-400">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Total Completed</span>
-            <span className="text-emerald-400 font-bold font-mono">
-              {summary.totalOrderQty > 0 ? Math.round((summary.totalProductionQty / summary.totalOrderQty) * 100) : 0}% Done
+            <span>Floor Qty (Loop Insert)</span>
+            <span className="text-cyan-400 font-mono font-bold">
+              {formatNumber(summary.totalFloorProductionQty)} pcs
             </span>
           </div>
         </div>
@@ -312,9 +364,10 @@ export default function DailyProductionDashboard({
                 <th className="py-3.5 px-3">Colour</th>
                 <th className="py-3.5 px-3 text-center">Size</th>
                 <th className="py-3.5 px-4 text-right">Order Qty</th>
+                <th className="py-3.5 px-4 text-right text-cyan-400">Floor Production Qty</th>
                 <th className="py-3.5 px-4 text-right">Production Qty</th>
                 <th className="py-3.5 px-4 text-right">Balance Qty</th>
-                <th className="py-3.5 px-4 text-right">Today's QR Output</th>
+                <th className="py-3.5 px-4 text-right text-cyan-400">Today's Delivery</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-center">Details</th>
               </tr>
@@ -323,7 +376,7 @@ export default function DailyProductionDashboard({
             <tbody className="divide-y divide-slate-800/60 font-sans">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                       <span>Loading daily production records...</span>
@@ -332,7 +385,7 @@ export default function DailyProductionDashboard({
                 </tr>
               ) : tableRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-slate-400">
                     No production orders found for {category} category.
                   </td>
                 </tr>
@@ -390,12 +443,24 @@ export default function DailyProductionDashboard({
                         </span>
                       </td>
 
-                      {/* 3. Order Qty */}
+                      {/* 4. Order Qty */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono font-bold text-slate-100 text-xs">
                         {formatNumber(row.orderQty)}
                       </td>
 
-                      {/* 4. Production Qty */}
+                      {/* 5. Floor Production Qty (Updated ONLY by Loop Insert Machine) */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <span className="font-mono font-bold text-cyan-300 text-xs">
+                          {formatNumber(row.floorProductionQty)}
+                        </span>
+                        {row.todayOutput > 0 && (
+                          <div className="text-[10px] text-cyan-400 font-mono">
+                            +{formatNumber(row.todayOutput)} loop
+                          </div>
+                        )}
+                      </td>
+
+                      {/* 6. Production Qty (Updated ONLY by Permanent Delivery Page) */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div>
                           <span className="font-mono font-bold text-emerald-400 text-xs">
@@ -415,7 +480,7 @@ export default function DailyProductionDashboard({
                         </div>
                       </td>
 
-                      {/* 5. Balance Qty */}
+                      {/* 7. Balance Qty */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono font-bold text-xs">
                         <span
                           className={
@@ -431,12 +496,23 @@ export default function DailyProductionDashboard({
                           {formatNumber(
                             row.balanceQty !== undefined
                               ? row.balanceQty
-                              : (Number(row.orderQty) || 0) - (Number(row.productionQty) || 0)
+                              : (Number(row.orderQty) || 0) - (Number(row.deliveryQty) || 0)
                           )}
                         </span>
                         <div className="text-[10px] text-slate-500 font-sans">
                           {row.balanceQty <= 0 ? 'Completed' : 'Remaining'}
                         </div>
+                      </td>
+
+                      {/* 8. Today's Delivery (Permanent) */}
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap font-mono text-xs">
+                        {row.todayDelivered > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-300 font-bold border border-cyan-500/30">
+                            +{formatNumber(row.todayDelivered)} pcs
+                          </span>
+                        ) : (
+                          <span className="text-slate-600 font-mono">-</span>
+                        )}
                       </td>
 
                       {/* 6. Today's QR Output */}
@@ -679,6 +755,7 @@ export default function DailyProductionDashboard({
                         <th className="py-3 px-3 text-center">Size</th>
                         <th className="py-3 px-3 text-right">Batch Qty</th>
                         <th className="py-3 px-3">Operator Notes</th>
+                        <th className="py-3 px-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-sans">
@@ -733,6 +810,24 @@ export default function DailyProductionDashboard({
                           <td className="py-3 px-3 text-slate-400 text-[11px] truncate max-w-[180px]">
                             {log.notes || 'Floor entry'}
                           </td>
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditLog(log)}
+                                className="p-1.5 rounded-lg bg-blue-500/15 text-blue-300 hover:bg-blue-500/30 transition border border-blue-500/30"
+                                title="Edit Hourly Log Qty"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteLog(log.id)}
+                                className="p-1.5 rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/30 transition border border-rose-500/30"
+                                title="Delete Log"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -753,6 +848,120 @@ export default function DailyProductionDashboard({
               >
                 Close Drill-Down
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Hourly Log Modal */}
+      {editingLogModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-scale-up">
+            <div className="p-5 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-b border-slate-800 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-blue-400">
+                  Update Floor Log
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Edit Hourly Production Qty
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingLogModal(null)}
+                className="p-2 rounded-xl bg-slate-800/80 text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs">
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Machine:</span>
+                  <span className="font-bold text-white font-mono">{editingLogModal.machineName || editingLogModal.machineId}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>PO Number:</span>
+                  <span className="font-bold text-slate-200 font-mono">{editingLogModal.poNumber}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Time Slot:</span>
+                  <span className="font-bold text-cyan-400 font-mono">{editingLogModal.timeSlot}</span>
+                </div>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Size & Colour:</span>
+                  <span className="font-bold text-slate-300">Size {editingLogModal.size} • {editingLogModal.colour}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Produced Quantity (pcs):
+                </label>
+                <input
+                  type="number"
+                  value={editQty}
+                  onChange={(e) => setEditQty(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-base font-bold text-white font-mono focus:outline-none focus:border-blue-500"
+                  placeholder="Enter quantity"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Operator / Worker Name:
+                </label>
+                <input
+                  type="text"
+                  value={editOperator}
+                  onChange={(e) => setEditOperator(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-semibold text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Worker name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Notes:
+                </label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Optional notes"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => handleDeleteLog(editingLogModal.id)}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/30 transition flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingLogModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEditLog}
+                  disabled={isSubmittingEdit}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 transition"
+                >
+                  {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
