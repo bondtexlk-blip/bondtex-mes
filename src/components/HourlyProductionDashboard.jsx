@@ -135,7 +135,7 @@ export default function HourlyProductionDashboard({
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl leading-relaxed">
               Machine-wise hourly output breakdowns comparing hourly targets against actual floor entries.
-              Includes Strap division workflows (Cutting, Pusing, Iron & Compress Sync) and Dry Cut multiplier calculations.
+              Includes Strap division workflows (Cutting, Pusing, Iron Machine) and Dry Cut multiplier calculations.
             </p>
           </div>
 
@@ -346,20 +346,12 @@ export default function HourlyProductionDashboard({
           <Info className="w-4 h-4 text-cyan-400" />
           <span>Active Factory Hourly Rules & Calculation Logic</span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-[11px] text-slate-300">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[11px] text-slate-300">
           <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-start gap-2">
             <Scissors className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold text-white block">Cutting & Pusing Machines:</span>
               <span className="text-slate-400">Dedicated tracking for Strap category components.</span>
-            </div>
-          </div>
-
-          <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-start gap-2">
-            <LinkIcon className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-white block">Iron & Compress Sync:</span>
-              <span className="text-slate-400">Entries in either Iron or Compress sync identically.</span>
             </div>
           </div>
 

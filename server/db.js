@@ -757,34 +757,7 @@ class ProductionDatabase {
     if (!machine.todayLogs) machine.todayLogs = [];
     machine.todayLogs.unshift(logEntry);
 
-    // 5. Synchronize Iron Machine & Compress Machine for Strap Workflow
-    const isIron =
-      (machine.name || '').toLowerCase().includes('iron') ||
-      (machine.code || '').toLowerCase().includes('irn');
-    const isCompress =
-      (machine.name || '').toLowerCase().includes('compress') ||
-      (machine.code || '').toLowerCase().includes('cmp');
-
-    if ((isIron || isCompress) && (machine.category === 'Strap' || !machine.category)) {
-      const peerMatch = isIron ? 'compress' : 'iron';
-      const peerCode = isIron ? 'MCH-CMP' : 'MCH-IRN';
-      const peerMachine = this.machines.find(
-        (m) =>
-          m.code === peerCode ||
-          m.id === peerCode ||
-          (m.name || '').toLowerCase().includes(peerMatch)
-      );
-      if (peerMachine) {
-        if (!peerMachine.todayLogs) peerMachine.todayLogs = [];
-        peerMachine.todayLogs.unshift({
-          ...logEntry,
-          id: `LOG-SYNC-${Date.now()}`,
-          notes: `${notes || 'Strap workflow log'} [Synced from ${machine.name}]`,
-        });
-      }
-    }
-
-    // 6. Log to global production logs
+    // 5. Log to global production logs
     const globalLogEntry = {
       id: logEntry.id,
       date: todayStr,
@@ -1036,6 +1009,12 @@ class ProductionDatabase {
   }
 
   ensureSpecialMachines() {
+    const initialLen = (this.machines || []).length;
+    this.machines = (this.machines || []).filter(
+      (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
+    );
+    let modified = this.machines.length !== initialLen;
+
     const specialSpecs = [
       {
         id: 'MCH-CUT',
@@ -1088,25 +1067,7 @@ class ProductionDatabase {
         assignedSizes: ['10', '12', '14', '16', '18'],
         assignedPos: ['4502991532'],
         qrPayload: 'MCH-IRN',
-        notes: 'Thermal curing bed (Synchronized with Compress Machine for Strap)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-CMP',
-        code: 'MCH-CMP',
-        name: 'Compress Machine',
-        type: 'High-Tension Hydraulic Strap Compressor',
-        category: 'Strap',
-        operatorName: 'Kamal Gunaratne',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6'],
-        assignedColours: ['Marzipan 39H6'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-CMP',
-        notes: 'Hydraulic strap compressor (Synchronized with Iron Machine for Strap)',
+        notes: 'Thermal curing bed (Strap Category)',
         todayLogs: [],
       },
       {
@@ -1191,12 +1152,12 @@ class ProductionDatabase {
     // Special machines prioritized order as requested:
     // 1. Cutting Machine (Strap)
     // 2. Pusing Machine (Strap)
-    // 3. Iron Machine (Strap - Synced)
-    // 4. Compress Machine (Strap - Synced)
-    // 5. Dry Cut Machine (Multiplier Logic)
-    const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-CMP', 'MCH-DRY'];
+    // 3. Iron Machine (Strap)
+    // 4. Dry Cut Machine (Multiplier Logic)
+    const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-DRY'];
 
     let targetMachines = this.machines.filter((m) => {
+      if (m.id === 'MCH-CMP' || m.code === 'MCH-CMP' || (m.name || '').toLowerCase().includes('compress')) return false;
       if (machineId !== 'All' && m.id !== machineId && m.code !== machineId) return false;
       return true;
     });
@@ -1211,42 +1172,18 @@ class ProductionDatabase {
       return (a.name || '').localeCompare(b.name || '');
     });
 
-    // Iron & Compress synchronized entries pool for Strap
-    const ironAndCompressLogs = [];
-    const ironMach = this.machines.find((m) => (m.name || '').toLowerCase().includes('iron'));
-    const cmpMach = this.machines.find((m) => (m.name || '').toLowerCase().includes('compress'));
-
-    if (ironMach && ironMach.todayLogs) {
-      ironAndCompressLogs.push(...ironMach.todayLogs);
-    }
-    if (cmpMach && cmpMach.todayLogs) {
-      // Add logs not already present by timestamp/id
-      cmpMach.todayLogs.forEach((l) => {
-        if (!ironAndCompressLogs.some((existing) => existing.timeSlot === l.timeSlot && existing.qty === l.qty && existing.size === l.size)) {
-          ironAndCompressLogs.push(l);
-        }
-      });
-    }
-
     const machineTables = targetMachines.map((m) => {
       const isCutting = (m.name || '').toLowerCase().includes('cutting') || (m.code || '').toLowerCase().includes('cut');
       const isPusing = (m.name || '').toLowerCase().includes('pusing') || (m.code || '').toLowerCase().includes('pus');
       const isIron = (m.name || '').toLowerCase().includes('iron') || (m.code || '').toLowerCase().includes('irn');
-      const isCompress = (m.name || '').toLowerCase().includes('compress') || (m.code || '').toLowerCase().includes('cmp');
       const isDryCut = (m.name || '').toLowerCase().includes('dry cut') || (m.code || '').toLowerCase().includes('dry');
-
-      const isSyncedStrap = isIron || isCompress;
+      const isSyncedStrap = false;
 
       const dailyTarget = Number(m.dailyTargetQty) || 2600;
       // Formula: Divide daily target by working hours to get expected hourly target
       const expectedHourlyTarget = Math.round(dailyTarget / workingHours);
 
-      // Determine log source:
-      // If Iron Machine or Compress Machine under Strap, sync & display identically!
       let sourceLogs = m.todayLogs || [];
-      if (isSyncedStrap) {
-        sourceLogs = ironAndCompressLogs;
-      }
 
       // Filter logs by shift if specified
       const shiftLogs = sourceLogs.filter((l) => {
@@ -1352,8 +1289,7 @@ class ProductionDatabase {
       let specialRule = '';
       if (isCutting) specialRule = 'Strap Division Cutting Unit';
       else if (isPusing) specialRule = 'Strap Division Pusing Unit';
-      else if (isIron) specialRule = '🔗 Synced with Compress Machine (Strap Workflow)';
-      else if (isCompress) specialRule = '🔗 Synced with Iron Machine (Strap Workflow)';
+      else if (isIron) specialRule = 'Strap Division Steam Ironing & Thermal Curing Bed';
       else if (isDryCut) specialRule = '⚡ Dry Cut Multiplier: Sz 10/12/14/18 (×50), Sz 16 (×45)';
 
       return {
@@ -1370,8 +1306,8 @@ class ProductionDatabase {
         isCutting,
         isPusing,
         isIron,
-        isCompress,
-        isSyncedStrap,
+        isCompress: false,
+        isSyncedStrap: false,
         isDryCut,
         specialRule,
         slots: slotRows,

@@ -60,7 +60,9 @@ class ClientDatabaseStore {
       this.orders = cloudState.orders;
     }
     if (Array.isArray(cloudState.machines)) {
-      this.machines = cloudState.machines;
+      this.machines = cloudState.machines.filter(
+        (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
+      );
     }
     if (Array.isArray(cloudState.workers)) {
       this.workers = cloudState.workers;
@@ -122,7 +124,8 @@ class ClientDatabaseStore {
         const parsed = JSON.parse(saved);
         this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : JSON.parse(JSON.stringify(initialCategories));
         this.orders = Array.isArray(parsed.orders) ? parsed.orders : JSON.parse(JSON.stringify(initialOrders));
-        this.machines = Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines));
+        this.machines = (Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines)))
+          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
@@ -226,6 +229,9 @@ class ClientDatabaseStore {
   }
 
   ensureSpecialMachines() {
+    this.machines = (this.machines || []).filter(
+      (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
+    );
     const specialSpecs = [
       {
         id: 'MCH-CUT',
@@ -278,25 +284,7 @@ class ClientDatabaseStore {
         assignedSizes: ['10', '12', '14', '16', '18'],
         assignedPos: ['4502991532'],
         qrPayload: 'MCH-IRN',
-        notes: 'Thermal curing bed (Synchronized with Compress Machine for Strap)',
-        todayLogs: [],
-      },
-      {
-        id: 'MCH-CMP',
-        code: 'MCH-CMP',
-        name: 'Compress Machine',
-        type: 'High-Tension Hydraulic Strap Compressor',
-        category: 'Strap',
-        operatorName: 'Kamal Gunaratne',
-        shift: 'Day Shift',
-        status: 'Active',
-        dailyTargetQty: 2600,
-        assignedStyles: ['Strap Webbing Band - 39H6'],
-        assignedColours: ['Marzipan 39H6'],
-        assignedSizes: ['10', '12', '14', '16', '18'],
-        assignedPos: ['4502991532'],
-        qrPayload: 'MCH-CMP',
-        notes: 'Hydraulic strap compressor (Synchronized with Iron Machine for Strap)',
+        notes: 'Thermal curing bed (Strap Category)',
         todayLogs: [],
       },
       {
@@ -748,23 +736,6 @@ class ClientDatabaseStore {
     if (!machine.todayLogs) machine.todayLogs = [];
     machine.todayLogs.unshift(logEntry);
 
-    // Synchronize Iron Machine & Compress Machine for Strap Workflow
-    const isIron = (machine.name || '').toLowerCase().includes('iron') || (machine.code || '').toLowerCase().includes('irn');
-    const isCompress = (machine.name || '').toLowerCase().includes('compress') || (machine.code || '').toLowerCase().includes('cmp');
-
-    if ((isIron || isCompress) && (machine.category === 'Strap' || !machine.category)) {
-      const peerCode = isIron ? 'MCH-CMP' : 'MCH-IRN';
-      const peerMachine = this.machines.find((m) => m.code === peerCode || m.id === peerCode);
-      if (peerMachine) {
-        if (!peerMachine.todayLogs) peerMachine.todayLogs = [];
-        peerMachine.todayLogs.unshift({
-          ...logEntry,
-          id: `LOG-SYNC-${Date.now()}`,
-          notes: `${notes || 'Strap workflow log'} [Synced from ${machine.name}]`,
-        });
-      }
-    }
-
     const globalLogEntry = {
       ...logEntry,
       date: todayStr,
@@ -1001,8 +972,9 @@ class ClientDatabaseStore {
     const activeSlots = isNight ? nightShiftSlots : dayShiftSlots;
     const workingHours = isNight ? 10 : 13;
 
-    const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-CMP', 'MCH-DRY'];
+    const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-DRY'];
     let targetMachines = this.machines.filter((m) => {
+      if (m.id === 'MCH-CMP' || m.code === 'MCH-CMP' || (m.name || '').toLowerCase().includes('compress')) return false;
       if (machineId !== 'All' && m.id !== machineId && m.code !== machineId) return false;
       return true;
     });
@@ -1016,31 +988,17 @@ class ClientDatabaseStore {
       return (a.name || '').localeCompare(b.name || '');
     });
 
-    const ironAndCompressLogs = [];
-    const ironMach = this.machines.find((m) => (m.name || '').toLowerCase().includes('iron'));
-    const cmpMach = this.machines.find((m) => (m.name || '').toLowerCase().includes('compress'));
-
-    if (ironMach && ironMach.todayLogs) ironAndCompressLogs.push(...ironMach.todayLogs);
-    if (cmpMach && cmpMach.todayLogs) {
-      cmpMach.todayLogs.forEach((l) => {
-        if (!ironAndCompressLogs.some((e) => e.timeSlot === l.timeSlot && e.qty === l.qty && e.size === l.size)) {
-          ironAndCompressLogs.push(l);
-        }
-      });
-    }
-
     const machineTables = targetMachines.map((m) => {
       const isCutting = (m.name || '').toLowerCase().includes('cutting') || (m.code || '').toLowerCase().includes('cut');
       const isPusing = (m.name || '').toLowerCase().includes('pusing') || (m.code || '').toLowerCase().includes('pus');
       const isIron = (m.name || '').toLowerCase().includes('iron') || (m.code || '').toLowerCase().includes('irn');
-      const isCompress = (m.name || '').toLowerCase().includes('compress') || (m.code || '').toLowerCase().includes('cmp');
       const isDryCut = (m.name || '').toLowerCase().includes('dry cut') || (m.code || '').toLowerCase().includes('dry');
-      const isSyncedStrap = isIron || isCompress;
+      const isSyncedStrap = false;
 
       const dailyTarget = Number(m.dailyTargetQty) || 2600;
       const expectedHourlyTarget = Math.round(dailyTarget / workingHours);
 
-      let sourceLogs = isSyncedStrap ? ironAndCompressLogs : m.todayLogs || [];
+      let sourceLogs = m.todayLogs || [];
       const shiftLogs = sourceLogs.filter((l) => {
         if (shift !== 'All' && l.shift && l.shift !== shift) return false;
         return true;
@@ -1137,8 +1095,7 @@ class ClientDatabaseStore {
       let specialRule = '';
       if (isCutting) specialRule = 'Strap Division Cutting Unit';
       else if (isPusing) specialRule = 'Strap Division Pusing Unit';
-      else if (isIron) specialRule = '🔗 Synced with Compress Machine (Strap Workflow)';
-      else if (isCompress) specialRule = '🔗 Synced with Iron Machine (Strap Workflow)';
+      else if (isIron) specialRule = 'Strap Division Steam Ironing & Thermal Curing Bed';
       else if (isDryCut) specialRule = '⚡ Dry Cut Multiplier: Sz 10/12/14/18 (×50), Sz 16 (×45)';
 
       return {
@@ -1155,8 +1112,8 @@ class ClientDatabaseStore {
         isCutting,
         isPusing,
         isIron,
-        isCompress,
-        isSyncedStrap,
+        isCompress: false,
+        isSyncedStrap: false,
         isDryCut,
         specialRule,
         slots: slotRows,

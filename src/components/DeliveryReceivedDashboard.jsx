@@ -622,7 +622,6 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
     { label: 'Station: MCH-CUT (Cutting)', code: 'MCH-CUT', type: 'machine' },
     { label: 'Station: MCH-PUS (Pusing)', code: 'MCH-PUS', type: 'machine' },
     { label: 'Station: MCH-IRN (Iron)', code: 'MCH-IRN', type: 'machine' },
-    { label: 'Station: MCH-CMP (Compress)', code: 'MCH-CMP', type: 'machine' },
     { label: 'Station: MCH-DRY (Dry Cut)', code: 'MCH-DRY', type: 'machine' },
     { label: 'QR URL (?machine=MCH-01)', code: '/?view=worker&machine=MCH-01', type: 'machine' },
     { label: 'PO 4502991550 (Black)', code: '4502991550', type: 'po' },
