@@ -527,8 +527,9 @@ export default function AdminPanel({
             <button
               type="button"
               onClick={() => {
-                if (window.confirm('Reset all production orders & balances strictly to factory baseline (Image 3)? This will clear test transactions and reload pristine data.')) {
+                if (window.confirm('Reset all production orders & balances strictly to factory baseline (22-Oct sheet)? This will clear test transactions and reload pristine data.')) {
                   try {
+                    localStorage.removeItem('bondtex_loop_real_v9');
                     localStorage.removeItem('bondtex_loop_real_v8');
                     localStorage.removeItem('bondtex_loop_real_v7');
                     window.location.reload();

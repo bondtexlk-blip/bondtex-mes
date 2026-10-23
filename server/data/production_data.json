@@ -73,17 +73,17 @@
       "deliveryQty": 21612,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-10-28",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 4322,
           "actualQty": 21612,
           "deliveryQty": 21612,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -102,17 +102,17 @@
       "deliveryQty": 24496,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-07",
-      "targetDate": "2026-10-29",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 4899,
           "actualQty": 24496,
           "deliveryQty": 24496,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -131,17 +131,17 @@
       "deliveryQty": 6700,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-06",
-      "targetDate": "2026-10-30",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 1340,
           "actualQty": 6700,
           "deliveryQty": 6700,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -160,17 +160,17 @@
       "deliveryQty": 755,
       "balanceQty": 1,
       "deliveryBalanceQty": 1,
-      "startDate": "2026-10-05",
-      "targetDate": "2026-10-31",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Ahead",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 151,
           "actualQty": 755,
           "deliveryQty": 755,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -185,21 +185,21 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-10",
       "orderQty": 35003,
-      "productionQty": 34003,
-      "deliveryQty": 34003,
-      "balanceQty": 1000,
-      "deliveryBalanceQty": 1000,
+      "productionQty": 34803,
+      "deliveryQty": 34803,
+      "balanceQty": 200,
+      "deliveryBalanceQty": 200,
       "startDate": "2026-10-04",
       "targetDate": "2026-11-01",
       "status": "Ahead",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 7001,
-          "actualQty": 34003,
-          "deliveryQty": 34003,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 34803,
+          "deliveryQty": 34803,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -214,21 +214,21 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-12",
       "orderQty": 20874,
-      "productionQty": 18550,
-      "deliveryQty": 18550,
-      "balanceQty": 2324,
-      "deliveryBalanceQty": 2324,
-      "startDate": "2026-10-03",
-      "targetDate": "2026-11-02",
-      "status": "Behind Plan",
+      "productionQty": 20350,
+      "deliveryQty": 20350,
+      "balanceQty": 524,
+      "deliveryBalanceQty": 524,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
+      "status": "Ahead",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 4175,
-          "actualQty": 18550,
-          "deliveryQty": 18550,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 20350,
+          "deliveryQty": 20350,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -247,17 +247,17 @@
       "deliveryQty": 1353,
       "balanceQty": -2,
       "deliveryBalanceQty": -2,
-      "startDate": "2026-10-02",
-      "targetDate": "2026-11-03",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 270,
           "actualQty": 1353,
           "deliveryQty": 1353,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -276,17 +276,17 @@
       "deliveryQty": 450,
       "balanceQty": -3,
       "deliveryBalanceQty": -3,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-04",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 89,
           "actualQty": 450,
           "deliveryQty": 450,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -301,21 +301,21 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-10",
       "orderQty": 61714,
-      "productionQty": 41200,
-      "deliveryQty": 41200,
-      "balanceQty": 20514,
-      "deliveryBalanceQty": 20514,
-      "startDate": "2026-10-07",
-      "targetDate": "2026-10-28",
+      "productionQty": 48200,
+      "deliveryQty": 48200,
+      "balanceQty": 13514,
+      "deliveryBalanceQty": 13514,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Behind Plan",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 12343,
-          "actualQty": 41200,
-          "deliveryQty": 41200,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 48200,
+          "deliveryQty": 48200,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -330,21 +330,21 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-12",
       "orderQty": 31682,
-      "productionQty": 11000,
-      "deliveryQty": 11000,
-      "balanceQty": 20682,
-      "deliveryBalanceQty": 20682,
-      "startDate": "2026-10-06",
-      "targetDate": "2026-10-29",
+      "productionQty": 15200,
+      "deliveryQty": 15200,
+      "balanceQty": 16482,
+      "deliveryBalanceQty": 16482,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Behind Plan",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 6336,
-          "actualQty": 11000,
-          "deliveryQty": 11000,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 15200,
+          "deliveryQty": 15200,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -359,21 +359,21 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-14",
       "orderQty": 6408,
-      "productionQty": 1000,
-      "deliveryQty": 1000,
-      "balanceQty": 5408,
-      "deliveryBalanceQty": 5408,
-      "startDate": "2026-10-05",
-      "targetDate": "2026-10-30",
+      "productionQty": 3600,
+      "deliveryQty": 3600,
+      "balanceQty": 2808,
+      "deliveryBalanceQty": 2808,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Behind Plan",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 1282,
-          "actualQty": 1000,
-          "deliveryQty": 1000,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 3600,
+          "deliveryQty": 3600,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -393,16 +393,16 @@
       "balanceQty": -6,
       "deliveryBalanceQty": -6,
       "startDate": "2026-10-04",
-      "targetDate": "2026-10-31",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 58,
           "actualQty": 297,
           "deliveryQty": 297,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -421,7 +421,7 @@
       "deliveryQty": 0,
       "balanceQty": 64,
       "deliveryBalanceQty": 64,
-      "startDate": "2026-10-03",
+      "startDate": "2026-10-04",
       "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "High",
@@ -438,15 +438,23 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-10",
       "orderQty": 923,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 923,
-      "deliveryBalanceQty": 923,
-      "startDate": "2026-10-02",
-      "targetDate": "2026-11-02",
-      "status": "Scheduled",
+      "productionQty": 400,
+      "deliveryQty": 400,
+      "balanceQty": 523,
+      "deliveryBalanceQty": 523,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
+      "status": "Behind Plan",
       "priority": "Normal",
-      "dailyLogs": []
+      "dailyLogs": [
+        {
+          "date": "2026-10-22",
+          "planQty": 185,
+          "actualQty": 400,
+          "deliveryQty": 400,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
+        }
+      ]
     },
     {
       "id": "ORD-015",
@@ -459,21 +467,21 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-12",
       "orderQty": 2506,
-      "productionQty": 1800,
-      "deliveryQty": 1800,
-      "balanceQty": 706,
-      "deliveryBalanceQty": 706,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-03",
-      "status": "Behind Plan",
+      "productionQty": 2600,
+      "deliveryQty": 2600,
+      "balanceQty": -94,
+      "deliveryBalanceQty": -94,
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
+      "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 501,
-          "actualQty": 1800,
-          "deliveryQty": 1800,
-          "notes": "Factory verified Loop production records"
+          "actualQty": 2600,
+          "deliveryQty": 2600,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -492,17 +500,17 @@
       "deliveryQty": 1400,
       "balanceQty": 1020,
       "deliveryBalanceQty": 1020,
-      "startDate": "2026-10-07",
-      "targetDate": "2026-11-04",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Behind Plan",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 484,
           "actualQty": 1400,
           "deliveryQty": 1400,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -521,17 +529,17 @@
       "deliveryQty": 275,
       "balanceQty": 1225,
       "deliveryBalanceQty": 1225,
-      "startDate": "2026-10-06",
-      "targetDate": "2026-10-28",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Behind Plan",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 300,
           "actualQty": 275,
           "deliveryQty": 275,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -550,17 +558,17 @@
       "deliveryQty": 216,
       "balanceQty": -2,
       "deliveryBalanceQty": -2,
-      "startDate": "2026-10-05",
-      "targetDate": "2026-10-29",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-21",
+          "date": "2026-10-22",
           "planQty": 43,
           "actualQty": 216,
           "deliveryQty": 216,
-          "notes": "Factory verified Loop production records"
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
         }
       ]
     },
@@ -580,7 +588,7 @@
       "balanceQty": 29699,
       "deliveryBalanceQty": 29699,
       "startDate": "2026-10-04",
-      "targetDate": "2026-10-30",
+      "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "High",
       "dailyLogs": []
@@ -600,8 +608,8 @@
       "deliveryQty": 0,
       "balanceQty": 19055,
       "deliveryBalanceQty": 19055,
-      "startDate": "2026-10-03",
-      "targetDate": "2026-10-31",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "Normal",
       "dailyLogs": []
@@ -621,7 +629,7 @@
       "deliveryQty": 0,
       "balanceQty": 3260,
       "deliveryBalanceQty": 3260,
-      "startDate": "2026-10-02",
+      "startDate": "2026-10-04",
       "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "Critical",
@@ -642,8 +650,8 @@
       "deliveryQty": 0,
       "balanceQty": 451,
       "deliveryBalanceQty": 451,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-02",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "High",
       "dailyLogs": []
@@ -663,8 +671,8 @@
       "deliveryQty": 0,
       "balanceQty": 63,
       "deliveryBalanceQty": 63,
-      "startDate": "2026-10-07",
-      "targetDate": "2026-11-03",
+      "startDate": "2026-10-04",
+      "targetDate": "2026-11-01",
       "status": "Scheduled",
       "priority": "Normal",
       "dailyLogs": []
