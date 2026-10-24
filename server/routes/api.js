@@ -323,6 +323,26 @@ router.get('/hourly-production', (req, res) => {
   }
 });
 
+router.put('/production-logs/:id', (req, res) => {
+  try {
+    const updated = db.updateProductionLog(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ success: false, message: 'Production log not found' });
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/production-logs/:id', (req, res) => {
+  try {
+    const ok = db.deleteProductionLog(req.params.id, req.query);
+    if (!ok) return res.status(404).json({ success: false, message: 'Production log not found' });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 21. Delivery & Received Multi-Step Workflow
 router.get('/delivery-received', (req, res) => {
   try {

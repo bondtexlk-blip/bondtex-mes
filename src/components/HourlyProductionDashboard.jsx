@@ -63,15 +63,29 @@ export default function HourlyProductionDashboard({
   const [editNotes, setEditNotes] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
-  const handleOpenEdit = (log, machineInfo, slotInfo) => {
+  const handleOpenEdit = (log, machineInfo, slotInfo, allSlotLogs = []) => {
+    const list = allSlotLogs && allSlotLogs.length > 0 ? allSlotLogs : (log ? [log] : []);
+    const activeLog = log || list[0] || null;
     setEditingLogModal({
-      log,
+      log: activeLog,
       machine: machineInfo,
       slot: slotInfo,
+      logsList: list,
     });
-    setEditQty(log?.qty || '');
-    setEditOperator(log?.operator || log?.operatorName || machineInfo?.operatorName || '');
-    setEditNotes(log?.notes || '');
+    setEditQty(activeLog?.qty !== undefined ? String(activeLog.qty) : '');
+    setEditOperator(activeLog?.operator || activeLog?.operatorName || machineInfo?.operatorName || '');
+    setEditNotes(activeLog?.notes || '');
+  };
+
+  const handleSelectLogToEdit = (selectedLog) => {
+    if (!selectedLog) return;
+    setEditingLogModal((prev) => ({
+      ...prev,
+      log: selectedLog,
+    }));
+    setEditQty(selectedLog.qty !== undefined ? String(selectedLog.qty) : '');
+    setEditOperator(selectedLog.operator || selectedLog.operatorName || editingLogModal?.machine?.operatorName || '');
+    setEditNotes(selectedLog.notes || '');
   };
 
   const handleSaveEdit = async () => {
@@ -83,17 +97,27 @@ export default function HourlyProductionDashboard({
     }
     try {
       setIsSubmittingEdit(true);
-      await api.updateProductionLog(editingLogModal.log.id, {
+      const res = await api.updateProductionLog(editingLogModal.log.id, {
         qty: num,
         operator: editOperator,
         notes: editNotes,
+        machineId: editingLogModal.log.machineId || editingLogModal.machine?.code || editingLogModal.machine?.id,
+        timeSlot: editingLogModal.slot?.label || editingLogModal.log?.timeSlot,
+        date: editingLogModal.log.date || selectedDate,
+        size: editingLogModal.log.size || editingLogModal.machine?.size,
+        colour: editingLogModal.log.colour || editingLogModal.machine?.colour,
       });
-      if (onShowToast) {
-        const unit = getMachineUnit(editingLogModal.machine);
-        onShowToast(`Updated to ${num.toLocaleString()} ${unit} successfully!`, 'success');
+
+      if (res && res.success) {
+        if (onShowToast) {
+          const unit = getMachineUnit(editingLogModal.machine);
+          onShowToast(`Updated to ${num.toLocaleString()} ${unit} successfully!`, 'success');
+        }
+        setEditingLogModal(null);
+        await loadHourlyData();
+      } else {
+        if (onShowToast) onShowToast('Failed to update hourly production entry', 'error');
       }
-      setEditingLogModal(null);
-      await loadHourlyData();
     } catch (err) {
       if (onShowToast) onShowToast(err.message, 'error');
     } finally {
@@ -101,15 +125,30 @@ export default function HourlyProductionDashboard({
     }
   };
 
-  const handleDeleteLog = async () => {
-    if (!editingLogModal || !editingLogModal.log) return;
-    if (!window.confirm('Are you sure you want to delete this hourly production entry?')) return;
+  const handleDeleteLog = async (targetLog = editingLogModal?.log) => {
+    const logToDelete = targetLog || editingLogModal?.log;
+    if (!logToDelete) return;
+    const unit = getMachineUnit(editingLogModal?.machine || { name: logToDelete.machineName, code: logToDelete.machineId });
+    const confirmMsg = `Are you sure you want to delete this hourly production entry?\n\nMachine: ${logToDelete.machineName || logToDelete.machineId || editingLogModal?.machine?.name || 'Machine'}\nOperator: ${logToDelete.operator || logToDelete.operatorName || 'N/A'}\nSlot: ${logToDelete.timeSlot || editingLogModal?.slot?.label || 'Slot'}\nOutput: ${formatNumber(logToDelete.qty)} ${unit}\n\nThis will permanently delete this record and update Floor Production Qty and Dashboard metrics!`;
+    if (!window.confirm(confirmMsg)) return;
+
     try {
       setIsSubmittingEdit(true);
-      await api.deleteProductionLog(editingLogModal.log.id);
-      if (onShowToast) onShowToast('Hourly production log deleted successfully!', 'success');
-      setEditingLogModal(null);
-      await loadHourlyData();
+      const res = await api.deleteProductionLog(logToDelete.id, {
+        machineId: logToDelete.machineId || editingLogModal?.machine?.code || editingLogModal?.machine?.id,
+        timeSlot: logToDelete.timeSlot || editingLogModal?.slot?.label,
+        date: logToDelete.date || selectedDate,
+        size: logToDelete.size,
+        qty: logToDelete.qty,
+      });
+
+      if (res && res.success) {
+        if (onShowToast) onShowToast('Hourly production log deleted successfully!', 'success');
+        setEditingLogModal(null);
+        await loadHourlyData();
+      } else {
+        if (onShowToast) onShowToast('Failed to delete hourly production entry', 'error');
+      }
     } catch (err) {
       if (onShowToast) onShowToast(err.message, 'error');
     } finally {
@@ -175,6 +214,7 @@ export default function HourlyProductionDashboard({
   const timeSlots = data?.slots || (shift === 'Night Shift' ? defaultNightSlots : defaultDaySlots);
   const summaryMatrix = data?.summaryMatrix || [];
   const machines = data?.machines || [];
+  const allLogsForDate = data?.allLogs || [];
   const summary = data?.summary || {
     totalHourlyOutput: 0,
     totalTargetQuota: 0,
@@ -216,7 +256,7 @@ export default function HourlyProductionDashboard({
 
           {/* Top Controls: View Toggle, Shift Selector, Theme & Refresh */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* View Mode Toggle: Summary Matrix vs Station Cards */}
+            {/* View Mode Toggle: Summary Matrix vs Station Cards vs All Logs */}
             <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
               <button
                 type="button"
@@ -228,7 +268,7 @@ export default function HourlyProductionDashboard({
                 }`}
               >
                 <Layers className="w-3.5 h-3.5" />
-                <span>Summary View</span>
+                <span>Summary Matrix</span>
               </button>
 
               <button
@@ -241,7 +281,20 @@ export default function HourlyProductionDashboard({
                 }`}
               >
                 <Smartphone className="w-3.5 h-3.5" />
-                <span>Detailed Stations</span>
+                <span>Station Cards</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('logs')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
+                  viewMode === 'logs'
+                    ? 'bg-amber-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Log Entries ({allLogsForDate.length})</span>
               </button>
             </div>
 
@@ -602,7 +655,7 @@ export default function HourlyProductionDashboard({
                                       colour: row.colour,
                                       notes: 'Slot output',
                                     };
-                                handleOpenEdit(logToEdit, row, slot);
+                                handleOpenEdit(logToEdit, row, slot, slotLogs);
                               }
                             }}
                             className={`py-3 px-2 text-center whitespace-nowrap border-r border-slate-800/40 font-mono text-xs ${
@@ -648,7 +701,7 @@ export default function HourlyProductionDashboard({
             </table>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'stations' ? (
         /* Detailed Station Cards View */
         <div className="space-y-8 animate-fade-in">
         {loading && !data ? (
@@ -899,7 +952,7 @@ export default function HourlyProductionDashboard({
                                           colour: slot.colour,
                                           notes: slot.notes || '',
                                         };
-                                    handleOpenEdit(logToEdit, machine, slot);
+                                    handleOpenEdit(logToEdit, machine, slot, slot.logs || []);
                                   }}
                                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-500/30 transition group/btn"
                                   title={`Click to edit ${slot.actualOutput} ${unit}`}
@@ -1007,13 +1060,120 @@ export default function HourlyProductionDashboard({
           })
         )}
         </div>
+      ) : (
+        /* View Mode === 'logs': All Logged Entries View */
+        <div className="rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl overflow-hidden animate-fade-in">
+          {/* Card Header */}
+          <div className="p-5 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-400" />
+                <span>All Hourly Logged Batches</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Direct audit trail for <strong>{selectedDate}</strong> ({shift}). You can change numbers or delete any wrong entry.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-xl">
+                {allLogsForDate.length} Logged Entries
+              </span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-950/95 border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider font-bold select-none">
+                  <th className="py-3.5 px-4">Time Slot & Time</th>
+                  <th className="py-3.5 px-4">Station / Machine</th>
+                  <th className="py-3.5 px-4">Operator / Worker</th>
+                  <th className="py-3.5 px-4">Order / Colour / Size</th>
+                  <th className="py-3.5 px-4 text-right">Output Quantity</th>
+                  <th className="py-3.5 px-4">Notes</th>
+                  <th className="py-3.5 px-4 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 font-sans">
+                {allLogsForDate.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-16 text-center text-slate-500 font-sans text-xs">
+                      No hourly logs recorded for {selectedDate} ({shift}).
+                    </td>
+                  </tr>
+                ) : (
+                  allLogsForDate.map((logItem, idx) => {
+                    const unit = logItem.unit || 'pcs';
+                    const mach = machines.find((m) => m.code === logItem.machineId || m.id === logItem.machineId || m.name === logItem.machineName);
+                    return (
+                      <tr key={logItem.id || idx} className="hover:bg-slate-800/30 transition">
+                        <td className="py-3 px-4 whitespace-nowrap font-mono text-cyan-300">
+                          <div className="font-bold">{logItem.timeSlot || 'Slot'}</div>
+                          {logItem.time && <div className="text-[10px] text-slate-500">{logItem.time}</div>}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="font-bold text-white">{logItem.machineName || logItem.machineId}</span>
+                          <span className="ml-1.5 text-[10px] font-mono text-slate-400">({logItem.machineId})</span>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 font-medium">
+                            {logItem.operatorName || logItem.operator || 'Floor Worker'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px] text-slate-300">
+                          {logItem.colour && logItem.colour !== '-' && <span className="mr-2 text-indigo-300">{logItem.colour}</span>}
+                          {logItem.size && logItem.size !== '-' && (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-bold">
+                              Sz {logItem.size}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap font-mono font-black text-emerald-400 text-sm">
+                          {formatNumber(logItem.qty)} <span className="text-[10px] font-normal text-slate-400">{unit}</span>
+                          {logItem.rawQty && logItem.multiplier && logItem.multiplier > 1 && (
+                            <div className="text-[9px] text-amber-400/80 font-normal">
+                              ({logItem.rawQty} × {logItem.multiplier})
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 max-w-xs truncate text-slate-400 text-[11px]">
+                          {logItem.notes || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(logItem, mach, { label: logItem.timeSlot, display: logItem.timeSlot })}
+                              className="p-1.5 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 transition"
+                              title="Edit quantity / worker"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLog(logItem)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition"
+                              title="Delete entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* Edit Hourly Production Log Modal */}
       {editingLogModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-scale-up">
-            <div className="p-5 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-b border-slate-800 flex items-center justify-between">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden animate-scale-up max-h-[90vh] flex flex-col">
+            <div className="p-5 bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-blue-400">
                   Floor Entry Management
@@ -1030,7 +1190,54 @@ export default function HourlyProductionDashboard({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
+            <div className="p-5 space-y-4 text-xs overflow-y-auto">
+              {/* If multiple logs in this slot, allow selecting which worker's batch to edit/delete */}
+              {editingLogModal.logsList && editingLogModal.logsList.length > 1 && (
+                <div className="p-3 rounded-2xl bg-slate-950 border border-amber-500/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-300">
+                      Multiple Operator Batches in this Slot ({editingLogModal.logsList.length}):
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {editingLogModal.logsList.map((entry, idx) => {
+                      const isSelected = editingLogModal.log?.id === entry.id;
+                      return (
+                        <div
+                          key={entry.id || idx}
+                          onClick={() => handleSelectLogToEdit(entry)}
+                          className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${
+                            isSelected
+                              ? 'bg-blue-600/20 border-blue-500 text-white font-bold'
+                              : 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-cyan-400">{entry.operator || entry.operatorName || 'Worker'}</span>
+                            <span className="text-[10px] text-slate-400">({entry.size ? `Sz ${entry.size}` : ''} {entry.colour || ''})</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-amber-300 font-bold">{formatNumber(entry.qty)} {getMachineUnit(editingLogModal.machine)}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteLog(entry);
+                              }}
+                              className="p-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
+                              title="Delete this entry"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Station & Slot Info */}
               <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
                 <div className="flex items-center justify-between text-slate-400">
                   <span>Station / Machine:</span>
@@ -1093,14 +1300,15 @@ export default function HourlyProductionDashboard({
               </div>
             </div>
 
-            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
-                onClick={handleDeleteLog}
-                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/30 transition flex items-center gap-1.5"
+                onClick={() => handleDeleteLog(editingLogModal.log)}
+                disabled={isSubmittingEdit}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/30 transition flex items-center gap-1.5 disabled:opacity-50"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
+                <span>Delete Entry</span>
               </button>
 
               <div className="flex items-center gap-2">
@@ -1115,7 +1323,7 @@ export default function HourlyProductionDashboard({
                   type="button"
                   onClick={handleSaveEdit}
                   disabled={isSubmittingEdit}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 transition"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isSubmittingEdit ? 'Saving...' : 'Save Changes'}
                 </button>

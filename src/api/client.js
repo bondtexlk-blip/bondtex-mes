@@ -271,7 +271,7 @@ export const api = {
     return { success: true, data };
   },
 
-  updateProductionLog: async (logId, data) => {
+  updateProductionLog: async (logId, data = {}) => {
     const remote = await safeFetchJson(`${BASE_URL}/production-logs/${encodeURIComponent(logId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -279,15 +279,20 @@ export const api = {
     });
     if (remote && remote.success) return remote;
     const updated = dbStore.updateProductionLog(logId, data);
-    return { success: true, data: updated };
+    return { success: !!updated, data: updated };
   },
 
-  deleteProductionLog: async (logId) => {
-    const remote = await safeFetchJson(`${BASE_URL}/production-logs/${encodeURIComponent(logId)}`, {
+  deleteProductionLog: async (logId, query = {}) => {
+    const q = new URLSearchParams();
+    if (query.machineId) q.append('machineId', query.machineId);
+    if (query.timeSlot) q.append('timeSlot', query.timeSlot);
+    if (query.date) q.append('date', query.date);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    const remote = await safeFetchJson(`${BASE_URL}/production-logs/${encodeURIComponent(logId)}${qs}`, {
       method: 'DELETE',
     });
     if (remote && remote.success) return remote;
-    const ok = dbStore.deleteProductionLog(logId);
+    const ok = dbStore.deleteProductionLog(logId, query);
     return { success: ok };
   },
 
@@ -299,6 +304,8 @@ export const api = {
     if (params.partner) q.append('partner', params.partner);
     if (params.poNumber) q.append('poNumber', params.poNumber);
     if (params.search) q.append('search', params.search);
+    if (params.limit) q.append('limit', params.limit);
+    if (params.date) q.append('date', params.date);
     const remote = await safeFetchJson(`${BASE_URL}/delivery-received?${q.toString()}`);
     if (remote && remote.success) return remote;
     return dbStore.getDeliveryReceivedLogs(params);

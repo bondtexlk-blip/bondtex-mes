@@ -69,6 +69,8 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const [notes, setNotes] = useState('');
 
   // 3. Transactions & Summary State
+  const todayIso = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayIso);
   const [logs, setLogs] = useState([]);
   const [summary, setSummary] = useState({
     outsourceDeliveredToday: 0,
@@ -87,6 +89,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   // Edit Transaction Modal State
   const [editingTransaction, setEditingTransaction] = useState(null);
   const [editQty, setEditQty] = useState('');
+  const [editDate, setEditDate] = useState(todayIso);
   const [editPartner, setEditPartner] = useState('Saroja');
   const [editSubCategory, setEditSubCategory] = useState('Outsource');
   const [editHandler, setEditHandler] = useState('');
@@ -121,12 +124,12 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   };
 
   // Load orders, machines, transaction history, and active outsource consignments
-  const loadData = async () => {
+  const loadData = async (targetDate = selectedDate) => {
     try {
       setLoading(true);
       const [ordersRes, logsRes, machinesRes, consignmentsRes] = await Promise.all([
         api.getOrders({ limit: 100 }),
-        api.getDeliveryReceivedLogs(),
+        api.getDeliveryReceivedLogs({ date: targetDate }),
         api.getMachines().catch(() => ({ success: false })),
         api.getOutsourceConsignments().catch(() => ({ success: false, data: [] })),
       ]);
@@ -510,6 +513,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
         items,
         notes: activeMachine ? `${notes ? notes + ' | ' : ''}[Station: ${activeMachine.name}]` : notes,
         handlerName,
+        date: selectedDate,
       };
 
       const res = await api.recordDeliveryReceived(payload);
@@ -554,6 +558,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const handleOpenEdit = (log) => {
     setEditingTransaction(log);
     setEditQty(String(log.qty || ''));
+    setEditDate(log.date || (log.timestamp ? log.timestamp.slice(0, 10) : todayIso));
     setEditPartner(log.outsourcePartner || 'Saroja');
     setEditSubCategory(log.subCategory || 'Outsource');
     setEditHandler(log.handlerName || '');
@@ -574,6 +579,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
       setSavingEdit(true);
       const res = await api.updateDeliveryReceived(editingTransaction.id, {
         qty: num,
+        date: editDate,
         outsourcePartner: editPartner,
         subCategory: editSubCategory,
         handlerName: editHandler,
@@ -677,9 +683,40 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Interactive Dispatch Date Selector */}
+            <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-2xl border border-slate-800 shadow-inner">
+              <Calendar className="w-4 h-4 text-blue-400 shrink-0" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    setSelectedDate(val);
+                    loadData(val);
+                  }
+                }}
+                className="bg-transparent text-white font-mono text-xs font-bold focus:outline-none cursor-pointer"
+                title="Select Dispatch / Delivery Date"
+              />
+              {selectedDate !== todayIso && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(todayIso);
+                    loadData(todayIso);
+                  }}
+                  className="px-2 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold transition shadow"
+                  title="Snap back to Today"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
             <button
-              onClick={loadData}
+              onClick={() => loadData(selectedDate)}
               disabled={loading}
               className="p-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition flex items-center gap-2 text-xs font-semibold"
               title="Refresh Records"
@@ -694,7 +731,9 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mt-6">
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-blue-500/30">
             <div className="flex items-center justify-between text-blue-400 mb-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider">Outsource Today</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider">
+                {selectedDate === todayIso ? 'Outsource Today' : `Outsource (${selectedDate})`}
+              </span>
               <Users className="w-4 h-4" />
             </div>
             <div className="text-2xl font-black text-white font-mono">
@@ -707,7 +746,9 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/30">
             <div className="flex items-center justify-between text-emerald-400 mb-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider">Permanent Delivered</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider">
+                {selectedDate === todayIso ? 'Permanent Delivered' : `Permanent (${selectedDate})`}
+              </span>
               <PackageCheck className="w-4 h-4" />
             </div>
             <div className="text-2xl font-black text-white font-mono">
@@ -720,7 +761,9 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-purple-500/30">
             <div className="flex items-center justify-between text-purple-400 mb-1">
-              <span className="text-[11px] font-bold uppercase tracking-wider">Total Received</span>
+              <span className="text-[11px] font-bold uppercase tracking-wider">
+                {selectedDate === todayIso ? 'Total Received' : `Received (${selectedDate})`}
+              </span>
               <ArrowDownToLine className="w-4 h-4" />
             </div>
             <div className="text-2xl font-black text-white font-mono">
@@ -737,10 +780,11 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
               <Clock className="w-4 h-4" />
             </div>
             <div className="text-2xl font-black text-white font-mono">
-              {logs.length} <span className="text-xs font-normal text-slate-400">records</span>
+              {logs.filter((l) => (l.date || l.timestamp || '').slice(0, 10) === selectedDate).length}{' '}
+              <span className="text-xs font-normal text-slate-400">records</span>
             </div>
             <div className="text-[10px] text-amber-400/80 mt-1">
-              Full audit trail preserved
+              {selectedDate === todayIso ? 'Full audit trail preserved' : `Date: ${selectedDate} • Total: ${logs.length}`}
             </div>
           </div>
         </div>
@@ -1855,6 +1899,19 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
                     {formatNumber(editingTransaction.qty)} pcs
                   </span>
                 </div>
+              </div>
+
+              {/* 0. Transaction Date */}
+              <div>
+                <label className="block text-[11px] font-bold text-slate-300 uppercase mb-1">
+                  Transaction Date:
+                </label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs font-bold focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               {/* 1. Adjusted Quantity Input */}

@@ -916,62 +916,148 @@ class ProductionDatabase {
     return true;
   }
 
-  updateProductionLog(logId, updatedData = {}) {
-    if (!logId) return null;
-    const logIndex = (this.productionLogs || []).findIndex((l) => l.id === logId);
-    if (logIndex === -1) return null;
+  findProductionLog(logId, query = {}) {
+    if (!logId && !query.machineId) return null;
 
-    const oldLog = this.productionLogs[logIndex];
+    // 1. Check in productionLogs by ID
+    if (logId && Array.isArray(this.productionLogs)) {
+      const idx = this.productionLogs.findIndex((l) => l.id === logId);
+      if (idx !== -1) return { log: this.productionLogs[idx], source: 'productionLogs', index: idx };
+    }
+
+    // 2. Check in machines.todayLogs by ID
+    if (logId && Array.isArray(this.machines)) {
+      for (const m of this.machines) {
+        if (Array.isArray(m.todayLogs)) {
+          const idx = m.todayLogs.findIndex((l) => l.id === logId);
+          if (idx !== -1) return { log: m.todayLogs[idx], machine: m, source: 'machine', index: idx };
+        }
+      }
+    }
+
+    // 3. Match by attributes if ID was synthetic or missing
+    const targetMachine = query.machineId || query.machineCode;
+    const targetSlot = (query.timeSlot || query.slotId || query.slotLabel || '').replace(/\s+/g, '');
+    const targetDate = query.date ? String(query.date).slice(0, 10) : '';
+    const targetSize = query.size !== undefined && query.size !== null && query.size !== '-' ? String(query.size).trim() : null;
+    const targetQty = query.qty !== undefined && query.qty !== null ? Number(query.qty) : null;
+
+    if (targetMachine) {
+      if (Array.isArray(this.productionLogs)) {
+        const idx = this.productionLogs.findIndex((l) => {
+          const machMatch =
+            l.machineId === targetMachine ||
+            l.machineCode === targetMachine ||
+            (l.machineName && l.machineName.toLowerCase() === targetMachine.toLowerCase());
+          const slotMatch = !targetSlot || (l.timeSlot && l.timeSlot.replace(/\s+/g, '') === targetSlot);
+          const dateMatch = !targetDate || (l.date || l.timestamp || '').slice(0, 10) === targetDate;
+          const szMatch = !targetSize || String(l.size).trim() === targetSize;
+          const qtyMatch = targetQty === null || Number(l.qty) === targetQty;
+          return machMatch && slotMatch && dateMatch && szMatch && qtyMatch;
+        });
+        if (idx !== -1) return { log: this.productionLogs[idx], source: 'productionLogs', index: idx };
+      }
+
+      const mach = this.machines.find(
+        (m) =>
+          m.code === targetMachine ||
+          m.id === targetMachine ||
+          (m.name && m.name.toLowerCase() === targetMachine.toLowerCase())
+      );
+      if (mach && Array.isArray(mach.todayLogs)) {
+        const idx = mach.todayLogs.findIndex((l) => {
+          const slotMatch = !targetSlot || (l.timeSlot && l.timeSlot.replace(/\s+/g, '') === targetSlot);
+          const dateMatch = !targetDate || (l.date || l.timestamp || '').slice(0, 10) === targetDate;
+          const szMatch = !targetSize || String(l.size).trim() === targetSize;
+          const qtyMatch = targetQty === null || Number(l.qty) === targetQty;
+          return slotMatch && dateMatch && szMatch && qtyMatch;
+        });
+        if (idx !== -1) return { log: mach.todayLogs[idx], machine: mach, source: 'machine', index: idx };
+      }
+    }
+
+    return null;
+  }
+
+  findLoopOrder(log) {
+    if (!log) return null;
+    const targetPo = log.poNumber;
+    const targetSize = String(log.size || '').trim();
+    const targetColour = (log.colour || '').toLowerCase().trim();
+
+    let order = this.orders.find((o) => {
+      const poMatch = targetPo && targetPo !== 'PO-PROD-BATCH' && o.poNumber === targetPo;
+      const colMatch = targetColour && (o.colour || '').toLowerCase().trim() === targetColour;
+      const szMatch = targetSize && String(o.size).trim() === targetSize;
+      return (poMatch && szMatch) || (colMatch && szMatch);
+    });
+    if (!order && targetSize) {
+      order = this.orders.find((o) => String(o.size).trim() === targetSize && (o.category || '').toLowerCase() === 'loop');
+    }
+    return order;
+  }
+
+  updateProductionLog(logId, updatedData = {}) {
+    const found = this.findProductionLog(logId, updatedData);
+    if (!found) return null;
+
+    const oldLog = found.log;
     const oldQty = Number(oldLog.qty) || 0;
     const newQty = updatedData.qty !== undefined ? Number(updatedData.qty) : oldQty;
     const qtyDelta = newQty - oldQty;
 
+    const effectiveId = oldLog.id || logId || `LOG-${Date.now()}`;
     const updatedLog = {
       ...oldLog,
       ...updatedData,
+      id: effectiveId,
       qty: newQty,
       rawQty: updatedData.rawQty !== undefined ? Number(updatedData.rawQty) : newQty,
       operator: updatedData.operator || updatedData.operatorName || oldLog.operator,
       operatorName: updatedData.operatorName || updatedData.operator || oldLog.operatorName,
       notes: updatedData.notes !== undefined ? updatedData.notes : oldLog.notes,
     };
-    this.productionLogs[logIndex] = updatedLog;
 
-    // Update inside machine.todayLogs
-    const mach = this.machines.find(
-      (m) =>
-        m.code === oldLog.machineId ||
-        m.id === oldLog.machineId ||
-        (m.name || '').toLowerCase() === (oldLog.machineName || '').toLowerCase()
-    );
-    if (mach && Array.isArray(mach.todayLogs)) {
-      const mIdx = mach.todayLogs.findIndex(
-        (l) => l.id === logId || (l.timeSlot === oldLog.timeSlot && l.size === oldLog.size && Number(l.qty) === oldQty)
-      );
-      if (mIdx !== -1) {
-        mach.todayLogs[mIdx] = {
-          ...mach.todayLogs[mIdx],
-          ...updatedData,
-          qty: newQty,
-          rawQty: updatedLog.rawQty,
-          operator: updatedLog.operator,
-          operatorName: updatedLog.operatorName,
-          notes: updatedLog.notes,
-        };
-      }
+    // 1. Update in this.productionLogs
+    if (!Array.isArray(this.productionLogs)) this.productionLogs = [];
+    const pIdx = this.productionLogs.findIndex((l) => (l.id && l.id === effectiveId) || l === oldLog);
+    if (pIdx !== -1) {
+      this.productionLogs[pIdx] = updatedLog;
+    } else {
+      this.productionLogs.unshift(updatedLog);
     }
 
-    // If machine is Loop Insert, adjust floorProductionQty on the matched order
+    // 2. Update inside machine.todayLogs & recalculate machine totals
+    const targetMachineId = updatedLog.machineId || oldLog.machineId;
+    const mach = this.machines.find(
+      (m) =>
+        m.code === targetMachineId ||
+        m.id === targetMachineId ||
+        (m.name || '').toLowerCase() === (updatedLog.machineName || oldLog.machineName || '').toLowerCase()
+    );
+    if (mach) {
+      if (!Array.isArray(mach.todayLogs)) mach.todayLogs = [];
+      const mIdx = mach.todayLogs.findIndex(
+        (l) => (l.id && l.id === effectiveId) || l === oldLog || (l.timeSlot === oldLog.timeSlot && Number(l.qty) === oldQty)
+      );
+      if (mIdx !== -1) {
+        mach.todayLogs[mIdx] = { ...mach.todayLogs[mIdx], ...updatedLog };
+      } else {
+        mach.todayLogs.unshift(updatedLog);
+      }
+      mach.todayProduced = mach.todayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+      mach.todayOutput = mach.todayProduced;
+    }
+
+    // 3. Loop Insert logic -> floorProductionQty
     const isLoopInsert =
-      (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
-      (mach?.name || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
-      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop')) ||
-      (mach?.code || oldLog.machineId || '').toLowerCase() === 'mch-06';
+      (mach?.name || updatedLog.machineName || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
+      (mach?.name || updatedLog.machineName || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
+      ((mach?.name || updatedLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || '').toLowerCase().includes('loop')) ||
+      (mach?.code || targetMachineId || '').toLowerCase() === 'mch-06';
 
     if (isLoopInsert && qtyDelta !== 0) {
-      const order = this.orders.find(
-        (o) => o.poNumber === oldLog.poNumber && String(o.size) === String(oldLog.size)
-      );
+      const order = this.findLoopOrder(updatedLog) || this.findLoopOrder(oldLog);
       if (order) {
         if (order.floorProductionQty === undefined || order.floorProductionQty === null) {
           order.floorProductionQty = Number(order.productionQty) || 0;
@@ -984,44 +1070,50 @@ class ProductionDatabase {
     return updatedLog;
   }
 
-  deleteProductionLog(logId) {
-    if (!logId) return false;
-    const logIndex = (this.productionLogs || []).findIndex((l) => l.id === logId);
-    if (logIndex === -1) return false;
+  deleteProductionLog(logId, query = {}) {
+    const found = this.findProductionLog(logId, query);
+    if (!found) return false;
 
-    const oldLog = this.productionLogs[logIndex];
+    const oldLog = found.log;
     const oldQty = Number(oldLog.qty) || 0;
+    const effectiveId = oldLog.id || logId;
 
-    // Remove from global log
-    this.productionLogs.splice(logIndex, 1);
+    // 1. Remove from productionLogs
+    if (Array.isArray(this.productionLogs)) {
+      const pIdx = this.productionLogs.findIndex((l) => (l.id && l.id === effectiveId) || l === oldLog);
+      if (pIdx !== -1) {
+        this.productionLogs.splice(pIdx, 1);
+      }
+    }
 
-    // Remove from machine.todayLogs
+    // 2. Remove from machine.todayLogs
+    const targetMachineId = oldLog.machineId || query.machineId;
     const mach = this.machines.find(
       (m) =>
-        m.code === oldLog.machineId ||
-        m.id === oldLog.machineId ||
+        m.code === targetMachineId ||
+        m.id === targetMachineId ||
         (m.name || '').toLowerCase() === (oldLog.machineName || '').toLowerCase()
     );
     if (mach && Array.isArray(mach.todayLogs)) {
       const mIdx = mach.todayLogs.findIndex(
-        (l) => l.id === logId || (l.timeSlot === oldLog.timeSlot && l.size === oldLog.size && Number(l.qty) === oldQty)
+        (l) => (l.id && l.id === effectiveId) || l === oldLog || (l.timeSlot === oldLog.timeSlot && Number(l.qty) === oldQty)
       );
       if (mIdx !== -1) {
         mach.todayLogs.splice(mIdx, 1);
       }
+      mach.todayProduced = mach.todayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+      mach.todayOutput = mach.todayProduced;
     }
 
-    // If machine is Loop Insert, deduct from floorProductionQty
+    // 3. Loop Insert -> floorProductionQty deduction
     const isLoopInsert =
       (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
       (mach?.name || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
-      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop')) ||
-      (mach?.code || oldLog.machineId || '').toLowerCase() === 'mch-06';
+      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || '').toLowerCase().includes('loop')) ||
+      (mach?.code || targetMachineId || '').toLowerCase() === 'mch-06';
 
     if (isLoopInsert) {
-      const order = this.orders.find(
-        (o) => o.poNumber === oldLog.poNumber && String(o.size) === String(oldLog.size)
-      );
+      const order = this.findLoopOrder(oldLog);
       if (order && order.floorProductionQty !== undefined) {
         order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - oldQty);
       }
@@ -1281,7 +1373,6 @@ class ProductionDatabase {
       },
     ];
 
-    let modified = false;
     for (const spec of specialSpecs) {
       const idx = this.machines.findIndex(
         (m) => m.id === spec.id || m.code === spec.code
@@ -1408,6 +1499,15 @@ class ProductionDatabase {
       });
 
       const sourceLogs = [...machineGlobalLogs, ...extraLogs];
+      // Ensure all logs have stable unique IDs and machine tags
+      sourceLogs.forEach((l, idx) => {
+        if (!l.id) {
+          l.id = `LOG-${m.code || m.id}-${(l.date || targetDate).replace(/-/g, '')}-${(l.timeSlot || '').replace(/[^0-9]/g, '')}-${idx}`;
+        }
+        if (!l.machineId) l.machineId = m.code || m.id;
+        if (!l.machineName) l.machineName = m.name;
+        if (!l.date) l.date = targetDate;
+      });
 
       // Filter logs by shift if specified
       const shiftLogs = sourceLogs.filter((l) => {
@@ -1574,6 +1674,8 @@ class ProductionDatabase {
           qty: s.actualOutput,
           workerName: s.workerName,
           status: s.status,
+          logs: s.logs || [],
+          slotLabel: s.timeSlot,
         };
       });
 
@@ -1593,6 +1695,22 @@ class ProductionDatabase {
       };
     });
 
+    // Flatten all individual logs for targetDate to display in Log History view
+    const allLogs = [];
+    machineTables.forEach((mt) => {
+      mt.slots.forEach((s) => {
+        (s.logs || []).forEach((l) => {
+          allLogs.push({
+            ...l,
+            machineId: mt.code || mt.id,
+            machineName: mt.name,
+            operatorName: l.operator || l.operatorName || mt.operatorName || 'Floor Worker',
+            unit: (mt.name || '').toLowerCase().includes('cutting') || (mt.name || '').toLowerCase().includes('fusing') || (mt.name || '').toLowerCase().includes('iron') ? 'Straps' : 'pcs',
+          });
+        });
+      });
+    });
+
     return {
       shift,
       date: targetDate,
@@ -1606,6 +1724,7 @@ class ProductionDatabase {
       },
       summaryMatrix,
       machines: machineTables,
+      allLogs,
     };
   }
 
@@ -1624,7 +1743,7 @@ class ProductionDatabase {
       handlerName = 'Dispatcher',
     } = payload;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = (payload.date || new Date().toISOString().split('T')[0]).slice(0, 10);
     const createdLogs = [];
 
     // Normalize entries: either payload.items or single entry
@@ -1873,31 +1992,32 @@ class ProductionDatabase {
 
     // Summary calculations
     const allLogs = this.deliveryReceivedLogs || [];
-    const todayStr = new Date().toISOString().split('T')[0];
-    const todayLogs = allLogs.filter((l) => l.date === todayStr);
+    const targetDate = (params.date || new Date().toISOString().split('T')[0]).slice(0, 10);
+    const dateLogs = allLogs.filter((l) => (l.date || l.timestamp || '').slice(0, 10) === targetDate);
 
-    const outsourceDeliveredToday = todayLogs
+    const outsourceDeliveredToday = dateLogs
       .filter((l) => l.type === 'Delivery' && l.subCategory === 'Outsource')
       .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
-    const permanentDeliveredToday = todayLogs
+    const permanentDeliveredToday = dateLogs
       .filter((l) => l.type === 'Delivery' && l.subCategory === 'Permanent')
       .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
-    const totalReceivedToday = todayLogs
+    const totalReceivedToday = dateLogs
       .filter((l) => l.type === 'Received')
       .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
     const partnerBreakdown = {
-      Saroja: todayLogs.filter((l) => l.outsourcePartner === 'Saroja').reduce((sum, l) => sum + Number(l.qty), 0),
-      Anoja: todayLogs.filter((l) => l.outsourcePartner === 'Anoja').reduce((sum, l) => sum + Number(l.qty), 0),
-      Iresh: todayLogs.filter((l) => l.outsourcePartner === 'Iresh').reduce((sum, l) => sum + Number(l.qty), 0),
+      Saroja: dateLogs.filter((l) => l.outsourcePartner === 'Saroja').reduce((sum, l) => sum + Number(l.qty), 0),
+      Anoja: dateLogs.filter((l) => l.outsourcePartner === 'Anoja').reduce((sum, l) => sum + Number(l.qty), 0),
+      Iresh: dateLogs.filter((l) => l.outsourcePartner === 'Iresh').reduce((sum, l) => sum + Number(l.qty), 0),
     };
 
     return {
       success: true,
       logs: list.slice(0, Number(limit) || 100),
       totalLogs: list.length,
+      targetDate,
       summary: {
         outsourceDeliveredToday,
         permanentDeliveredToday,
@@ -2027,6 +2147,9 @@ class ProductionDatabase {
       }
     }
 
+    if (updateData.date) {
+      log.date = String(updateData.date).slice(0, 10);
+    }
     log.qty = newQty;
     log.outsourcePartner = newPartner;
     log.handlerName = newHandler;
