@@ -785,6 +785,7 @@ class ClientDatabaseStore {
     const logEntry = {
       id: `LOG-${Date.now()}`,
       timestamp: new Date().toISOString(),
+      date: todayStr,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timeSlot: timeSlot || 'Current Window',
       qty: effectiveQty,
@@ -1154,7 +1155,8 @@ class ClientDatabaseStore {
 
   getHourlyProduction(params = {}) {
     this.ensureSpecialMachines();
-    const { shift = 'Day Shift', machineId = 'All' } = params;
+    const { shift = 'Day Shift', machineId = 'All', date } = params;
+    const targetDate = (date || new Date().toISOString().split('T')[0]).slice(0, 10);
 
     const dayShiftSlots = [
       { id: '07:45-08:45', label: '07:45 - 08:45', display: '7.45 - 8.45 AM' },
@@ -1215,7 +1217,25 @@ class ClientDatabaseStore {
       const dailyTarget = Number(m.dailyTargetQty) || 2600;
       const expectedHourlyTarget = Math.round(dailyTarget / workingHours);
 
-      let sourceLogs = m.todayLogs || [];
+      // Find all logs for this machine on targetDate from global productionLogs (authoritative)
+      const machineGlobalLogs = (this.productionLogs || []).filter((l) => {
+        const matchMach =
+          l.machineId === m.id ||
+          l.machineId === m.code ||
+          (m.name && l.machineName && l.machineName.toLowerCase() === m.name.toLowerCase());
+        const lDate = (l.date || l.timestamp || '').slice(0, 10);
+        return matchMach && (!targetDate || lDate === targetDate);
+      });
+
+      // Also include any matching logs from m.todayLogs if not already in machineGlobalLogs
+      const seenIds = new Set(machineGlobalLogs.map((l) => l.id).filter(Boolean));
+      const extraLogs = (m.todayLogs || []).filter((l) => {
+        if (l.id && seenIds.has(l.id)) return false;
+        const lDate = (l.date || l.timestamp || '').slice(0, 10);
+        return lDate === targetDate;
+      });
+
+      const sourceLogs = [...machineGlobalLogs, ...extraLogs];
       const shiftLogs = sourceLogs.filter((l) => {
         if (shift !== 'All' && l.shift && l.shift !== shift) return false;
         return true;
@@ -1390,6 +1410,7 @@ class ClientDatabaseStore {
     });
 
     return {
+      date: targetDate,
       shift,
       workingHours,
       slots: activeSlots,

@@ -48,6 +48,8 @@ export default function HourlyProductionDashboard({
   onToggleTheme,
 }) {
   const [shift, setShift] = useState('Day Shift');
+  const todayIso = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayIso);
   const [selectedMachineFilter, setSelectedMachineFilter] = useState('All');
   const [viewMode, setViewMode] = useState('summary'); // 'summary' | 'stations'
   const [data, setData] = useState(null);
@@ -119,7 +121,7 @@ export default function HourlyProductionDashboard({
   const loadHourlyData = async () => {
     try {
       setLoading(true);
-      const res = await api.getHourlyProduction({ shift });
+      const res = await api.getHourlyProduction({ shift, date: selectedDate });
       if (res.success && res.data) {
         setData(res.data);
         setLastRefreshed(new Date());
@@ -140,7 +142,7 @@ export default function HourlyProductionDashboard({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [shift]);
+  }, [shift, selectedDate]);
 
   const defaultDaySlots = [
     { id: '07:45-08:45', label: '07:45 - 08:45', display: '7.45 - 8.45' },
@@ -243,6 +245,28 @@ export default function HourlyProductionDashboard({
               </button>
             </div>
 
+            {/* Production Date Selector */}
+            <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+              <Calendar className="w-4 h-4 text-cyan-400 shrink-0" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                title="Select Production Date to view hourly output"
+              />
+              {selectedDate !== todayIso && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayIso)}
+                  className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 text-[11px] font-bold border border-cyan-500/30 transition"
+                  title="Jump back to Today"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
             {/* Shift Switcher */}
             <div className="flex items-center bg-slate-950/80 p-1 rounded-2xl border border-slate-800 text-xs font-semibold">
               <button
@@ -305,7 +329,7 @@ export default function HourlyProductionDashboard({
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400">
-              Shift Actual Output
+              {selectedDate === todayIso ? "Today's Shift Output" : `${selectedDate} Shift Output`}
             </span>
             <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
               <Activity className="w-3.5 h-3.5" />

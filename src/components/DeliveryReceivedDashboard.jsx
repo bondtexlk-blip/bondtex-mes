@@ -78,6 +78,7 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   });
   const [filterType, setFilterType] = useState('All');
   const [filterPartner, setFilterPartner] = useState('All');
+  const [filterDate, setFilterDate] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -636,6 +637,10 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
   const filteredLogs = logs.filter((l) => {
     if (filterType !== 'All' && l.type.toLowerCase() !== filterType.toLowerCase()) return false;
     if (filterPartner !== 'All' && l.outsourcePartner !== filterPartner) return false;
+    if (filterDate !== 'All') {
+      const lDate = (l.date || l.timestamp || '').slice(0, 10);
+      if (lDate !== filterDate) return false;
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const match =
@@ -1619,6 +1624,28 @@ export default function DeliveryReceivedDashboard({ onShowToast, onNavigateToVie
 
           {/* Filter Controls */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Date Filter */}
+            <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs">
+              <Calendar className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <input
+                type="date"
+                value={filterDate === 'All' ? '' : filterDate}
+                onChange={(e) => setFilterDate(e.target.value || 'All')}
+                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                title="Filter ledger by date"
+              />
+              {filterDate !== 'All' && (
+                <button
+                  type="button"
+                  onClick={() => setFilterDate('All')}
+                  className="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-750 text-[10px] text-cyan-300 font-bold transition border border-slate-700"
+                  title="Show all records"
+                >
+                  All Dates
+                </button>
+              )}
+            </div>
+
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}

@@ -781,6 +781,7 @@ class ProductionDatabase {
     const logEntry = {
       id: `LOG-${Date.now()}`,
       timestamp: new Date().toISOString(),
+      date: todayStr,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timeSlot: timeSlot || 'Current Window',
       qty: effectiveQty,
@@ -1386,7 +1387,27 @@ class ProductionDatabase {
       // Formula: Divide daily target by working hours to get expected hourly target
       const expectedHourlyTarget = Math.round(dailyTarget / workingHours);
 
-      let sourceLogs = m.todayLogs || [];
+      const targetDate = (params.date || date || new Date().toISOString().split('T')[0]).slice(0, 10);
+
+      // Find all logs for this machine on targetDate from global productionLogs (authoritative)
+      const machineGlobalLogs = (this.productionLogs || []).filter((l) => {
+        const matchMach =
+          l.machineId === m.id ||
+          l.machineId === m.code ||
+          (m.name && l.machineName && l.machineName.toLowerCase() === m.name.toLowerCase());
+        const lDate = (l.date || l.timestamp || '').slice(0, 10);
+        return matchMach && (!targetDate || lDate === targetDate);
+      });
+
+      // Also include any matching logs from m.todayLogs if not already in machineGlobalLogs
+      const seenIds = new Set(machineGlobalLogs.map((l) => l.id).filter(Boolean));
+      const extraLogs = (m.todayLogs || []).filter((l) => {
+        if (l.id && seenIds.has(l.id)) return false;
+        const lDate = (l.date || l.timestamp || '').slice(0, 10);
+        return lDate === targetDate;
+      });
+
+      const sourceLogs = [...machineGlobalLogs, ...extraLogs];
 
       // Filter logs by shift if specified
       const shiftLogs = sourceLogs.filter((l) => {
@@ -1574,7 +1595,7 @@ class ProductionDatabase {
 
     return {
       shift,
-      date,
+      date: targetDate,
       workingHours,
       slots: activeSlots,
       summary: {
