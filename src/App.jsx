@@ -16,6 +16,7 @@ import WorkerPortal from './components/WorkerPortal';
 import DailyProductionDashboard from './components/DailyProductionDashboard';
 import HourlyProductionDashboard from './components/HourlyProductionDashboard';
 import DeliveryReceivedDashboard from './components/DeliveryReceivedDashboard';
+import MaterialCalculationDashboard from './components/MaterialCalculationDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { api } from './api/client';
 import {
@@ -34,6 +35,7 @@ import {
   QrCode,
   Calendar,
   Clock,
+  Calculator,
 } from 'lucide-react';
 import { formatNumber } from './utils/formatters';
 
@@ -408,6 +410,14 @@ export default function App() {
                       </button>
 
                       <button
+                        onClick={() => setActiveView('calculation')}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shadow-lg shadow-emerald-600/30 active:scale-95"
+                      >
+                        <Calculator className="w-4 h-4" />
+                        <span>Material Calculation</span>
+                      </button>
+
+                      <button
                         onClick={() => setActiveView('admin')}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 font-semibold text-xs transition"
                       >
@@ -494,6 +504,13 @@ export default function App() {
                 onPrintBarcode={(order) => setSelectedOrderForLabel(order)}
                 onOpenBarcodeScanner={() => setBarcodeScannerOpen(true)}
                 metadata={metadata}
+              />
+            ) : activeView === 'calculation' ? (
+              /* 3B. MATERIAL CALCULATION DASHBOARD (LOOP STRIPS & ADHESIVE TAPE) */
+              <MaterialCalculationDashboard
+                onBackToDashboard={() => setActiveView('dashboard')}
+                onShowToast={showToast}
+                theme={theme}
               />
             ) : activeView === 'admin' ? (
               /* 4. ADMIN PANEL & STATIC QR GENERATION */

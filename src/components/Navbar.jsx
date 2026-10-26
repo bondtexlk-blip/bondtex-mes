@@ -8,6 +8,7 @@ import {
   Layers,
   ChevronDown,
   Sparkles,
+  Calculator,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -131,6 +132,17 @@ export default function Navbar({
             }`}
           >
             Orders & POs
+          </button>
+          <button
+            onClick={() => setActiveView('calculation')}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+              activeView === 'calculation'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-emerald-400 hover:text-emerald-300'
+            }`}
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            Calculation
           </button>
           <button
             onClick={() => setActiveView('admin')}
