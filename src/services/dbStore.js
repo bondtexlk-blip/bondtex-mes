@@ -12,6 +12,8 @@ import {
 import { firestoreSync, firebaseRealtime } from '../firebase.js';
 
 const STORAGE_KEY = 'bondtex_loop_real_v9';
+const VAULT_KEY = 'bondtex_permanent_vault_backup';
+const OLD_STORAGE_KEYS = ['bondtex_loop_real_v9', 'bondtex_loop_real_v8', 'bondtex_loop_real_v7'];
 
 class ClientDatabaseStore {
   constructor() {
@@ -54,11 +56,50 @@ class ClientDatabaseStore {
     if (!cloudState) return;
     if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastSaved) return;
 
+    // Multi-Device Data Protection & Anti-Downgrade Guard:
+    // Ensures no older device, reset script, or transient sync ever regresses factory production progress
+    const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
+    const cloudTotProd = Array.isArray(cloudState.orders)
+      ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
+      : 0;
+
+    if (Array.isArray(cloudState.orders) && cloudState.orders.length > 0) {
+      if (cloudTotProd >= localTotProd) {
+        // Cloud state has equal or greater verified production -> accept cloud orders
+        this.orders = cloudState.orders;
+      } else {
+        // DANGER GUARD ACTIVATED: Cloud payload has LESS production than local state!
+        // Never clobber or wipe factory floor progress! Safe-merge orders preserving maximum progress.
+        const mergedOrders = this.orders.map((localOrd) => {
+          const cloudOrd = cloudState.orders.find((co) => co.id === localOrd.id);
+          if (!cloudOrd) return localOrd;
+          return {
+            ...cloudOrd,
+            ...localOrd,
+            productionQty: Math.max(Number(localOrd.productionQty) || 0, Number(cloudOrd.productionQty) || 0),
+            deliveryQty: Math.max(Number(localOrd.deliveryQty) || 0, Number(cloudOrd.deliveryQty) || 0),
+            floorProductionQty: Math.max(Number(localOrd.floorProductionQty) || 0, Number(cloudOrd.floorProductionQty) || 0),
+            dailyLogs: (localOrd.dailyLogs && localOrd.dailyLogs.length >= (cloudOrd.dailyLogs?.length || 0))
+              ? localOrd.dailyLogs
+              : (cloudOrd.dailyLogs || []),
+          };
+        });
+        cloudState.orders.forEach((co) => {
+          if (!mergedOrders.some((mo) => mo.id === co.id)) {
+            mergedOrders.push(co);
+          }
+        });
+        this.orders = mergedOrders;
+
+        // Auto-heal cloud database by re-broadcasting higher ground truth
+        setTimeout(() => {
+          this.save(true);
+        }, 600);
+      }
+    }
+
     if (Array.isArray(cloudState.categories) && cloudState.categories.length) {
       this.categories = cloudState.categories;
-    }
-    if (Array.isArray(cloudState.orders) && cloudState.orders.length) {
-      this.orders = cloudState.orders;
     }
     if (Array.isArray(cloudState.machines)) {
       this.machines = cloudState.machines.filter(
@@ -68,11 +109,15 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.workers)) {
       this.workers = cloudState.workers;
     }
-    if (Array.isArray(cloudState.productionLogs)) {
-      this.productionLogs = cloudState.productionLogs;
+    if (Array.isArray(cloudState.productionLogs) && cloudState.productionLogs.length > 0) {
+      const existingLogIds = new Set((this.productionLogs || []).map((l) => l.id));
+      const newLogs = cloudState.productionLogs.filter((l) => !existingLogIds.has(l.id));
+      this.productionLogs = [...(this.productionLogs || []), ...newLogs];
     }
-    if (Array.isArray(cloudState.deliveryReceivedLogs)) {
-      this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs;
+    if (Array.isArray(cloudState.deliveryReceivedLogs) && cloudState.deliveryReceivedLogs.length > 0) {
+      const existingDelIds = new Set((this.deliveryReceivedLogs || []).map((l) => l.id));
+      const newLogs = cloudState.deliveryReceivedLogs.filter((l) => !existingDelIds.has(l.id));
+      this.deliveryReceivedLogs = [...(this.deliveryReceivedLogs || []), ...newLogs];
     }
     if (Array.isArray(cloudState.outsourceConsignments)) {
       this.outsourceConsignments = cloudState.outsourceConsignments;
@@ -84,19 +129,18 @@ class ClientDatabaseStore {
 
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem(
-          STORAGE_KEY,
-          JSON.stringify({
-            categories: this.categories,
-            orders: this.orders,
-            machines: this.machines,
-            workers: this.workers,
-            productionLogs: this.productionLogs,
-            deliveryReceivedLogs: this.deliveryReceivedLogs,
-            outsourceConsignments: this.outsourceConsignments || [],
-            lastSaved: this.lastSaved,
-          })
-        );
+        const payloadStr = JSON.stringify({
+          categories: this.categories,
+          orders: this.orders,
+          machines: this.machines,
+          workers: this.workers,
+          productionLogs: this.productionLogs,
+          deliveryReceivedLogs: this.deliveryReceivedLogs,
+          outsourceConsignments: this.outsourceConsignments || [],
+          lastSaved: this.lastSaved,
+        });
+        localStorage.setItem(STORAGE_KEY, payloadStr);
+        localStorage.setItem(VAULT_KEY, payloadStr);
       } catch {
         // ignore storage quota errors
       }
@@ -120,11 +164,37 @@ class ClientDatabaseStore {
         : 'srv';
 
     try {
-      const saved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      let parsed = null;
+      if (typeof window !== 'undefined') {
+        const rawPrimary = localStorage.getItem(STORAGE_KEY);
+        if (rawPrimary) {
+          try { parsed = JSON.parse(rawPrimary); } catch {}
+        }
+        if (!parsed || !Array.isArray(parsed.orders) || parsed.orders.length === 0) {
+          const rawVault = localStorage.getItem(VAULT_KEY);
+          if (rawVault) {
+            try { parsed = JSON.parse(rawVault); } catch {}
+          }
+        }
+        if (!parsed || !Array.isArray(parsed.orders) || parsed.orders.length === 0) {
+          for (const key of OLD_STORAGE_KEYS) {
+            try {
+              const rawOld = localStorage.getItem(key);
+              if (rawOld) {
+                const oldObj = JSON.parse(rawOld);
+                if (Array.isArray(oldObj.orders) && oldObj.orders.length > 0) {
+                  parsed = oldObj;
+                  break;
+                }
+              }
+            } catch {}
+          }
+        }
+      }
+
+      if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
         this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : JSON.parse(JSON.stringify(initialCategories));
-        this.orders = Array.isArray(parsed.orders) ? parsed.orders : JSON.parse(JSON.stringify(initialOrders));
+        this.orders = parsed.orders;
         this.machines = (Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines)))
           .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
@@ -207,12 +277,19 @@ class ClientDatabaseStore {
       };
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        try {
+          const payloadStr = JSON.stringify(payload);
+          localStorage.setItem(STORAGE_KEY, payloadStr);
+          localStorage.setItem(VAULT_KEY, payloadStr);
+        } catch {
+          // ignore quota
+        }
       }
 
       // Automatically broadcast state to Firebase Realtime Database
       if (broadcastToCloud && typeof window !== 'undefined') {
         firebaseRealtime.pushState(payload);
+        firebaseRealtime.pushSnapshot(payload);
       }
 
       this.notifySubscribers();

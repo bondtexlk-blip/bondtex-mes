@@ -157,6 +157,31 @@ export const firebaseRealtime = {
     }
   },
 
+  async pushSnapshot(state) {
+    try {
+      if (!state || !Array.isArray(state.orders)) return null;
+      const snapKey = new Date().toISOString().replace(/[:.]/g, '-');
+      const url = `${REALTIME_DB_URL}/snapshots/${snapKey}.json`;
+      await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          lastUpdated: state.lastUpdated,
+          lastDeviceId: state.lastDeviceId,
+          orderCount: state.orders.length,
+          totalOrderQty: state.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+          totalProductionQty: state.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+          totalBalanceQty: state.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+          orders: state.orders,
+          deliveryReceivedLogs: state.deliveryReceivedLogs || [],
+        }),
+      });
+    } catch (err) {
+      // offline snapshot ignore
+    }
+  },
+
   async pullState() {
     try {
       const url = `${REALTIME_DB_URL}/state.json`;
