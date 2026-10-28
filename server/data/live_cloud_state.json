@@ -79,8 +79,8 @@
     }
   ],
   "lastDeviceId": "DEV-xxoivmq-1792731542844",
-  "lastSaved": "2026-10-23T07:17:14.092Z",
-  "lastUpdated": "2026-10-23T07:17:14.092Z",
+  "lastSaved": "2026-10-28T11:53:26.043Z",
+  "lastUpdated": "2026-10-28T11:53:26.043Z",
   "machines": [
     {
       "assignedColours": [
@@ -289,7 +289,8 @@
       "status": "Completed",
       "style": "Loop Elastic Band - 54A2",
       "styleCode": "LP-54A2",
-      "targetDate": "2026-11-01"
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 21612
     },
     {
       "balanceQty": 0,
@@ -325,7 +326,8 @@
       "status": "Completed",
       "style": "Loop Elastic Band - 54A2",
       "styleCode": "LP-54A2",
-      "targetDate": "2026-11-01"
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 24596
     },
     {
       "balanceQty": 0,
@@ -800,7 +802,8 @@
       "status": "Scheduled",
       "style": "Loop Elastic Band - 57H1",
       "styleCode": "LP-57H1",
-      "targetDate": "2026-11-01"
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 600
     },
     {
       "balanceQty": 17655,
@@ -829,7 +832,8 @@
       "status": "Behind Plan",
       "style": "Loop Elastic Band - 57H1",
       "styleCode": "LP-57H1",
-      "targetDate": "2026-11-01"
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 1400
     },
     {
       "balanceQty": 3260,
@@ -893,6 +897,48 @@
     }
   ],
   "productionLogs": [
+    {
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "date": "2026-10-23",
+      "id": "LOG-1792761647290",
+      "machineId": "MCH-06",
+      "machineName": "Loop Insert",
+      "multiplier": 1,
+      "notes": "Floor QR scan entry",
+      "operator": "Chithra",
+      "operatorName": "Chithra",
+      "poNumber": "4502991550",
+      "qty": 300,
+      "rawQty": 300,
+      "shift": "Day Shift",
+      "size": "10",
+      "style": "Loop Elastic Band - 54A2",
+      "time": "06:50 PM",
+      "timeSlot": "14:15 - 15:15",
+      "timestamp": "2026-10-23T13:20:47.290Z"
+    },
+    {
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "date": "2026-10-23",
+      "id": "LOG-1792761630169",
+      "machineId": "MCH-06",
+      "machineName": "Loop Insert",
+      "multiplier": 1,
+      "notes": "Floor QR scan entry",
+      "operator": "Chithra",
+      "operatorName": "Chithra",
+      "poNumber": "4502991550",
+      "qty": 300,
+      "rawQty": 300,
+      "shift": "Day Shift",
+      "size": "10",
+      "style": "Loop Elastic Band - 54A2",
+      "time": "06:50 PM",
+      "timeSlot": "12:45 - 14:15",
+      "timestamp": "2026-10-23T13:20:30.169Z"
+    },
     {
       "category": "Loop",
       "colour": "Talc 69-09-47 57H1",

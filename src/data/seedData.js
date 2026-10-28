@@ -72,8 +72,8 @@ const getFutureDateStr = (daysAhead) => {
 // All 23 Real Production Orders belong strictly to the Loop Category (5 Colours)
 export const rawProductionRows = [
   // PO 4502991550 | 200150259454A2 | Black 093 54A2 | Loop
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 21612, productionQty: 21612, deliveryQty: 21612, status: 'Completed' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 24496, productionQty: 24496, deliveryQty: 24496, status: 'Completed' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 21612, productionQty: 21612, deliveryQty: 21612, floorProductionQty: 21612, status: 'Completed' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 24496, productionQty: 24596, deliveryQty: 24496, floorProductionQty: 24596, status: 'Completed' },
   { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 6700, productionQty: 6700, deliveryQty: 6700, status: 'Completed' },
   { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 756, productionQty: 755, deliveryQty: 755, status: 'Ahead' },
 
@@ -98,8 +98,8 @@ export const rawProductionRows = [
   { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 214, productionQty: 216, deliveryQty: 216, status: 'Completed' },
 
   // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Loop
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 29699, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 19055, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 29699, productionQty: 0, deliveryQty: 0, floorProductionQty: 600, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 19055, productionQty: 1400, deliveryQty: 1400, floorProductionQty: 1400, status: 'Behind Plan' },
   { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 3260, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
   { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 451, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
   { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 63, productionQty: 0, deliveryQty: 0, status: 'Scheduled' },
@@ -283,13 +283,100 @@ export const initialWorkers = [
   { id: 'WRK-10', name: 'Dinesh Bandara', empId: 'EMP-1050', category: 'Other', shift: 'Night Shift', status: 'Active', phone: '+94 77 912 3456', assignedMachine: 'MCH-05', todayProduced: 0, todayOutput: 0, batchesLogged: 0 },
 ];
 
-export const initialProductionLogs = [];
+export const initialProductionLogs = [
+  {
+    category: 'Loop',
+    colour: 'Talc 69-09-47 57H1',
+    date: '2026-10-23',
+    id: 'LOG-1792761647290',
+    machineId: 'MCH-06',
+    machineName: 'Loop Insert',
+    multiplier: 1,
+    notes: 'Floor QR scan entry',
+    operator: 'Chithra',
+    operatorName: 'Chithra',
+    poNumber: '4502991550',
+    qty: 300,
+    rawQty: 300,
+    shift: 'Day Shift',
+    size: '10',
+    style: 'Loop Elastic Band - 54A2',
+    time: '06:50 PM',
+    timeSlot: '14:15 - 15:15',
+    timestamp: '2026-10-23T13:20:47.290Z',
+  },
+  {
+    category: 'Loop',
+    colour: 'Talc 69-09-47 57H1',
+    date: '2026-10-23',
+    id: 'LOG-1792761630169',
+    machineId: 'MCH-06',
+    machineName: 'Loop Insert',
+    multiplier: 1,
+    notes: 'Floor QR scan entry',
+    operator: 'Chithra',
+    operatorName: 'Chithra',
+    poNumber: '4502991550',
+    qty: 300,
+    rawQty: 300,
+    shift: 'Day Shift',
+    size: '10',
+    style: 'Loop Elastic Band - 54A2',
+    time: '06:50 PM',
+    timeSlot: '12:45 - 14:15',
+    timestamp: '2026-10-23T13:20:30.169Z',
+  },
+  {
+    category: 'Loop',
+    colour: 'Talc 69-09-47 57H1',
+    date: '2026-10-23',
+    id: 'LOG-1792735991621',
+    machineId: 'MCH-IRN',
+    machineName: 'Iron Machine',
+    multiplier: 1,
+    notes: 'Floor QR scan entry',
+    operator: 'Dilini',
+    operatorName: 'Dilini',
+    poNumber: '4502991550',
+    qty: 100,
+    rawQty: 100,
+    shift: 'Day Shift',
+    size: '12',
+    style: 'Strap Webbing Band - 39H6',
+    time: '11:43 AM',
+    timeSlot: '10:45 - 11:45',
+    timestamp: '2026-10-23T06:13:11.621Z',
+  },
+];
+
+export const initialDeliveryReceivedLogs = [
+  {
+    balanceDeduction: 1400,
+    calculationEffect: 'Deducted 1,400 pcs from Remaining Balance (Remaining Balance: 17,655 pcs, Total Delivered: 1,400 pcs)',
+    colour: 'Talc 69-09-47 57H1',
+    date: '2026-10-23',
+    dayTargetDeduction: 0,
+    handlerName: 'Floor Dispatcher',
+    id: 'DLR-1792737477334-214',
+    notes: '',
+    orderStatusAfter: 'Behind Plan',
+    poNumber: '4502991562',
+    productQtyAfter: 1400,
+    qty: 1400,
+    size: '12',
+    subCategory: 'Permanent',
+    systemBalanceAfter: 17655,
+    timestamp: '2026-10-23T06:37:57.334Z',
+    type: 'Delivery',
+  },
+];
 
 export const initialOrders = rawProductionRows.map((row, idx) => {
   const id = `ORD-${String(idx + 1).padStart(3, '0')}`;
   const barcode = `BTX-${row.poNumber}-${row.size}`;
-  const balanceQty = row.orderQty - row.productionQty;
-  const deliveryBalanceQty = row.orderQty - row.deliveryQty;
+  const balanceQty = row.orderQty - row.deliveryQty;
+  const deliveryBalanceQty = balanceQty;
+  const floorProductionQty = row.floorProductionQty !== undefined ? row.floorProductionQty : row.productionQty;
 
   return {
     id,
@@ -303,6 +390,7 @@ export const initialOrders = rawProductionRows.map((row, idx) => {
     barcode,
     orderQty: row.orderQty,
     productionQty: row.productionQty,
+    floorProductionQty,
     deliveryQty: row.deliveryQty,
     balanceQty,
     deliveryBalanceQty,

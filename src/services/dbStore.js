@@ -7,6 +7,7 @@ import {
   initialWorkers,
   initialOrders,
   initialProductionLogs,
+  initialDeliveryReceivedLogs,
 } from '../data/seedData.js';
 import { firestoreSync, firebaseRealtime } from '../firebase.js';
 
@@ -18,8 +19,8 @@ class ClientDatabaseStore {
     this.orders = [];
     this.machines = [];
     this.workers = [];
-    this.productionLogs = [];
-    this.deliveryReceivedLogs = [];
+    this.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
+    this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
     this.subscribers = [];
     this.lastSaved = null;
@@ -127,8 +128,8 @@ class ClientDatabaseStore {
         this.machines = (Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines)))
           .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
-        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
-        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+        this.productionLogs = Array.isArray(parsed.productionLogs) && parsed.productionLogs.length ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
+        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) && parsed.deliveryReceivedLogs.length ? parsed.deliveryReceivedLogs : JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.lastSaved = parsed.lastSaved || null;
       } else {
@@ -225,8 +226,8 @@ class ClientDatabaseStore {
     this.orders = JSON.parse(JSON.stringify(initialOrders));
     this.machines = JSON.parse(JSON.stringify(initialMachines));
     this.workers = JSON.parse(JSON.stringify(initialWorkers));
-    this.productionLogs = [];
-    this.deliveryReceivedLogs = [];
+    this.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
+    this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
     this.ensureSpecialMachines();
     this.save(broadcastToCloud);

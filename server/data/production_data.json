@@ -1,701 +1,238 @@
 {
   "categories": [
     {
-      "id": "Loop",
-      "name": "Loop",
-      "code": "LP",
-      "description": "Elastic loops, hook & loop fasteners, pull tabs, and ring closures",
-      "icon": "RefreshCw",
-      "color": "blue",
-      "gradient": "from-blue-600 to-indigo-700",
-      "accentBorder": "border-blue-500/30",
       "accentBg": "bg-blue-500/10",
+      "accentBorder": "border-blue-500/30",
       "accentText": "text-blue-400",
-      "supervisor": "Kavinda Perera",
-      "linesActive": 6
+      "code": "LP",
+      "color": "blue",
+      "description": "Elastic loops, hook & loop fasteners, pull tabs, and ring closures",
+      "gradient": "from-blue-600 to-indigo-700",
+      "icon": "RefreshCw",
+      "id": "Loop",
+      "linesActive": 6,
+      "name": "Loop",
+      "supervisor": "Kavinda Perera"
     },
     {
-      "id": "Strap",
-      "name": "Strap",
-      "code": "ST",
-      "description": "Nylon webbings, polyester bonded straps, shoulder harnesses & bands",
-      "icon": "Layers",
-      "color": "emerald",
-      "gradient": "from-emerald-600 to-teal-700",
-      "accentBorder": "border-emerald-500/30",
       "accentBg": "bg-emerald-500/10",
+      "accentBorder": "border-emerald-500/30",
       "accentText": "text-emerald-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "code": "ST",
+      "color": "emerald",
+      "description": "Nylon webbings, polyester bonded straps, shoulder harnesses & bands",
+      "gradient": "from-emerald-600 to-teal-700",
+      "icon": "Layers",
+      "id": "Strap",
+      "linesActive": 0,
+      "name": "Strap",
+      "supervisor": "Not Assigned"
     },
     {
-      "id": "T-shirt",
-      "name": "T-shirt",
-      "code": "TS",
-      "description": "Crewneck, polo tees, activewear blanks, seamless knits & garment dyeing",
-      "icon": "Shirt",
-      "color": "amber",
-      "gradient": "from-amber-600 to-orange-700",
-      "accentBorder": "border-amber-500/30",
       "accentBg": "bg-amber-500/10",
+      "accentBorder": "border-amber-500/30",
       "accentText": "text-amber-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "code": "TS",
+      "color": "amber",
+      "description": "Crewneck, polo tees, activewear blanks, seamless knits & garment dyeing",
+      "gradient": "from-amber-600 to-orange-700",
+      "icon": "Shirt",
+      "id": "T-shirt",
+      "linesActive": 0,
+      "name": "T-shirt",
+      "supervisor": "Not Assigned"
     },
     {
-      "id": "Other",
-      "name": "Other",
-      "code": "OT",
-      "description": "Trim accessories, heat-seal patches, cords, tags & specialty textile components",
-      "icon": "Boxes",
-      "color": "purple",
-      "gradient": "from-purple-600 to-pink-700",
-      "accentBorder": "border-purple-500/30",
       "accentBg": "bg-purple-500/10",
+      "accentBorder": "border-purple-500/30",
       "accentText": "text-purple-400",
-      "supervisor": "Not Assigned",
-      "linesActive": 0
+      "code": "OT",
+      "color": "purple",
+      "description": "Trim accessories, heat-seal patches, cords, tags & specialty textile components",
+      "gradient": "from-purple-600 to-pink-700",
+      "icon": "Boxes",
+      "id": "Other",
+      "linesActive": 0,
+      "name": "Other",
+      "supervisor": "Not Assigned"
     }
   ],
-  "orders": [
+  "deliveryReceivedLogs": [
     {
-      "id": "ORD-001",
-      "poNumber": "4502991550",
-      "rmMaterial": "200150259454A2",
-      "colour": "Black 093 54A2",
-      "size": "10",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 54A2",
-      "styleCode": "LP-54A2",
-      "barcode": "BTX-4502991550-10",
-      "orderQty": 21612,
-      "productionQty": 21612,
-      "deliveryQty": 21612,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 4322,
-          "actualQty": 21612,
-          "deliveryQty": 21612,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-002",
-      "poNumber": "4502991550",
-      "rmMaterial": "200150259454A2",
-      "colour": "Black 093 54A2",
-      "size": "12",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 54A2",
-      "styleCode": "LP-54A2",
-      "barcode": "BTX-4502991550-12",
-      "orderQty": 24496,
-      "productionQty": 24496,
-      "deliveryQty": 24496,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 4899,
-          "actualQty": 24496,
-          "deliveryQty": 24496,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-003",
-      "poNumber": "4502991550",
-      "rmMaterial": "200150259454A2",
-      "colour": "Black 093 54A2",
-      "size": "14",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 54A2",
-      "styleCode": "LP-54A2",
-      "barcode": "BTX-4502991550-14",
-      "orderQty": 6700,
-      "productionQty": 6700,
-      "deliveryQty": 6700,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 1340,
-          "actualQty": 6700,
-          "deliveryQty": 6700,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-004",
-      "poNumber": "4502991550",
-      "rmMaterial": "200150259454A2",
-      "colour": "Black 093 54A2",
-      "size": "16",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 54A2",
-      "styleCode": "LP-54A2",
-      "barcode": "BTX-4502991550-16",
-      "orderQty": 756,
-      "productionQty": 755,
-      "deliveryQty": 755,
-      "balanceQty": 1,
-      "deliveryBalanceQty": 1,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Ahead",
-      "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 151,
-          "actualQty": 755,
-          "deliveryQty": 755,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-005",
-      "poNumber": "4502991532",
-      "rmMaterial": "200150259439H6",
-      "colour": "Marzipan 39H6",
-      "size": "10",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 39H6",
-      "styleCode": "LP-39H6",
-      "barcode": "BTX-4502991532-10",
-      "orderQty": 35003,
-      "productionQty": 34803,
-      "deliveryQty": 34803,
-      "balanceQty": 200,
-      "deliveryBalanceQty": 200,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Ahead",
-      "priority": "Critical",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 7001,
-          "actualQty": 34803,
-          "deliveryQty": 34803,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-006",
-      "poNumber": "4502991532",
-      "rmMaterial": "200150259439H6",
-      "colour": "Marzipan 39H6",
-      "size": "12",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 39H6",
-      "styleCode": "LP-39H6",
-      "barcode": "BTX-4502991532-12",
-      "orderQty": 20874,
-      "productionQty": 20350,
-      "deliveryQty": 20350,
-      "balanceQty": 524,
-      "deliveryBalanceQty": 524,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Ahead",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 4175,
-          "actualQty": 20350,
-          "deliveryQty": 20350,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-007",
-      "poNumber": "4502991532",
-      "rmMaterial": "200150259439H6",
-      "colour": "Marzipan 39H6",
-      "size": "14",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 39H6",
-      "styleCode": "LP-39H6",
-      "barcode": "BTX-4502991532-14",
-      "orderQty": 1351,
-      "productionQty": 1353,
-      "deliveryQty": 1353,
-      "balanceQty": -2,
-      "deliveryBalanceQty": -2,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 270,
-          "actualQty": 1353,
-          "deliveryQty": 1353,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-008",
-      "poNumber": "4502991532",
-      "rmMaterial": "200150259439H6",
-      "colour": "Marzipan 39H6",
-      "size": "16",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 39H6",
-      "styleCode": "LP-39H6",
-      "barcode": "BTX-4502991532-16",
-      "orderQty": 447,
-      "productionQty": 450,
-      "deliveryQty": 450,
-      "balanceQty": -3,
-      "deliveryBalanceQty": -3,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 89,
-          "actualQty": 450,
-          "deliveryQty": 450,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-009",
-      "poNumber": "4502991599",
-      "rmMaterial": "200150259465H8",
-      "colour": "Praline 65H8",
-      "size": "10",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 65H8",
-      "styleCode": "LP-65H8",
-      "barcode": "BTX-4502991599-10",
-      "orderQty": 61714,
-      "productionQty": 48200,
-      "deliveryQty": 48200,
-      "balanceQty": 13514,
-      "deliveryBalanceQty": 13514,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "Critical",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 12343,
-          "actualQty": 48200,
-          "deliveryQty": 48200,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-010",
-      "poNumber": "4502991599",
-      "rmMaterial": "200150259465H8",
-      "colour": "Praline 65H8",
-      "size": "12",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 65H8",
-      "styleCode": "LP-65H8",
-      "barcode": "BTX-4502991599-12",
-      "orderQty": 31682,
-      "productionQty": 15200,
-      "deliveryQty": 15200,
-      "balanceQty": 16482,
-      "deliveryBalanceQty": 16482,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 6336,
-          "actualQty": 15200,
-          "deliveryQty": 15200,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-011",
-      "poNumber": "4502991599",
-      "rmMaterial": "200150259465H8",
-      "colour": "Praline 65H8",
-      "size": "14",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 65H8",
-      "styleCode": "LP-65H8",
-      "barcode": "BTX-4502991599-14",
-      "orderQty": 6408,
-      "productionQty": 3600,
-      "deliveryQty": 3600,
-      "balanceQty": 2808,
-      "deliveryBalanceQty": 2808,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 1282,
-          "actualQty": 3600,
-          "deliveryQty": 3600,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-012",
-      "poNumber": "4502991599",
-      "rmMaterial": "200150259465H8",
-      "colour": "Praline 65H8",
-      "size": "16",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 65H8",
-      "styleCode": "LP-65H8",
-      "barcode": "BTX-4502991599-16",
-      "orderQty": 291,
-      "productionQty": 297,
-      "deliveryQty": 297,
-      "balanceQty": -6,
-      "deliveryBalanceQty": -6,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 58,
-          "actualQty": 297,
-          "deliveryQty": 297,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-013",
-      "poNumber": "4502991599",
-      "rmMaterial": "200150259465H8",
-      "colour": "Praline 65H8",
-      "size": "18",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 65H8",
-      "styleCode": "LP-65H8",
-      "barcode": "BTX-4502991599-18",
-      "orderQty": 64,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 64,
-      "deliveryBalanceQty": 64,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "High",
-      "dailyLogs": []
-    },
-    {
-      "id": "ORD-014",
-      "poNumber": "4502991520",
-      "rmMaterial": "200150259433F6",
-      "colour": "Ganache 33F6",
-      "size": "10",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 33F6",
-      "styleCode": "LP-33F6",
-      "barcode": "BTX-4502991520-10",
-      "orderQty": 923,
-      "productionQty": 400,
-      "deliveryQty": 400,
-      "balanceQty": 523,
-      "deliveryBalanceQty": 523,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 185,
-          "actualQty": 400,
-          "deliveryQty": 400,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-015",
-      "poNumber": "4502991520",
-      "rmMaterial": "200150259433F6",
-      "colour": "Ganache 33F6",
-      "size": "12",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 33F6",
-      "styleCode": "LP-33F6",
-      "barcode": "BTX-4502991520-12",
-      "orderQty": 2506,
-      "productionQty": 2600,
-      "deliveryQty": 2600,
-      "balanceQty": -94,
-      "deliveryBalanceQty": -94,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 501,
-          "actualQty": 2600,
-          "deliveryQty": 2600,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-016",
-      "poNumber": "4502991520",
-      "rmMaterial": "200150259433F6",
-      "colour": "Ganache 33F6",
-      "size": "14",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 33F6",
-      "styleCode": "LP-33F6",
-      "barcode": "BTX-4502991520-14",
-      "orderQty": 2420,
-      "productionQty": 1400,
-      "deliveryQty": 1400,
-      "balanceQty": 1020,
-      "deliveryBalanceQty": 1020,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 484,
-          "actualQty": 1400,
-          "deliveryQty": 1400,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-017",
-      "poNumber": "4502991520",
-      "rmMaterial": "200150259433F6",
-      "colour": "Ganache 33F6",
-      "size": "16",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 33F6",
-      "styleCode": "LP-33F6",
-      "barcode": "BTX-4502991520-16",
-      "orderQty": 1500,
-      "productionQty": 275,
-      "deliveryQty": 275,
-      "balanceQty": 1225,
-      "deliveryBalanceQty": 1225,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Behind Plan",
-      "priority": "Critical",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 300,
-          "actualQty": 275,
-          "deliveryQty": 275,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-018",
-      "poNumber": "4502991520",
-      "rmMaterial": "200150259433F6",
-      "colour": "Ganache 33F6",
-      "size": "18",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 33F6",
-      "styleCode": "LP-33F6",
-      "barcode": "BTX-4502991520-18",
-      "orderQty": 214,
-      "productionQty": 216,
-      "deliveryQty": 216,
-      "balanceQty": -2,
-      "deliveryBalanceQty": -2,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Completed",
-      "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-22",
-          "planQty": 43,
-          "actualQty": 216,
-          "deliveryQty": 216,
-          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet"
-        }
-      ]
-    },
-    {
-      "id": "ORD-019",
-      "poNumber": "4502991562",
-      "rmMaterial": "200150259457H1",
+      "balanceDeduction": 1400,
+      "calculationEffect": "Deducted 1,400 pcs from Remaining Balance (Remaining Balance: 17,655 pcs, Total Delivered: 1,400 pcs)",
       "colour": "Talc 69-09-47 57H1",
-      "size": "10",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 57H1",
-      "styleCode": "LP-57H1",
-      "barcode": "BTX-4502991562-10",
-      "orderQty": 29699,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 29699,
-      "deliveryBalanceQty": 29699,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "High",
-      "dailyLogs": []
-    },
-    {
-      "id": "ORD-020",
+      "date": "2026-10-23",
+      "dayTargetDeduction": 0,
+      "handlerName": "Floor Dispatcher",
+      "id": "DLR-1792737477334-214",
+      "notes": "",
+      "orderStatusAfter": "Behind Plan",
       "poNumber": "4502991562",
-      "rmMaterial": "200150259457H1",
-      "colour": "Talc 69-09-47 57H1",
+      "productQtyAfter": 1400,
+      "qty": 1400,
       "size": "12",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 57H1",
-      "styleCode": "LP-57H1",
-      "barcode": "BTX-4502991562-12",
-      "orderQty": 19055,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 19055,
-      "deliveryBalanceQty": 19055,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "Normal",
-      "dailyLogs": []
-    },
-    {
-      "id": "ORD-021",
-      "poNumber": "4502991562",
-      "rmMaterial": "200150259457H1",
-      "colour": "Talc 69-09-47 57H1",
-      "size": "14",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 57H1",
-      "styleCode": "LP-57H1",
-      "barcode": "BTX-4502991562-14",
-      "orderQty": 3260,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 3260,
-      "deliveryBalanceQty": 3260,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "Critical",
-      "dailyLogs": []
-    },
-    {
-      "id": "ORD-022",
-      "poNumber": "4502991562",
-      "rmMaterial": "200150259457H1",
-      "colour": "Talc 69-09-47 57H1",
-      "size": "16",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 57H1",
-      "styleCode": "LP-57H1",
-      "barcode": "BTX-4502991562-16",
-      "orderQty": 451,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 451,
-      "deliveryBalanceQty": 451,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "High",
-      "dailyLogs": []
-    },
-    {
-      "id": "ORD-023",
-      "poNumber": "4502991562",
-      "rmMaterial": "200150259457H1",
-      "colour": "Talc 69-09-47 57H1",
-      "size": "18",
-      "category": "Loop",
-      "style": "Loop Elastic Band - 57H1",
-      "styleCode": "LP-57H1",
-      "barcode": "BTX-4502991562-18",
-      "orderQty": 63,
-      "productionQty": 0,
-      "deliveryQty": 0,
-      "balanceQty": 63,
-      "deliveryBalanceQty": 63,
-      "startDate": "2026-10-04",
-      "targetDate": "2026-11-01",
-      "status": "Scheduled",
-      "priority": "Normal",
-      "dailyLogs": []
+      "subCategory": "Permanent",
+      "systemBalanceAfter": 17655,
+      "timestamp": "2026-10-23T06:37:57.334Z",
+      "type": "Delivery"
     }
   ],
+  "lastDeviceId": "DEV-xxoivmq-1792731542844",
+  "lastSaved": "2026-10-28T11:53:26.043Z",
+  "lastUpdated": "2026-10-28T11:53:26.043Z",
   "machines": [
     {
-      "id": "MCH-01",
-      "code": "MCH-01",
-      "name": "Machine 01",
-      "type": "High Speed Elastic Loom L1",
+      "assignedColours": [
+        "Black 093 54A2",
+        "Marzipan 39H6",
+        "Praline 65H8",
+        "Ganache 33F6",
+        "Talc 69-09-47 57H1"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
       "category": "Loop",
-      "operatorName": "Sunil Perera",
+      "code": "MCH-CUT",
+      "dailyTargetQty": 2600,
+      "id": "MCH-CUT",
+      "name": "Cutting Machine",
+      "notes": "Dedicated strap cutting section (Strap Category)",
+      "operatorName": "Pradeep Silva",
+      "qrPayload": "MCH-CUT",
       "shift": "Day Shift",
       "status": "Active",
-      "dailyTargetQty": 5000,
-      "assignedStyles": [
-        "Loop Elastic Band - 54A2",
-        "Loop Elastic Band - 39H6",
-        "Loop Elastic Band - 65H8",
-        "Loop Elastic Band - 33F6",
-        "Loop Elastic Band - 57H1"
+      "type": "Strap Precision Rotary Slitter & Cutter"
+    },
+    {
+      "assignedColours": [
+        "Black 093 54A2",
+        "Marzipan 39H6",
+        "Praline 65H8",
+        "Ganache 33F6",
+        "Talc 69-09-47 57H1"
       ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "category": "Loop",
+      "code": "MCH-PUS",
+      "dailyTargetQty": 2600,
+      "id": "MCH-PUS",
+      "name": "Fusing Machine",
+      "notes": "Pusing adhesive fusing station (Strap Category)",
+      "operatorName": "Sanjeewa Silva",
+      "qrPayload": "MCH-PUS",
+      "shift": "Day Shift",
+      "status": "Active",
+      "type": "Continuous Belt Pusing / Fusing Unit"
+    },
+    {
+      "assignedColours": [
+        "Black 093 54A2",
+        "Marzipan 39H6",
+        "Praline 65H8",
+        "Ganache 33F6",
+        "Talc 69-09-47 57H1"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "category": "Loop",
+      "code": "MCH-IRN",
+      "dailyTargetQty": 2600,
+      "id": "MCH-IRN",
+      "name": "Iron Machine",
+      "notes": "Thermal curing bed (Strap Category)",
+      "operatorName": "Kamal Gunaratne",
+      "qrPayload": "MCH-IRN",
+      "shift": "Day Shift",
+      "status": "Active",
+      "todayLogs": [
+        {
+          "colour": "Talc 69-09-47 57H1",
+          "id": "LOG-1792735991621",
+          "multiplier": 1,
+          "notes": "Floor QR scan entry",
+          "operator": "Dilini",
+          "poNumber": "4502991550",
+          "qty": 100,
+          "rawQty": 100,
+          "shift": "Day Shift",
+          "size": "12",
+          "style": "Strap Webbing Band - 39H6",
+          "time": "11:43 AM",
+          "timeSlot": "10:45 - 11:45",
+          "timestamp": "2026-10-23T06:13:11.621Z"
+        }
+      ],
+      "type": "Steam Ironing & Thermal Curing Bed"
+    },
+    {
+      "assignedColours": [
+        "Black 093 54A2",
+        "Marzipan 39H6",
+        "Praline 65H8",
+        "Ganache 33F6",
+        "Talc 69-09-47 57H1"
+      ],
+      "assignedPos": [
+        "4502991532"
+      ],
+      "assignedSizes": [
+        "10",
+        "12",
+        "14",
+        "16",
+        "18"
+      ],
+      "assignedStyles": [
+        "Strap Webbing Band - 39H6"
+      ],
+      "category": "Loop",
+      "code": "MCH-DRY",
+      "dailyTargetQty": 2600,
+      "id": "MCH-DRY",
+      "name": "Dry Cut Machine",
+      "notes": "Multiplier Logic: Size 10->x50, 12->x50, 14->x50, 16->x45, 18->x50",
+      "operatorName": "Anura Bandara",
+      "qrPayload": "MCH-DRY",
+      "shift": "Day Shift",
+      "status": "Active",
+      "type": "Automatic Dry Rotary Guillotine Cutter"
+    },
+    {
       "assignedColours": [
         "Black 093 54A2",
         "Marzipan 39H6",
@@ -707,403 +244,931 @@
         "10",
         "12",
         "14",
-        "16",
-        "18"
+        "16"
       ],
-      "assignedPos": [
-        "4502991550",
-        "4502991532",
-        "4502991599",
-        "4502991520",
-        "4502991562"
+      "assignedStyles": [
+        "Loop Elastic Band - 54A2"
       ],
-      "qrPayload": "MCH-01",
-      "notes": "Primary elastic loop line - Handles all 5 Loop colorways",
-      "todayLogs": []
-    },
-    {
-      "id": "MCH-02",
-      "code": "MCH-02",
-      "name": "Machine 02",
-      "type": "Elastic Loop Loom L2",
       "category": "Loop",
-      "operatorName": "Kavinda Perera",
-      "shift": "Day Shift",
+      "code": "MCH-06",
+      "dailyTargetQty": 2500,
+      "id": "MCH-06",
+      "name": "Loop Insert",
+      "operatorName": "Sunil Perera",
+      "qrPayload": "MCH-06",
+      "shift": "Shift A",
       "status": "Active",
-      "dailyTargetQty": 5000,
-      "assignedStyles": [
-        "Loop Elastic Band - 54A2",
-        "Loop Elastic Band - 39H6",
-        "Loop Elastic Band - 65H8"
+      "type": "Custom Production Unit"
+    }
+  ],
+  "orders": [
+    {
+      "balanceQty": 0,
+      "barcode": "BTX-4502991550-10",
+      "category": "Loop",
+      "colour": "Black 093 54A2",
+      "dailyLogs": [
+        {
+          "actualQty": 21612,
+          "date": "2026-10-22",
+          "deliveryQty": 21612,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 4322
+        }
       ],
-      "assignedColours": [
-        "Black 093 54A2",
-        "Marzipan 39H6",
-        "Praline 65H8"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991550",
-        "4502991532",
-        "4502991599"
-      ],
-      "qrPayload": "MCH-02",
-      "notes": "Secondary elastic loop line",
-      "todayLogs": []
+      "deliveryBalanceQty": 0,
+      "deliveryQty": 21612,
+      "id": "ORD-001",
+      "orderQty": 21612,
+      "poNumber": "4502991550",
+      "priority": "High",
+      "productionQty": 21612,
+      "rmMaterial": "200150259454A2",
+      "size": "10",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 21612
     },
     {
-      "id": "MCH-CUT",
-      "code": "MCH-CUT",
-      "name": "Cutting Machine",
-      "type": "Strap Precision Rotary Slitter & Cutter",
-      "category": "Strap",
-      "operatorName": "Pradeep Silva",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 2600,
-      "assignedStyles": [
-        "Strap Webbing Band - 39H6"
+      "balanceQty": 0,
+      "barcode": "BTX-4502991550-12",
+      "category": "Loop",
+      "colour": "Black 093 54A2",
+      "dailyLogs": [
+        {
+          "actualQty": 24496,
+          "date": "2026-10-22",
+          "deliveryQty": 24496,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 4899
+        },
+        {
+          "actualQty": 100,
+          "date": "2026-10-23",
+          "deliveryQty": 0,
+          "notes": "Batch from Iron Machine (Dilini) - 10:45 - 11:45",
+          "planQty": 2450
+        }
       ],
-      "assignedColours": [
-        "Marzipan 39H6",
-        "Black 093 54A2"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991532"
-      ],
-      "qrPayload": "MCH-CUT",
-      "notes": "Dedicated strap cutting section (Strap Category)",
-      "todayLogs": []
+      "deliveryBalanceQty": 0,
+      "deliveryQty": 24496,
+      "id": "ORD-002",
+      "orderQty": 24496,
+      "poNumber": "4502991550",
+      "priority": "Normal",
+      "productionQty": 24596,
+      "rmMaterial": "200150259454A2",
+      "size": "12",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 24596
     },
     {
-      "id": "MCH-PUS",
-      "code": "MCH-PUS",
-      "name": "Pusing Machine",
-      "type": "Continuous Belt Pusing / Fusing Unit",
-      "category": "Strap",
-      "operatorName": "Sanjeewa Silva",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 2600,
-      "assignedStyles": [
-        "Strap Webbing Band - 39H6"
+      "balanceQty": 0,
+      "barcode": "BTX-4502991550-14",
+      "category": "Loop",
+      "colour": "Black 093 54A2",
+      "dailyLogs": [
+        {
+          "actualQty": 6700,
+          "date": "2026-10-22",
+          "deliveryQty": 6700,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 1340
+        }
       ],
-      "assignedColours": [
-        "Marzipan 39H6"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991532"
-      ],
-      "qrPayload": "MCH-PUS",
-      "notes": "Pusing adhesive fusing station (Strap Category)",
-      "todayLogs": []
+      "deliveryBalanceQty": 0,
+      "deliveryQty": 6700,
+      "id": "ORD-003",
+      "orderQty": 6700,
+      "poNumber": "4502991550",
+      "priority": "Normal",
+      "productionQty": 6700,
+      "rmMaterial": "200150259454A2",
+      "size": "14",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "targetDate": "2026-11-01"
     },
     {
-      "id": "MCH-IRN",
-      "code": "MCH-IRN",
-      "name": "Iron Machine",
-      "type": "Steam Ironing & Thermal Curing Bed",
-      "category": "Strap",
-      "operatorName": "Kamal Gunaratne",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 2600,
-      "assignedStyles": [
-        "Strap Webbing Band - 39H6"
+      "balanceQty": 1,
+      "barcode": "BTX-4502991550-16",
+      "category": "Loop",
+      "colour": "Black 093 54A2",
+      "dailyLogs": [
+        {
+          "actualQty": 755,
+          "date": "2026-10-22",
+          "deliveryQty": 755,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 151
+        }
       ],
-      "assignedColours": [
-        "Marzipan 39H6"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991532"
-      ],
-      "qrPayload": "MCH-IRN",
-      "notes": "Thermal curing bed (Strap Category)",
-      "todayLogs": []
+      "deliveryBalanceQty": 1,
+      "deliveryQty": 755,
+      "id": "ORD-004",
+      "orderQty": 756,
+      "poNumber": "4502991550",
+      "priority": "High",
+      "productionQty": 755,
+      "rmMaterial": "200150259454A2",
+      "size": "16",
+      "startDate": "2026-10-04",
+      "status": "Ahead",
+      "style": "Loop Elastic Band - 54A2",
+      "styleCode": "LP-54A2",
+      "targetDate": "2026-11-01"
     },
     {
-      "id": "MCH-DRY",
-      "code": "MCH-DRY",
-      "name": "Dry Cut Machine",
-      "type": "Automatic Dry Rotary Guillotine Cutter",
-      "category": "Strap",
-      "operatorName": "Anura Bandara",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 2600,
-      "assignedStyles": [
-        "Strap Webbing Band - 39H6"
+      "balanceQty": 200,
+      "barcode": "BTX-4502991532-10",
+      "category": "Loop",
+      "colour": "Marzipan 39H6",
+      "dailyLogs": [
+        {
+          "actualQty": 34803,
+          "date": "2026-10-22",
+          "deliveryQty": 34803,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 7001
+        }
       ],
-      "assignedColours": [
-        "Marzipan 39H6",
-        "Black 093 54A2"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991532"
-      ],
-      "qrPayload": "MCH-DRY",
-      "notes": "Multiplier Logic: Size 10->x50, 12->x50, 14->x50, 16->x45, 18->x50",
-      "todayLogs": []
+      "deliveryBalanceQty": 200,
+      "deliveryQty": 34803,
+      "id": "ORD-005",
+      "orderQty": 35003,
+      "poNumber": "4502991532",
+      "priority": "Critical",
+      "productionQty": 34803,
+      "rmMaterial": "200150259439H6",
+      "size": "10",
+      "startDate": "2026-10-04",
+      "status": "Ahead",
+      "style": "Loop Elastic Band - 39H6",
+      "styleCode": "LP-39H6",
+      "targetDate": "2026-11-01"
     },
     {
-      "id": "MCH-03",
-      "code": "MCH-03",
-      "name": "Machine 03",
-      "type": "Santoni Circular Knit C3",
-      "category": "T-shirt",
-      "operatorName": "Chamari Wickramasinghe",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 6000,
-      "assignedStyles": [
-        "T-Shirt Combed Knit - 65H8"
+      "balanceQty": 524,
+      "barcode": "BTX-4502991532-12",
+      "category": "Loop",
+      "colour": "Marzipan 39H6",
+      "dailyLogs": [
+        {
+          "actualQty": 20350,
+          "date": "2026-10-22",
+          "deliveryQty": 20350,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 4175
+        }
       ],
-      "assignedColours": [
-        "Praline 65H8"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991599"
-      ],
-      "qrPayload": "MCH-03",
-      "notes": "Continuous circular knitting cylinder",
-      "todayLogs": []
+      "deliveryBalanceQty": 524,
+      "deliveryQty": 20350,
+      "id": "ORD-006",
+      "orderQty": 20874,
+      "poNumber": "4502991532",
+      "priority": "Normal",
+      "productionQty": 20350,
+      "rmMaterial": "200150259439H6",
+      "size": "12",
+      "startDate": "2026-10-04",
+      "status": "Ahead",
+      "style": "Loop Elastic Band - 39H6",
+      "styleCode": "LP-39H6",
+      "targetDate": "2026-11-01"
     },
     {
-      "id": "MCH-04",
-      "code": "MCH-04",
-      "name": "Machine 04",
-      "type": "Ultrasonic Trim Slitter U4",
-      "category": "Other",
-      "operatorName": "Roshan Kumara",
-      "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 1500,
-      "assignedStyles": [
-        "Specialty Trim Finish - 33F6"
+      "balanceQty": -2,
+      "barcode": "BTX-4502991532-14",
+      "category": "Loop",
+      "colour": "Marzipan 39H6",
+      "dailyLogs": [
+        {
+          "actualQty": 1353,
+          "date": "2026-10-22",
+          "deliveryQty": 1353,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 270
+        }
       ],
-      "assignedColours": [
-        "Ganache 33F6"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991520"
-      ],
-      "qrPayload": "MCH-04",
-      "notes": "Precision cold/hot slitter",
-      "todayLogs": []
+      "deliveryBalanceQty": -2,
+      "deliveryQty": 1353,
+      "id": "ORD-007",
+      "orderQty": 1351,
+      "poNumber": "4502991532",
+      "priority": "High",
+      "productionQty": 1353,
+      "rmMaterial": "200150259439H6",
+      "size": "14",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 39H6",
+      "styleCode": "LP-39H6",
+      "targetDate": "2026-11-01"
     },
     {
-      "id": "MCH-05",
-      "code": "MCH-05",
-      "name": "Machine 05",
-      "type": "Multi-Bed Thermal Press T5",
-      "category": "Other",
-      "operatorName": "Dinesh Bandara",
+      "balanceQty": -3,
+      "barcode": "BTX-4502991532-16",
+      "category": "Loop",
+      "colour": "Marzipan 39H6",
+      "dailyLogs": [
+        {
+          "actualQty": 450,
+          "date": "2026-10-22",
+          "deliveryQty": 450,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 89
+        }
+      ],
+      "deliveryBalanceQty": -3,
+      "deliveryQty": 450,
+      "id": "ORD-008",
+      "orderQty": 447,
+      "poNumber": "4502991532",
+      "priority": "Normal",
+      "productionQty": 450,
+      "rmMaterial": "200150259439H6",
+      "size": "16",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 39H6",
+      "styleCode": "LP-39H6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 13514,
+      "barcode": "BTX-4502991599-10",
+      "category": "Loop",
+      "colour": "Praline 65H8",
+      "dailyLogs": [
+        {
+          "actualQty": 48200,
+          "date": "2026-10-22",
+          "deliveryQty": 48200,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 12343
+        }
+      ],
+      "deliveryBalanceQty": 13514,
+      "deliveryQty": 48200,
+      "id": "ORD-009",
+      "orderQty": 61714,
+      "poNumber": "4502991599",
+      "priority": "Critical",
+      "productionQty": 48200,
+      "rmMaterial": "200150259465H8",
+      "size": "10",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 65H8",
+      "styleCode": "LP-65H8",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 16482,
+      "barcode": "BTX-4502991599-12",
+      "category": "Loop",
+      "colour": "Praline 65H8",
+      "dailyLogs": [
+        {
+          "actualQty": 15200,
+          "date": "2026-10-22",
+          "deliveryQty": 15200,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 6336
+        }
+      ],
+      "deliveryBalanceQty": 16482,
+      "deliveryQty": 15200,
+      "id": "ORD-010",
+      "orderQty": 31682,
+      "poNumber": "4502991599",
+      "priority": "High",
+      "productionQty": 15200,
+      "rmMaterial": "200150259465H8",
+      "size": "12",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 65H8",
+      "styleCode": "LP-65H8",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 2808,
+      "barcode": "BTX-4502991599-14",
+      "category": "Loop",
+      "colour": "Praline 65H8",
+      "dailyLogs": [
+        {
+          "actualQty": 3600,
+          "date": "2026-10-22",
+          "deliveryQty": 3600,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 1282
+        }
+      ],
+      "deliveryBalanceQty": 2808,
+      "deliveryQty": 3600,
+      "id": "ORD-011",
+      "orderQty": 6408,
+      "poNumber": "4502991599",
+      "priority": "Normal",
+      "productionQty": 3600,
+      "rmMaterial": "200150259465H8",
+      "size": "14",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 65H8",
+      "styleCode": "LP-65H8",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": -6,
+      "barcode": "BTX-4502991599-16",
+      "category": "Loop",
+      "colour": "Praline 65H8",
+      "dailyLogs": [
+        {
+          "actualQty": 297,
+          "date": "2026-10-22",
+          "deliveryQty": 297,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 58
+        }
+      ],
+      "deliveryBalanceQty": -6,
+      "deliveryQty": 297,
+      "id": "ORD-012",
+      "orderQty": 291,
+      "poNumber": "4502991599",
+      "priority": "Normal",
+      "productionQty": 297,
+      "rmMaterial": "200150259465H8",
+      "size": "16",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 65H8",
+      "styleCode": "LP-65H8",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 64,
+      "barcode": "BTX-4502991599-18",
+      "category": "Loop",
+      "colour": "Praline 65H8",
+      "deliveryBalanceQty": 64,
+      "deliveryQty": 0,
+      "id": "ORD-013",
+      "orderQty": 64,
+      "poNumber": "4502991599",
+      "priority": "High",
+      "productionQty": 0,
+      "rmMaterial": "200150259465H8",
+      "size": "18",
+      "startDate": "2026-10-04",
+      "status": "Scheduled",
+      "style": "Loop Elastic Band - 65H8",
+      "styleCode": "LP-65H8",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 523,
+      "barcode": "BTX-4502991520-10",
+      "category": "Loop",
+      "colour": "Ganache 33F6",
+      "dailyLogs": [
+        {
+          "actualQty": 400,
+          "date": "2026-10-22",
+          "deliveryQty": 400,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 185
+        }
+      ],
+      "deliveryBalanceQty": 523,
+      "deliveryQty": 400,
+      "id": "ORD-014",
+      "orderQty": 923,
+      "poNumber": "4502991520",
+      "priority": "Normal",
+      "productionQty": 400,
+      "rmMaterial": "200150259433F6",
+      "size": "10",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 33F6",
+      "styleCode": "LP-33F6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": -94,
+      "barcode": "BTX-4502991520-12",
+      "category": "Loop",
+      "colour": "Ganache 33F6",
+      "dailyLogs": [
+        {
+          "actualQty": 2600,
+          "date": "2026-10-22",
+          "deliveryQty": 2600,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 501
+        }
+      ],
+      "deliveryBalanceQty": -94,
+      "deliveryQty": 2600,
+      "id": "ORD-015",
+      "orderQty": 2506,
+      "poNumber": "4502991520",
+      "priority": "Normal",
+      "productionQty": 2600,
+      "rmMaterial": "200150259433F6",
+      "size": "12",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 33F6",
+      "styleCode": "LP-33F6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 1020,
+      "barcode": "BTX-4502991520-14",
+      "category": "Loop",
+      "colour": "Ganache 33F6",
+      "dailyLogs": [
+        {
+          "actualQty": 1400,
+          "date": "2026-10-22",
+          "deliveryQty": 1400,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 484
+        }
+      ],
+      "deliveryBalanceQty": 1020,
+      "deliveryQty": 1400,
+      "id": "ORD-016",
+      "orderQty": 2420,
+      "poNumber": "4502991520",
+      "priority": "High",
+      "productionQty": 1400,
+      "rmMaterial": "200150259433F6",
+      "size": "14",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 33F6",
+      "styleCode": "LP-33F6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 1225,
+      "barcode": "BTX-4502991520-16",
+      "category": "Loop",
+      "colour": "Ganache 33F6",
+      "dailyLogs": [
+        {
+          "actualQty": 275,
+          "date": "2026-10-22",
+          "deliveryQty": 275,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 300
+        }
+      ],
+      "deliveryBalanceQty": 1225,
+      "deliveryQty": 275,
+      "id": "ORD-017",
+      "orderQty": 1500,
+      "poNumber": "4502991520",
+      "priority": "Critical",
+      "productionQty": 275,
+      "rmMaterial": "200150259433F6",
+      "size": "16",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 33F6",
+      "styleCode": "LP-33F6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": -2,
+      "barcode": "BTX-4502991520-18",
+      "category": "Loop",
+      "colour": "Ganache 33F6",
+      "dailyLogs": [
+        {
+          "actualQty": 216,
+          "date": "2026-10-22",
+          "deliveryQty": 216,
+          "notes": "Updated to 22-Oct-26 Loop Daily Production sheet",
+          "planQty": 43
+        }
+      ],
+      "deliveryBalanceQty": -2,
+      "deliveryQty": 216,
+      "id": "ORD-018",
+      "orderQty": 214,
+      "poNumber": "4502991520",
+      "priority": "Normal",
+      "productionQty": 216,
+      "rmMaterial": "200150259433F6",
+      "size": "18",
+      "startDate": "2026-10-04",
+      "status": "Completed",
+      "style": "Loop Elastic Band - 33F6",
+      "styleCode": "LP-33F6",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 29699,
+      "barcode": "BTX-4502991562-10",
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "deliveryBalanceQty": 29699,
+      "deliveryQty": 0,
+      "id": "ORD-019",
+      "orderQty": 29699,
+      "poNumber": "4502991562",
+      "priority": "High",
+      "productionQty": 0,
+      "rmMaterial": "200150259457H1",
+      "size": "10",
+      "startDate": "2026-10-04",
+      "status": "Scheduled",
+      "style": "Loop Elastic Band - 57H1",
+      "styleCode": "LP-57H1",
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 600
+    },
+    {
+      "balanceQty": 17655,
+      "barcode": "BTX-4502991562-12",
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "dailyLogs": [
+        {
+          "actualQty": 0,
+          "date": "2026-10-23",
+          "deliveryQty": 1400,
+          "notes": "Permanent Dispatch (1400 pcs)",
+          "planQty": 0
+        }
+      ],
+      "deliveryBalanceQty": 17655,
+      "deliveryQty": 1400,
+      "id": "ORD-020",
+      "orderQty": 19055,
+      "poNumber": "4502991562",
+      "priority": "Normal",
+      "productionQty": 1400,
+      "rmMaterial": "200150259457H1",
+      "size": "12",
+      "startDate": "2026-10-04",
+      "status": "Behind Plan",
+      "style": "Loop Elastic Band - 57H1",
+      "styleCode": "LP-57H1",
+      "targetDate": "2026-11-01",
+      "floorProductionQty": 1400
+    },
+    {
+      "balanceQty": 3260,
+      "barcode": "BTX-4502991562-14",
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "deliveryBalanceQty": 3260,
+      "deliveryQty": 0,
+      "id": "ORD-021",
+      "orderQty": 3260,
+      "poNumber": "4502991562",
+      "priority": "Critical",
+      "productionQty": 0,
+      "rmMaterial": "200150259457H1",
+      "size": "14",
+      "startDate": "2026-10-04",
+      "status": "Scheduled",
+      "style": "Loop Elastic Band - 57H1",
+      "styleCode": "LP-57H1",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 451,
+      "barcode": "BTX-4502991562-16",
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "deliveryBalanceQty": 451,
+      "deliveryQty": 0,
+      "id": "ORD-022",
+      "orderQty": 451,
+      "poNumber": "4502991562",
+      "priority": "High",
+      "productionQty": 0,
+      "rmMaterial": "200150259457H1",
+      "size": "16",
+      "startDate": "2026-10-04",
+      "status": "Scheduled",
+      "style": "Loop Elastic Band - 57H1",
+      "styleCode": "LP-57H1",
+      "targetDate": "2026-11-01"
+    },
+    {
+      "balanceQty": 63,
+      "barcode": "BTX-4502991562-18",
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "deliveryBalanceQty": 63,
+      "deliveryQty": 0,
+      "id": "ORD-023",
+      "orderQty": 63,
+      "poNumber": "4502991562",
+      "priority": "Normal",
+      "productionQty": 0,
+      "rmMaterial": "200150259457H1",
+      "size": "18",
+      "startDate": "2026-10-04",
+      "status": "Scheduled",
+      "style": "Loop Elastic Band - 57H1",
+      "styleCode": "LP-57H1",
+      "targetDate": "2026-11-01"
+    }
+  ],
+  "productionLogs": [
+    {
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "date": "2026-10-23",
+      "id": "LOG-1792761647290",
+      "machineId": "MCH-06",
+      "machineName": "Loop Insert",
+      "multiplier": 1,
+      "notes": "Floor QR scan entry",
+      "operator": "Chithra",
+      "operatorName": "Chithra",
+      "poNumber": "4502991550",
+      "qty": 300,
+      "rawQty": 300,
       "shift": "Day Shift",
-      "status": "Active",
-      "dailyTargetQty": 3000,
-      "assignedStyles": [
-        "Technical Finish Trim - 57H1"
-      ],
-      "assignedColours": [
-        "Talc 69-09-47 57H1"
-      ],
-      "assignedSizes": [
-        "10",
-        "12",
-        "14",
-        "16",
-        "18"
-      ],
-      "assignedPos": [
-        "4502991562"
-      ],
-      "qrPayload": "MCH-05",
-      "notes": "Heat seal and adhesive curing bed",
-      "todayLogs": []
+      "size": "10",
+      "style": "Loop Elastic Band - 54A2",
+      "time": "06:50 PM",
+      "timeSlot": "14:15 - 15:15",
+      "timestamp": "2026-10-23T13:20:47.290Z"
+    },
+    {
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "date": "2026-10-23",
+      "id": "LOG-1792761630169",
+      "machineId": "MCH-06",
+      "machineName": "Loop Insert",
+      "multiplier": 1,
+      "notes": "Floor QR scan entry",
+      "operator": "Chithra",
+      "operatorName": "Chithra",
+      "poNumber": "4502991550",
+      "qty": 300,
+      "rawQty": 300,
+      "shift": "Day Shift",
+      "size": "10",
+      "style": "Loop Elastic Band - 54A2",
+      "time": "06:50 PM",
+      "timeSlot": "12:45 - 14:15",
+      "timestamp": "2026-10-23T13:20:30.169Z"
+    },
+    {
+      "category": "Loop",
+      "colour": "Talc 69-09-47 57H1",
+      "date": "2026-10-23",
+      "id": "LOG-1792735991621",
+      "machineId": "MCH-IRN",
+      "machineName": "Iron Machine",
+      "multiplier": 1,
+      "notes": "Floor QR scan entry",
+      "operator": "Dilini",
+      "operatorName": "Dilini",
+      "poNumber": "4502991550",
+      "qty": 100,
+      "rawQty": 100,
+      "shift": "Day Shift",
+      "size": "12",
+      "style": "Strap Webbing Band - 39H6",
+      "time": "11:43 AM",
+      "timeSlot": "10:45 - 11:45",
+      "timestamp": "2026-10-23T06:13:11.621Z"
     }
   ],
   "workers": [
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-101",
       "id": "WRK-01",
-      "name": "Sunil Perera",
-      "empId": "EMP-1041",
-      "category": "Loop",
-      "shift": "Day Shift",
+      "name": "Chamathka",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 123 4567",
-      "assignedMachine": "MCH-01",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-102",
       "id": "WRK-02",
-      "name": "Kavinda Perera",
-      "empId": "EMP-1042",
-      "category": "Loop",
-      "shift": "Day Shift",
+      "name": "Oshadi",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 234 5678",
-      "assignedMachine": "MCH-01",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-103",
       "id": "WRK-03",
-      "name": "Nimal Jayawardena",
-      "empId": "EMP-1043",
+      "name": "Methum",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
       "category": "Loop",
-      "shift": "Day Shift",
-      "status": "Active",
-      "phone": "+94 77 345 6789",
-      "assignedMachine": "MCH-01",
-      "todayProduced": 0,
-      "todayOutput": 0,
-      "batchesLogged": 0
-    },
-    {
+      "empId": "EMP-103",
       "id": "WRK-04",
-      "name": "Pradeep Silva",
-      "empId": "EMP-1044",
-      "category": "Strap",
-      "shift": "Day Shift",
+      "name": "Methum",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 456 7890",
-      "assignedMachine": "MCH-CUT",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-105",
       "id": "WRK-05",
-      "name": "Sanjeewa Silva",
-      "empId": "EMP-1045",
-      "category": "Strap",
-      "shift": "Day Shift",
+      "name": "Rusiru",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 567 8901",
-      "assignedMachine": "MCH-PUS",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-106",
       "id": "WRK-06",
-      "name": "Kamal Gunaratne",
-      "empId": "EMP-1046",
-      "category": "Strap",
-      "shift": "Day Shift",
+      "name": "Dileukshi",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 678 9012",
-      "assignedMachine": "MCH-IRN",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-107",
       "id": "WRK-07",
-      "name": "Anura Bandara",
-      "empId": "EMP-1047",
-      "category": "Strap",
-      "shift": "Day Shift",
+      "name": "Danushka",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 789 0123",
-      "assignedMachine": "MCH-DRY",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-108",
       "id": "WRK-08",
-      "name": "Chamari Wickramasinghe",
-      "empId": "EMP-1048",
-      "category": "T-shirt",
-      "shift": "Day Shift",
+      "name": "Chamila",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 890 1234",
-      "assignedMachine": "MCH-03",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 1,
+      "category": "Loop",
+      "empId": "EMP-109",
       "id": "WRK-09",
-      "name": "Roshan Kumara",
-      "empId": "EMP-1049",
-      "category": "Other",
-      "shift": "Day Shift",
+      "name": "Dilini",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 901 2345",
-      "assignedMachine": "MCH-04",
-      "todayProduced": 0,
-      "todayOutput": 0,
-      "batchesLogged": 0
+      "todayOutput": 100,
+      "todayProduced": 100
     },
     {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-109",
       "id": "WRK-10",
-      "name": "Dinesh Bandara",
-      "empId": "EMP-1050",
-      "category": "Other",
-      "shift": "Night Shift",
+      "name": "Dilini",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
       "status": "Active",
-      "phone": "+94 77 912 3456",
-      "assignedMachine": "MCH-05",
-      "todayProduced": 0,
       "todayOutput": 0,
-      "batchesLogged": 0
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-111",
+      "id": "WRK-11",
+      "name": "Geetha",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-112",
+      "id": "WRK-12",
+      "name": "Shamal",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-113",
+      "id": "WRK-13",
+      "name": "Kaveesha",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-114",
+      "id": "WRK-14",
+      "name": "Sachintha",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-115",
+      "id": "WRK-15",
+      "name": "Indika",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
+    },
+    {
+      "assignedMachine": "Cutting Machine (MCH-CUT)",
+      "batchesLogged": 0,
+      "category": "Loop",
+      "empId": "EMP-116",
+      "id": "WRK-16",
+      "name": "Janith",
+      "phone": "+94 77 000 0000",
+      "shift": "Shift A",
+      "status": "Active",
+      "todayOutput": 0,
+      "todayProduced": 0
     }
-  ],
-  "productionLogs": [],
-  "deliveryReceivedLogs": [],
-  "lastUpdated": "2026-10-22T14:07:43.915Z",
-  "outsourceConsignments": []
+  ]
 }
