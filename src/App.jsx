@@ -20,6 +20,7 @@ import MaterialCalculationDashboard from './components/MaterialCalculationDashbo
 import ProductionPlanningDashboard from './components/ProductionPlanningDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { api } from './api/client';
+import { checkAndRunAutomated24hBackup } from './services/backupService';
 import {
   Activity,
   CheckCircle2,
@@ -219,6 +220,7 @@ export default function App() {
 
   useEffect(() => {
     loadDashboardData();
+    checkAndRunAutomated24hBackup();
     // Subscribe to live multi-device cross-synchronization (Laptop <-> Phone)
     const unsubscribe = api.subscribe(() => {
       loadDashboardData();
