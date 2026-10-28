@@ -377,6 +377,23 @@ export const api = {
   syncCloud: async () => {
     return dbStore.pullCloudState ? dbStore.pullCloudState() : null;
   },
+
+  // 22. Production Planning & AI Scheduling API
+  saveProductionPlan: async (plan) => {
+    return dbStore.saveProductionPlan(plan);
+  },
+
+  getActiveProductionPlan: async (filter = {}) => {
+    return { success: true, data: dbStore.getActiveProductionPlan(filter) };
+  },
+
+  getMachineHistoricalAverage: async (machineId) => {
+    return { success: true, average: dbStore.getMachineHistoricalAverage(machineId) };
+  },
+
+  getMachineDayStats: async (machineId, dateStr) => {
+    return { success: true, data: dbStore.getMachineDayStats(machineId, dateStr) };
+  },
 };
 
 export default api;

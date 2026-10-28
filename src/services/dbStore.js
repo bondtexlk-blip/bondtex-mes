@@ -24,6 +24,7 @@ class ClientDatabaseStore {
     this.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
+    this.productionPlans = [];
     this.subscribers = [];
     this.lastSaved = null;
     this.deviceId = 'srv';
@@ -122,6 +123,9 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.outsourceConsignments)) {
       this.outsourceConsignments = cloudState.outsourceConsignments;
     }
+    if (Array.isArray(cloudState.productionPlans)) {
+      this.productionPlans = cloudState.productionPlans;
+    }
 
     this.ensureSpecialMachines();
     this.ensureOrderCalculations();
@@ -137,6 +141,7 @@ class ClientDatabaseStore {
           productionLogs: this.productionLogs,
           deliveryReceivedLogs: this.deliveryReceivedLogs,
           outsourceConsignments: this.outsourceConsignments || [],
+          productionPlans: this.productionPlans || [],
           lastSaved: this.lastSaved,
         });
         localStorage.setItem(STORAGE_KEY, payloadStr);
@@ -201,6 +206,7 @@ class ClientDatabaseStore {
         this.productionLogs = Array.isArray(parsed.productionLogs) && parsed.productionLogs.length ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) && parsed.deliveryReceivedLogs.length ? parsed.deliveryReceivedLogs : JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+        this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
         this.lastSaved = parsed.lastSaved || null;
       } else {
         this.reset(false);
@@ -271,6 +277,7 @@ class ClientDatabaseStore {
         productionLogs: this.productionLogs,
         deliveryReceivedLogs: this.deliveryReceivedLogs,
         outsourceConsignments: this.outsourceConsignments || [],
+        productionPlans: this.productionPlans || [],
         lastSaved: nowIso,
         lastUpdated: nowIso,
         lastDeviceId: this.deviceId,
@@ -306,6 +313,7 @@ class ClientDatabaseStore {
     this.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
+    this.productionPlans = [];
     this.ensureSpecialMachines();
     this.save(broadcastToCloud);
     return { success: true, count: this.orders.length };
@@ -2058,6 +2066,89 @@ class ClientDatabaseStore {
       message: `Transaction #${id} updated and calculation impacts synchronized!`,
       log,
       order,
+    };
+  }
+
+  // =========================================================================
+  // PRODUCTION PLANNING & AI SCHEDULING ENGINE METHODS
+  // =========================================================================
+  saveProductionPlan(plan) {
+    if (!plan || !plan.id) return { success: false, message: 'Invalid plan' };
+    if (!this.productionPlans) this.productionPlans = [];
+    const idx = this.productionPlans.findIndex((p) => p.id === plan.id);
+    if (idx >= 0) {
+      this.productionPlans[idx] = plan;
+    } else {
+      this.productionPlans.unshift(plan);
+    }
+    this.save();
+    return { success: true, plan };
+  }
+
+  getActiveProductionPlan(filter = {}) {
+    if (!this.productionPlans || this.productionPlans.length === 0) return null;
+    if (filter.orderId) {
+      return this.productionPlans.find((p) => p.orderId === filter.orderId) || null;
+    }
+    if (filter.poNumber) {
+      return this.productionPlans.find((p) => p.poNumber === filter.poNumber) || null;
+    }
+    return this.productionPlans[0];
+  }
+
+  getMachineHistoricalAverage(machineId) {
+    const targetLogs = (this.productionLogs || []).filter(
+      (l) => l.machineId === machineId || l.machineCode === machineId
+    );
+    if (targetLogs.length === 0) {
+      const m = (this.machines || []).find((m) => m.id === machineId || m.code === machineId);
+      return m?.dailyTargetQty || 2600;
+    }
+    // Group logs by unique dates
+    const dateMap = {};
+    targetLogs.forEach((l) => {
+      const d = l.date || (l.timestamp ? l.timestamp.split('T')[0] : 'today');
+      dateMap[d] = (dateMap[d] || 0) + (Number(l.qty) || 0);
+    });
+    const daysCount = Object.keys(dateMap).length;
+    if (daysCount === 0) return 2600;
+    const totalQty = Object.values(dateMap).reduce((a, b) => a + b, 0);
+    return Math.round(totalQty / daysCount);
+  }
+
+  getMachineDayStats(machineId, dateStr = new Date().toISOString().split('T')[0]) {
+    const machine = (this.machines || []).find((m) => m.id === machineId || m.code === machineId);
+    const dayLogs = (this.productionLogs || []).filter(
+      (l) => (l.machineId === machineId || l.machineCode === machineId) && l.date === dateStr
+    );
+    const todayProduced = dayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    // Look for active plan target for this day & machine
+    let plannedTarget = machine?.dailyTargetQty || 2600;
+    const activePlan = this.getActiveProductionPlan();
+    if (activePlan && Array.isArray(activePlan.scheduleDays)) {
+      const scheduleDay = activePlan.scheduleDays.find((sd) => sd.date === dateStr);
+      if (scheduleDay && Array.isArray(scheduleDay.machinePlans)) {
+        const mPlan = scheduleDay.machinePlans.find(
+          (mp) => mp.machineId === machineId || mp.machineCode === machineId
+        );
+        if (mPlan && mPlan.dailyTarget > 0) {
+          plannedTarget = mPlan.dailyTarget;
+        }
+      }
+    }
+
+    const remainingQty = Math.max(0, plannedTarget - todayProduced);
+    const historicalAverage = this.getMachineHistoricalAverage(machineId);
+
+    return {
+      machine,
+      date: dateStr,
+      todayProduced,
+      dailyTarget: plannedTarget,
+      remainingQty,
+      historicalAverage,
+      logs: dayLogs,
     };
   }
 }

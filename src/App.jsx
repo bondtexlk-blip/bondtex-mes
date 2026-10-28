@@ -17,6 +17,7 @@ import DailyProductionDashboard from './components/DailyProductionDashboard';
 import HourlyProductionDashboard from './components/HourlyProductionDashboard';
 import DeliveryReceivedDashboard from './components/DeliveryReceivedDashboard';
 import MaterialCalculationDashboard from './components/MaterialCalculationDashboard';
+import ProductionPlanningDashboard from './components/ProductionPlanningDashboard';
 import ErrorBoundary from './components/ErrorBoundary';
 import { api } from './api/client';
 import {
@@ -94,6 +95,8 @@ export default function App() {
         if (viewParam === 'daily-production' || viewParam === 'daily') return 'daily-production';
         if (viewParam === 'hourly-production' || viewParam === 'hourly') return 'hourly-production';
         if (viewParam === 'delivery-received' || viewParam === 'delivery') return 'delivery-received';
+        if (viewParam === 'planning' || viewParam === 'plan') return 'planning';
+        if (viewParam === 'calculation' || viewParam === 'calc') return 'calculation';
         if (viewParam === 'admin') return 'admin';
         if (viewParam === 'drilldown') return 'drilldown';
       }
@@ -161,6 +164,10 @@ export default function App() {
           setActiveView('hourly-production');
         } else if (viewParam === 'delivery-received' || viewParam === 'delivery') {
           setActiveView('delivery-received');
+        } else if (viewParam === 'planning' || viewParam === 'plan') {
+          setActiveView('planning');
+        } else if (viewParam === 'calculation' || viewParam === 'calc') {
+          setActiveView('calculation');
         } else if (viewParam === 'admin') {
           setActiveView('admin');
         } else if (viewParam === 'drilldown') {
@@ -505,8 +512,14 @@ export default function App() {
                 onOpenBarcodeScanner={() => setBarcodeScannerOpen(true)}
                 metadata={metadata}
               />
+            ) : activeView === 'planning' ? (
+              /* 3B. AI PRODUCTION PLANNING & SCHEDULING (GEMINI ENGINE) */
+              <ProductionPlanningDashboard
+                onShowToast={showToast}
+                theme={theme}
+              />
             ) : activeView === 'calculation' ? (
-              /* 3B. MATERIAL CALCULATION DASHBOARD (LOOP STRIPS & ADHESIVE TAPE) */
+              /* 3C. MATERIAL CALCULATION DASHBOARD (LOOP STRIPS & ADHESIVE TAPE) */
               <MaterialCalculationDashboard
                 onBackToDashboard={() => setActiveView('dashboard')}
                 onShowToast={showToast}

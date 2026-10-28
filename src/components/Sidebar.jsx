@@ -18,6 +18,8 @@ import {
   Clock,
   Truck,
   Calculator,
+  Cpu,
+  Sparkles,
   X,
 } from 'lucide-react';
 
@@ -177,6 +179,28 @@ export default function Sidebar({
                 <span className="flex items-center gap-1 text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800/50 px-1.5 py-0.5 rounded">
                   <Search className="w-2.5 h-2.5" />
                   Filter
+                </span>
+              </button>
+
+              {/* Production Planning Page with Gemini AI (Directly above Material Calculation) */}
+              <button
+                onClick={() => {
+                  setActiveView('planning');
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeView === 'planning'
+                    ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Cpu className="w-4 h-4 text-indigo-400" />
+                  <span>Production Planning</span>
+                </div>
+                <span className="flex items-center gap-1 text-[10px] bg-indigo-950 text-indigo-400 border border-indigo-800/50 px-1.5 py-0.5 rounded font-mono">
+                  <Sparkles className="w-2.5 h-2.5" />
+                  AI Plan
                 </span>
               </button>
 

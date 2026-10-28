@@ -27,9 +27,13 @@ import {
   Unlock,
   ShieldCheck,
   Check,
+  Calendar,
+  Target,
+  Cpu,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
+import { analyzeTargetWithGemini } from '../services/geminiService';
 import {
   detectCurrentShift,
   detectCurrentTimeSlot,
@@ -57,6 +61,13 @@ export default function WorkerPortal({
   const [submitting, setSubmitting] = useState(false);
   const [successBanner, setSuccessBanner] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Historical Date & AI Target Guidance State
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [dayStats, setDayStats] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [analyzingAi, setAnalyzingAi] = useState(false);
 
   // Fullscreen Mode Handler
   useEffect(() => {
@@ -231,11 +242,50 @@ export default function WorkerPortal({
     fetchMachineDetails(initialMachineId);
     const unsubscribe = api.subscribe(() => {
       fetchMachineDetails(initialMachineId);
+      loadDayStats(initialMachineId, selectedDate);
     });
     return () => {
       if (unsubscribe) unsubscribe();
     };
   }, [initialMachineId]);
+
+  // Load Machine Day Statistics (Target, Output, Historical Average)
+  const loadDayStats = async (mId, dStr) => {
+    try {
+      const res = await api.getMachineDayStats(mId || machineId, dStr || selectedDate);
+      if (res?.success && res.data) {
+        setDayStats(res.data);
+      }
+    } catch (e) {
+      console.warn('Day stats error:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadDayStats(machineId, selectedDate);
+  }, [machineId, selectedDate]);
+
+  // Gemini AI Performance & Dynamic Target Analysis
+  const handleRunAiAnalysis = async (customStats) => {
+    try {
+      setAnalyzingAi(true);
+      const stats = customStats || dayStats;
+      const res = await analyzeTargetWithGemini({
+        machine: machine || { name: machineId, code: machineId },
+        todayLogs: stats?.logs || machine?.todayLogs || [],
+        todayProduced: stats?.todayProduced || machine?.todayProduced || 0,
+        dailyTarget: stats?.dailyTarget || machine?.dailyTargetQty || 2600,
+        pastDailyAverage: stats?.historicalAverage || 2500,
+        date: selectedDate,
+      });
+      setAiAnalysis(res);
+      if (onShowToast) onShowToast('Gemini AI performance guidance generated!', 'success');
+    } catch (err) {
+      console.error('AI Analysis failed:', err);
+    } finally {
+      setAnalyzingAi(false);
+    }
+  };
 
   // Handle Quick Add Quantity
   const handleQuickAdd = (amt) => {
@@ -283,9 +333,10 @@ export default function WorkerPortal({
   const currentInputQty = parseInt(producedQty, 10) || 0;
   const effectiveBatchOutput = isDryCut ? currentInputQty * dryCutMultiplier : currentInputQty;
 
-  // Live Target Calculations
-  const dailyTarget = machine?.dailyTargetQty || 2500;
-  const todayProducedBefore = machine?.todayProduced || 0;
+  // Live Target Calculations (Synchronized with AI Active Schedule & Historical Averages)
+  const dailyTarget = dayStats?.dailyTarget || machine?.dailyTargetQty || 2500;
+  const todayProducedBefore = dayStats?.todayProduced !== undefined ? dayStats.todayProduced : (machine?.todayProduced || 0);
+  const historicalAverage = dayStats?.historicalAverage || 2500;
   const projectedTotal = todayProducedBefore + effectiveBatchOutput;
   const projectedRemaining = Math.max(0, dailyTarget - projectedTotal);
   const targetAchieved = projectedTotal >= dailyTarget;
@@ -322,6 +373,7 @@ export default function WorkerPortal({
         timeSlot: selectedTimeSlot,
         operatorName: selectedOperator || machine.operatorName || 'Floor Worker',
         notes: notes.trim(),
+        date: selectedDate,
       };
 
       const res = await api.submitWorkerBatch(payload);
@@ -341,6 +393,7 @@ export default function WorkerPortal({
 
         // Refresh machine status & update management dashboard
         await fetchMachineDetails(machine.id);
+        await loadDayStats(machine.id, selectedDate);
         if (onDataUpdated) onDataUpdated();
         if (onShowToast) {
           const msg = isDryCut
@@ -359,7 +412,8 @@ export default function WorkerPortal({
   };
 
   const currentSlots = getSlotsForShift(currentShift);
-  const todayMachineLogs = machine?.todayLogs || [];
+  const todayMachineLogs =
+    dayStats && Array.isArray(dayStats.logs) ? dayStats.logs : machine?.todayLogs || [];
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-4 animate-fade-in p-2 sm:p-4 lg:p-6 pb-12 flex-1 flex flex-col justify-start">
@@ -395,7 +449,35 @@ export default function WorkerPortal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Target Date Selector (Today or Past Date) */}
+          <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-700/80 rounded-xl px-2.5 py-1.5 shadow-sm">
+            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                setSelectedDate(e.target.value);
+                setAiAnalysis(null);
+              }}
+              title="Select today or any past date to view records and AI guidance"
+              className="bg-transparent text-white font-mono font-bold text-xs focus:outline-none cursor-pointer"
+            />
+            {selectedDate !== todayStr && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDate(todayStr);
+                  setAiAnalysis(null);
+                }}
+                className="text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800/50 px-1.5 py-0.5 rounded font-bold hover:bg-cyan-900 transition"
+                title="Reset to today"
+              >
+                Today
+              </button>
+            )}
+          </div>
+
           {/* Fullscreen Toggle Button */}
           <button
             type="button"
@@ -617,20 +699,66 @@ export default function WorkerPortal({
               </div>
             </div>
 
-            {/* Dynamic Real-Time Target Gauge */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-400 font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Today's Target Quota</span>
+            {/* 1. Target Guidance Overview (3-Card Metrics Display) */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              {/* Metric 1: Day Target */}
+              <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
+                  <Target className="w-3 h-3 text-cyan-400" />
+                  <span>Target</span>
                 </span>
-                <span className="font-mono font-bold text-slate-200">
-                  {formatNumber(projectedTotal)} / {formatNumber(dailyTarget)} pcs
+                <span className="font-mono font-black text-white text-sm sm:text-base block">
+                  {formatNumber(dailyTarget)}
+                </span>
+                <span className="text-[9px] text-slate-500 font-mono block">
+                  {dayStats?.dailyTarget ? 'AI Scheduled' : 'Quota Target'}
                 </span>
               </div>
 
-              {/* Progress Bar with Live Fill */}
-              <div className="w-full bg-slate-800 rounded-full h-3.5 overflow-hidden p-0.5">
+              {/* Metric 2: Remaining Quantity */}
+              <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
+                  <Clock className="w-3 h-3 text-amber-400" />
+                  <span>Remaining</span>
+                </span>
+                <span
+                  className={`font-mono font-black text-sm sm:text-base block ${
+                    targetAchieved ? 'text-emerald-400' : 'text-amber-400'
+                  }`}
+                >
+                  {targetAchieved ? '0' : formatNumber(projectedRemaining)}
+                </span>
+                <span className="text-[9px] text-slate-500 font-mono block">
+                  {targetAchieved ? 'Quota Reached!' : `${projectedProgress}% Done`}
+                </span>
+              </div>
+
+              {/* Metric 3: Historical Daily Average */}
+              <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
+                <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
+                  <TrendingUp className="w-3 h-3 text-indigo-400" />
+                  <span>Hist. Avg</span>
+                </span>
+                <span className="font-mono font-black text-indigo-300 text-sm sm:text-base block">
+                  {formatNumber(historicalAverage)}
+                </span>
+                <span className="text-[9px] text-slate-500 font-mono block">
+                  Past Pace/Day
+                </span>
+              </div>
+            </div>
+
+            {/* Target Progress Bar */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-400 font-semibold text-[11px]">
+                  Output Progress:
+                </span>
+                <span className="font-mono font-bold text-slate-200">
+                  {formatNumber(projectedTotal)} / {formatNumber(dailyTarget)} pcs ({projectedProgress}%)
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
                     targetAchieved
@@ -640,30 +768,70 @@ export default function WorkerPortal({
                   style={{ width: `${projectedProgress}%` }}
                 ></div>
               </div>
+            </div>
 
-              <div className="flex items-center justify-between pt-1 text-xs">
+            {/* 2. Gemini AI Dynamic Target Prediction & Guidance Card */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-slate-950 to-slate-950 border border-indigo-500/30 space-y-3 shadow-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>AI Dynamic Guidance (Gemini)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRunAiAnalysis()}
+                  disabled={analyzingAi}
+                  className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition flex items-center gap-1 shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {analyzingAi ? (
+                    <>
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      <span>Analyzing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3 h-3" />
+                      <span>Analyze Pace</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Dynamic Target Prediction Value */}
+              <div className="p-3 rounded-xl bg-slate-900/90 border border-indigo-500/20 flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] text-slate-500 block uppercase">Previously Produced</span>
-                  <span className="font-mono font-bold text-slate-300">
-                    {formatNumber(todayProducedBefore)} pcs
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                    Tomorrow's Recommended Target:
+                  </span>
+                  <span className="font-mono font-black text-indigo-300 text-base sm:text-lg">
+                    {formatNumber(aiAnalysis?.recommendedTomorrowTarget || (dailyTarget > 0 ? (projectedRemaining > 0 ? Math.round(dailyTarget + projectedRemaining * 0.5) : dailyTarget) : 2600))} pcs
                   </span>
                 </div>
-
                 <div className="text-right">
-                  <span className="text-[10px] text-slate-500 block uppercase">
-                    {targetAchieved ? 'Quota Exceeded' : 'Remaining To Target'}
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                    Live Pace Status
                   </span>
                   <span
-                    className={`text-sm font-mono font-extrabold ${
-                      targetAchieved ? 'text-emerald-400' : 'text-amber-400'
+                    className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md inline-block ${
+                      targetAchieved
+                        ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                        : projectedProgress >= 75
+                        ? 'bg-blue-500/15 text-blue-300 border border-blue-500/30'
+                        : 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                     }`}
                   >
-                    {targetAchieved
-                      ? `+${formatNumber(projectedTotal - dailyTarget)} pcs bonus!`
-                      : `${formatNumber(projectedRemaining)} pcs left`}
+                    {aiAnalysis?.paceStatus || (targetAchieved ? 'Ahead of Schedule' : projectedProgress >= 75 ? 'On Track' : 'Behind Plan')}
                   </span>
                 </div>
               </div>
+
+              {/* AI Guidance Text */}
+              <p className="text-[11px] text-slate-300 leading-relaxed font-sans bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
+                {aiAnalysis?.aiSummary ||
+                  (targetAchieved
+                    ? `Machine pace is optimal! Target exceeded by ${formatNumber(projectedTotal - dailyTarget)} pcs. Maintain steady feeding tempo.`
+                    : `Current deficit is ${formatNumber(projectedRemaining)} pcs. Tomorrow target is calibrated to compensate while preventing line overload.`)}
+              </p>
             </div>
           </div>
         </div>
@@ -703,6 +871,25 @@ export default function WorkerPortal({
                 <span className="font-mono text-xs font-black bg-emerald-500/20 px-3 py-1 rounded-xl border border-emerald-500/40 text-emerald-200">
                   MES SYNCED
                 </span>
+              </div>
+            )}
+
+            {/* Historical Day Indicator Banner */}
+            {selectedDate !== todayStr && (
+              <div className="p-3.5 rounded-2xl bg-amber-950/50 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    Viewing records for past date: <strong className="text-white font-mono">{selectedDate}</strong>.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(todayStr)}
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[11px] font-bold transition border border-amber-500/30 cursor-pointer"
+                >
+                  Switch to Today
+                </button>
               </div>
             )}
 
