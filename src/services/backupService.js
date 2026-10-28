@@ -2,19 +2,60 @@
 // Automated 24-Hour Backup & Disaster Recovery Manager
 // Configured Target Recipient: bondtexlk@gmail.com
 
-import { REALTIME_DB_URL } from '../firebase';
-import { dbStore } from './dbStore';
+import { REALTIME_DB_URL } from '../firebase.js';
+import { dbStore } from './dbStore.js';
 
 export const BACKUP_TARGET_EMAIL = 'bondtexlk@gmail.com';
 export const LAST_BACKUP_STORAGE_KEY = 'bondtex_last_database_backup_ts';
 
 /**
  * Gathers complete database state for JSON backup export
+ * Uses robust multi-tiered state recovery:
+ * 1. dbStore.getState() / dbStore properties
+ * 2. LocalStorage permanent vault / primary storage
+ * 3. Firebase Realtime Database cloud state
  */
 export async function generateFullDatabaseBackup() {
-  const localState = dbStore.getState();
-  let cloudState = null;
+  let localState = {};
 
+  try {
+    if (dbStore) {
+      if (typeof dbStore.getState === 'function') {
+        localState = dbStore.getState() || {};
+      } else {
+        localState = {
+          orders: Array.isArray(dbStore.orders) ? dbStore.orders : (typeof dbStore.getOrders === 'function' ? dbStore.getOrders() : []),
+          machines: Array.isArray(dbStore.machines) ? dbStore.machines : (typeof dbStore.getMachines === 'function' ? dbStore.getMachines() : []),
+          workers: Array.isArray(dbStore.workers) ? dbStore.workers : (typeof dbStore.getWorkers === 'function' ? dbStore.getWorkers() : []),
+          deliveryReceivedLogs: Array.isArray(dbStore.deliveryReceivedLogs) ? dbStore.deliveryReceivedLogs : (typeof dbStore.getDeliveryReceivedLogs === 'function' ? dbStore.getDeliveryReceivedLogs() : []),
+          productionLogs: Array.isArray(dbStore.productionLogs) ? dbStore.productionLogs : [],
+          outsourceConsignments: Array.isArray(dbStore.outsourceConsignments) ? dbStore.outsourceConsignments : [],
+          productionPlans: Array.isArray(dbStore.productionPlans) ? dbStore.productionPlans : [],
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Local dbStore read note in backup:', err);
+  }
+
+  // Fallback to localStorage if localState has no orders
+  if (!Array.isArray(localState.orders) || localState.orders.length === 0) {
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const rawVault = localStorage.getItem('bondtex_permanent_vault_backup') || localStorage.getItem('bondtex_orders_db_v2');
+        if (rawVault) {
+          const parsed = JSON.parse(rawVault);
+          if (parsed && Array.isArray(parsed.orders)) {
+            localState = { ...parsed, ...localState, orders: parsed.orders };
+          }
+        }
+      } catch (e) {
+        console.warn('LocalStorage fallback read note:', e);
+      }
+    }
+  }
+
+  let cloudState = null;
   try {
     const res = await fetch(`${REALTIME_DB_URL}/state.json`);
     if (res.ok) {
@@ -25,21 +66,21 @@ export async function generateFullDatabaseBackup() {
   }
 
   // Use the freshest available dataset
-  const activeOrders = (cloudState?.orders && cloudState.orders.length > 0)
+  const activeOrders = (Array.isArray(cloudState?.orders) && cloudState.orders.length > 0)
     ? cloudState.orders
-    : (localState?.orders || []);
+    : (Array.isArray(localState?.orders) ? localState.orders : []);
 
-  const deliveries = (cloudState?.deliveryReceivedLogs && cloudState.deliveryReceivedLogs.length > 0)
+  const deliveries = (Array.isArray(cloudState?.deliveryReceivedLogs) && cloudState.deliveryReceivedLogs.length > 0)
     ? cloudState.deliveryReceivedLogs
-    : (localState?.deliveryReceivedLogs || []);
+    : (Array.isArray(localState?.deliveryReceivedLogs) ? localState.deliveryReceivedLogs : []);
 
-  const machines = (cloudState?.machines && cloudState.machines.length > 0)
+  const machines = (Array.isArray(cloudState?.machines) && cloudState.machines.length > 0)
     ? cloudState.machines
-    : (localState?.machines || []);
+    : (Array.isArray(localState?.machines) ? localState.machines : []);
 
-  const hourlyLogs = (cloudState?.hourlyLogs && cloudState.hourlyLogs.length > 0)
+  const hourlyLogs = (Array.isArray(cloudState?.hourlyLogs) && cloudState.hourlyLogs.length > 0)
     ? cloudState.hourlyLogs
-    : (localState?.hourlyLogs || []);
+    : (Array.isArray(localState?.productionLogs) ? localState.productionLogs : (Array.isArray(localState?.hourlyLogs) ? localState.hourlyLogs : []));
 
   const now = new Date();
   const timestampIso = now.toISOString();

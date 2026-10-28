@@ -319,6 +319,23 @@ class ClientDatabaseStore {
     return { success: true, count: this.orders.length };
   }
 
+  // Returns full serializable database state snapshot
+  getState() {
+    return {
+      categories: Array.isArray(this.categories) ? this.categories : [],
+      orders: Array.isArray(this.orders) ? this.orders : [],
+      machines: Array.isArray(this.machines) ? this.machines : [],
+      workers: Array.isArray(this.workers) ? this.workers : [],
+      productionLogs: Array.isArray(this.productionLogs) ? this.productionLogs : [],
+      deliveryReceivedLogs: Array.isArray(this.deliveryReceivedLogs) ? this.deliveryReceivedLogs : [],
+      outsourceConsignments: Array.isArray(this.outsourceConsignments) ? this.outsourceConsignments : [],
+      productionPlans: Array.isArray(this.productionPlans) ? this.productionPlans : [],
+      lastSaved: this.lastSaved || new Date().toISOString(),
+      lastUpdated: this.lastSaved || new Date().toISOString(),
+      lastDeviceId: this.deviceId || 'srv',
+    };
+  }
+
   ensureSpecialMachines() {
     this.machines = (this.machines || []).filter(
       (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
