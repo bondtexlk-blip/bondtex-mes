@@ -11,6 +11,8 @@ export function exportDailyAiPlanPdf({
   order,
   materials = [],
   aiAnalysis = null,
+  adaptiveForecast = null,
+  continuousDates = [],
   targetDate = new Date().toISOString().split('T')[0],
 }) {
   try {
@@ -181,6 +183,16 @@ export function exportDailyAiPlanPdf({
         plan?.aiStrategySummary ||
           `Daily production capacity allocated across ${(plan?.assignedMachines || []).length} machines to achieve targeted output with minimal changeover downtime.`,
         [248, 250, 252]
+      );
+    }
+
+    // Adaptive Forecast Section (if present)
+    if (adaptiveForecast) {
+      const forecastText = `${adaptiveForecast.deficitSurplusAnalysis || ''}\n\nRECALIBRATED DAILY TARGET: ${(adaptiveForecast.recalibratedDailyTarget || 0).toLocaleString()} pcs/day across remaining ${adaptiveForecast.remainingDaysCount || 1} working days.\n\nACTION RECOMMENDATIONS:\n${(adaptiveForecast.correctiveActions || []).map((a, i) => `${i + 1}. ${a}`).join('\n')}`;
+      renderAiSection(
+        `DYNAMIC AI SCHEDULE FORECAST (${adaptiveForecast.paceStatus || 'Adaptive Tracking'})`,
+        forecastText,
+        adaptiveForecast.netVariance < 0 ? [254, 242, 242] : [240, 253, 244]
       );
     }
 
