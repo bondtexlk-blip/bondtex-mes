@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Calendar,
   Clock,
@@ -38,6 +38,7 @@ import {
   Flame,
   BarChart3,
   ListOrdered,
+  X,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
@@ -56,11 +57,17 @@ import { exportDailyAiPlanPdf } from '../utils/dailyAiReportPdf';
 export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark' }) {
   const [orders, setOrders] = useState([]);
   const [machines, setMachines] = useState([]);
-  const [selectedOrderId, setSelectedOrderId] = useState('');
+  
+  // Multi-Select Production Orders State
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [isOrderDropdownOpen, setIsOrderDropdownOpen] = useState(false);
+  const [orderDropdownSearch, setOrderDropdownSearch] = useState('');
+  const orderDropdownRef = useRef(null);
+
   const [targetType, setTargetType] = useState('balance'); // 'balance' | 'total' | 'custom'
   const [customQty, setCustomQty] = useState('');
 
-  // Date Selection (default: today to +8 days)
+  // Date Selection (default: today to +9 days)
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const defaultEndStr = useMemo(() => {
     const d = new Date();
@@ -73,6 +80,39 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
   const [includeSaturdays, setIncludeSaturdays] = useState(false);
   const [includeSundays, setIncludeSundays] = useState(false);
   const [rampUpMode, setRampUpMode] = useState('capacity_standard'); // 'capacity_standard' | 'none'
+
+  // Date Picker Input Refs
+  const startDateInputRef = useRef(null);
+  const endDateInputRef = useRef(null);
+
+  // Date Range Helper Handlers
+  const handleStartDateChange = (val) => {
+    setStartDate(val);
+    if (endDate && val && val > endDate) {
+      const d = new Date(val);
+      d.setDate(d.getDate() + 7);
+      setEndDate(d.toISOString().split('T')[0]);
+    }
+  };
+
+  const handleEndDateChange = (val) => {
+    setEndDate(val);
+  };
+
+  const applyDatePreset = (days) => {
+    const start = new Date(startDate || todayStr);
+    const end = new Date(start);
+    end.setDate(end.getDate() + days);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
+
+  const resetToCurrentMonth = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setStartDate(start.toISOString().split('T')[0]);
+    setEndDate(end.toISOString().split('T')[0]);
+  };
 
   // Generated Plan & State
   const [plan, setPlan] = useState(null);
@@ -165,10 +205,13 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
   const getActualFloorOutputForDate = (dateStr, targetPo = '') => {
     try {
       const logs = dbStore.productionLogs || [];
+      const poList = Array.isArray(targetPo)
+        ? targetPo.filter(Boolean)
+        : (targetPo ? [targetPo] : []);
       return logs
         .filter((l) => {
           const dMatch = (l.date || l.timestamp || '').slice(0, 10) === dateStr;
-          const poMatch = !targetPo || l.poNumber === targetPo;
+          const poMatch = poList.length === 0 || poList.includes(l.poNumber);
           return dMatch && poMatch;
         })
         .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
@@ -176,6 +219,17 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       return 0;
     }
   };
+
+  // Close Multi-Select Dropdown on Click Outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (orderDropdownRef.current && !orderDropdownRef.current.contains(event.target)) {
+        setIsOrderDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Load initial orders & machines
   useEffect(() => {
@@ -190,14 +244,14 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
 
         if (ordersRes?.orders) {
           setOrders(ordersRes.orders);
-          // Auto-select Talc 12 or active order
+          // Auto-select Talc 12 or active order with balance
           const preferredOrder =
             ordersRes.orders.find((o) => o.poNumber === '4502991562' && String(o.size) === '12') ||
             ordersRes.orders.find((o) => o.balanceQty > 0) ||
             ordersRes.orders[0];
 
           if (preferredOrder) {
-            setSelectedOrderId(preferredOrder.id);
+            setSelectedOrderIds([preferredOrder.id]);
           }
         }
 
@@ -220,22 +274,115 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
     loadInitialData();
   }, []);
 
-  // Selected Order Object
-  const selectedOrder = useMemo(() => {
-    return orders.find((o) => o.id === selectedOrderId) || null;
-  }, [orders, selectedOrderId]);
+  // Selected Orders & Metrics
+  const selectedOrders = useMemo(() => {
+    return orders.filter((o) => selectedOrderIds.includes(o.id));
+  }, [orders, selectedOrderIds]);
 
-  // Compute Target Quantity
+  // Primary selected order for backward compatibility
+  const selectedOrder = useMemo(() => {
+    return selectedOrders[0] || null;
+  }, [selectedOrders]);
+
+  const compositeOrder = useMemo(() => {
+    if (selectedOrders.length === 0) return null;
+    if (selectedOrders.length === 1) return selectedOrders[0];
+    const uniquePos = Array.from(new Set(selectedOrders.map((o) => o.poNumber).filter(Boolean)));
+    const uniqueColours = Array.from(new Set(selectedOrders.map((o) => o.colour).filter(Boolean)));
+    const uniqueSizes = Array.from(new Set(selectedOrders.map((o) => String(o.size)).filter(Boolean)));
+    const hasStrap = selectedOrders.some((o) => o.category === 'Strap');
+    const totalOrdQty = selectedOrders.reduce((s, o) => s + (Number(o.orderQty) || 0), 0);
+    const totalProdQty = selectedOrders.reduce((s, o) => s + (Number(o.productionQty) || 0), 0);
+    const totalBalQty = selectedOrders.reduce((s, o) => s + (Number(o.balanceQty) || 0), 0);
+
+    return {
+      id: selectedOrders.map((o) => o.id).join(','),
+      poNumber: uniquePos.join(', '),
+      poNumbers: uniquePos,
+      style: `${selectedOrders.length} Orders Batch Plan`,
+      colour: `${selectedOrders.length} Items (${uniqueColours.slice(0, 2).join(', ')}${uniqueColours.length > 2 ? '...' : ''})`,
+      size: uniqueSizes.join(', '),
+      category: hasStrap ? 'Strap' : 'Loop',
+      orderQty: totalOrdQty,
+      productionQty: totalProdQty,
+      balanceQty: totalBalQty,
+      status: 'In Progress',
+      isMultiOrder: true,
+      orderCount: selectedOrders.length,
+      selectedOrders,
+    };
+  }, [selectedOrders]);
+
+  // Multi-Select Handlers
+  const toggleOrderSelection = (id) => {
+    setSelectedOrderIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllOrders = () => {
+    if (selectedOrderIds.length === orders.length) {
+      setSelectedOrderIds([]);
+    } else {
+      setSelectedOrderIds(orders.map((o) => o.id));
+    }
+  };
+
+  const handleSelectAllActiveOrders = () => {
+    const active = orders.filter((o) => Number(o.balanceQty) > 0 || o.status !== 'Completed');
+    setSelectedOrderIds(active.map((o) => o.id));
+  };
+
+  const handleClearOrderSelection = () => {
+    setSelectedOrderIds([]);
+  };
+
+  // Dropdown filtered orders
+  const dropdownFilteredOrders = useMemo(() => {
+    const q = orderDropdownSearch.toLowerCase().trim();
+    if (!q) return orders;
+    return orders.filter((o) =>
+      (o.poNumber && o.poNumber.toLowerCase().includes(q)) ||
+      (o.style && o.style.toLowerCase().includes(q)) ||
+      (o.colour && o.colour.toLowerCase().includes(q)) ||
+      (o.size && String(o.size).toLowerCase().includes(q)) ||
+      (o.category && o.category.toLowerCase().includes(q)) ||
+      (o.rmMaterial && o.rmMaterial.toLowerCase().includes(q))
+    );
+  }, [orders, orderDropdownSearch]);
+
+  // Compute Target Quantity across selected orders
   const plannedQuantity = useMemo(() => {
-    if (!selectedOrder) return 0;
+    if (selectedOrders.length === 0) return 0;
     if (targetType === 'balance') {
-      return selectedOrder.balanceQty > 0 ? selectedOrder.balanceQty : selectedOrder.orderQty;
+      return selectedOrders.reduce((sum, o) => {
+        const b = Number(o.balanceQty);
+        return sum + (b > 0 ? b : (Number(o.orderQty) || 0));
+      }, 0);
+    }
+    if (targetType === 'total') {
+      return selectedOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
     }
     if (targetType === 'custom') {
-      return Number(customQty) || selectedOrder.balanceQty || selectedOrder.orderQty;
+      const parsed = Number(customQty);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+      return selectedOrders.reduce((sum, o) => sum + (Number(o.balanceQty) || Number(o.orderQty) || 0), 0);
     }
-    return selectedOrder.orderQty;
-  }, [selectedOrder, targetType, customQty]);
+    return selectedOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+  }, [selectedOrders, targetType, customQty]);
+
+  // Summary Metrics of Selected Orders
+  const selectedOrdersMetrics = useMemo(() => {
+    const totalOrderQty = selectedOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+    const totalProductionQty = selectedOrders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
+    const totalBalanceQty = selectedOrders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0);
+    return {
+      count: selectedOrders.length,
+      totalOrderQty,
+      totalProductionQty,
+      totalBalanceQty,
+    };
+  }, [selectedOrders]);
 
   // Working Days Calculation
   const calendarMetrics = useMemo(() => {
@@ -336,8 +483,9 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
         runningPlannedSum += plannedTarget;
       }
 
-      // Check actual floor production logged for this date
-      const actualProduced = getActualFloorOutputForDate(dateStr, selectedOrder?.poNumber);
+      // Check actual floor production logged for this date across selected orders
+      const selectedPoList = Array.from(new Set(selectedOrders.map((o) => o.poNumber).filter(Boolean)));
+      const actualProduced = getActualFloorOutputForDate(dateStr, selectedPoList);
       const isPastOrToday = dateStr <= todayStr;
       if (isPastOrToday && isWorkingDay) {
         runningActualSum += actualProduced;
@@ -369,17 +517,17 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
         machineAllocations,
         cumulativePlanned: runningPlannedSum,
         cumulativeActual: runningActualSum,
-        itemStyle: selectedOrder?.style || plan?.orderStyle || 'Loop Elastic Band - 54A2',
-        itemColour: selectedOrder?.colour || plan?.orderColour || 'Standard',
-        itemSize: selectedOrder?.size || plan?.orderSize || '12',
-        poNumber: selectedOrder?.poNumber || plan?.orderPoNumber || '4502991562',
+        itemStyle: selectedOrders.length > 1 ? `${selectedOrders.length} Orders Batch` : (selectedOrder?.style || plan?.orderStyle || 'Loop Elastic Band - 54A2'),
+        itemColour: selectedOrders.length > 1 ? `${selectedOrders.length} Colours Selected` : (selectedOrder?.colour || plan?.orderColour || 'Standard'),
+        itemSize: selectedOrders.length > 1 ? Array.from(new Set(selectedOrders.map((o) => String(o.size)))).join(', ') : (selectedOrder?.size || plan?.orderSize || '12'),
+        poNumber: selectedOrders.length > 1 ? selectedPoList.join(', ') : (selectedOrder?.poNumber || plan?.orderPoNumber || '4502991562'),
       });
 
       curr.setDate(curr.getDate() + 1);
     }
 
     return days;
-  }, [startDate, endDate, calendarMetrics, plannedQuantity, plan, selectedOrder, machines, includeSaturdays, includeSundays, todayStr]);
+  }, [startDate, endDate, calendarMetrics, plannedQuantity, plan, selectedOrders, selectedOrder, machines, includeSaturdays, includeSundays, todayStr]);
 
   // Overall Adaptive Metrics for Dynamic AI Progress Tracking
   const adaptiveMetrics = useMemo(() => {
@@ -389,7 +537,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
     const netVarianceSoFar = totalActualSoFar - totalPlannedSoFar;
 
     const remainingFutureWorkingDays = continuousDateSchedule.filter((d) => !d.isPastOrToday && d.isWorkingDay).length || 1;
-    const balanceRemainingToProduce = Math.max(0, (plannedQuantity || selectedOrder?.orderQty || 10000) - totalActualSoFar);
+    const balanceRemainingToProduce = Math.max(0, (plannedQuantity || selectedOrdersMetrics.totalOrderQty || 10000) - totalActualSoFar);
     const recalibratedDailyTarget = Math.ceil(balanceRemainingToProduce / remainingFutureWorkingDays);
 
     return {
@@ -401,12 +549,12 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       recalibratedDailyTarget,
       achievementRate: totalPlannedSoFar > 0 ? Math.round((totalActualSoFar / totalPlannedSoFar) * 100) : 100,
     };
-  }, [continuousDateSchedule, plannedQuantity, selectedOrder]);
+  }, [continuousDateSchedule, plannedQuantity, selectedOrdersMetrics]);
 
   // Generate Plan Handler
   const handleGeneratePlan = async () => {
-    if (!selectedOrder) {
-      if (onShowToast) onShowToast('Please select a production order to plan', 'error');
+    if (selectedOrders.length === 0) {
+      if (onShowToast) onShowToast('Please select at least one production order to plan', 'error');
       return;
     }
     if (calendarMetrics.count === 0) {
@@ -419,7 +567,8 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       setSavedSuccess(false);
 
       const generated = await generateProductionPlanWithGemini({
-        order: selectedOrder,
+        order: compositeOrder || selectedOrders[0],
+        orders: selectedOrders,
         targetQuantity: plannedQuantity,
         startDate,
         endDate,
@@ -441,7 +590,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       // Trigger initial AI Daily Production & Material Analysis
       try {
         const dailyAnalysis = await generateDailyAiAnalysisWithGemini({
-          order: selectedOrder,
+          order: compositeOrder || selectedOrders[0],
           plan: generated,
           materials,
           targetDate: startDate,
@@ -452,7 +601,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       }
 
       if (onShowToast) {
-        onShowToast('Gemini AI Production Plan successfully generated and scheduled!', 'success');
+        onShowToast(`Gemini AI Production Plan successfully generated for ${selectedOrders.length} order(s)!`, 'success');
       }
     } catch (err) {
       console.error('Plan generation failed:', err);
@@ -508,9 +657,10 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
 
   // Auto-calculate Standard Materials based on order size and yield
   const handleAutoAddStandardMaterials = () => {
-    if (!selectedOrder) return;
-    const sizeStr = String(selectedOrder.size || '12');
-    const targetPcs = plannedQuantity || selectedOrder.orderQty || 5000;
+    if (selectedOrders.length === 0) {
+      if (onShowToast) onShowToast('Please select at least one order to calculate materials', 'error');
+      return;
+    }
 
     const yieldMap = {
       '10': { yieldPerStrip: 70, tapeA: '9mm', tapeB: '16mm' },
@@ -519,33 +669,48 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       '16': { yieldPerStrip: 61, tapeA: '12mm', tapeB: '19mm' },
       '18': { yieldPerStrip: 48, tapeA: '13mm', tapeB: '20mm' },
     };
-    const spec = yieldMap[sizeStr] || { yieldPerStrip: 65, tapeA: '10mm', tapeB: '17mm' };
-    const requiredStrips = Math.ceil(targetPcs / spec.yieldPerStrip);
-    const requiredMeters = Number((requiredStrips * 1.35).toFixed(2));
 
-    const standardItems = [
-      {
-        id: `mat-${Date.now()}-1`,
-        name: `Fabric Strips 1350mm (Size ${sizeStr})`,
-        quantity: requiredStrips,
-        unit: 'Strips',
-        notes: `Yield: ${spec.yieldPerStrip} pcs/strip (${requiredMeters} meters)`,
-      },
-      {
-        id: `mat-${Date.now()}-2`,
-        name: `Adhesive Tape ${spec.tapeA} (1350mm strip)`,
-        quantity: requiredMeters,
-        unit: 'Meters',
-        notes: `Inner adhesive backing for Size ${sizeStr}`,
-      },
-      {
-        id: `mat-${Date.now()}-3`,
-        name: `Adhesive Tape ${spec.tapeB} (1350mm strip)`,
-        quantity: requiredMeters,
-        unit: 'Meters',
-        notes: `Outer adhesive backing for Size ${sizeStr}`,
-      },
-    ];
+    // Group target quantity by size across selected orders
+    const sizeMap = {};
+    selectedOrders.forEach((o) => {
+      const sz = String(o.size || '12');
+      const target = targetType === 'balance'
+        ? (Number(o.balanceQty) > 0 ? Number(o.balanceQty) : Number(o.orderQty) || 2000)
+        : (Number(o.orderQty) || 2000);
+      sizeMap[sz] = (sizeMap[sz] || 0) + target;
+    });
+
+    const standardItems = [];
+    const timestamp = Date.now();
+    Object.entries(sizeMap).forEach(([sizeStr, targetPcs], idx) => {
+      const spec = yieldMap[sizeStr] || { yieldPerStrip: 65, tapeA: '10mm', tapeB: '17mm' };
+      const requiredStrips = Math.ceil(targetPcs / spec.yieldPerStrip);
+      const requiredMeters = Number((requiredStrips * 1.35).toFixed(2));
+
+      standardItems.push(
+        {
+          id: `mat-${timestamp}-${idx}-1`,
+          name: `Fabric Strips 1350mm (Size ${sizeStr})`,
+          quantity: requiredStrips,
+          unit: 'Strips',
+          notes: `Yield: ${spec.yieldPerStrip} pcs/strip for ${targetPcs.toLocaleString()} pcs (${requiredMeters}m)`,
+        },
+        {
+          id: `mat-${timestamp}-${idx}-2`,
+          name: `Adhesive Tape ${spec.tapeA} (Size ${sizeStr})`,
+          quantity: requiredMeters,
+          unit: 'Meters',
+          notes: `Inner adhesive backing for Size ${sizeStr} (1350mm strip)`,
+        },
+        {
+          id: `mat-${timestamp}-${idx}-3`,
+          name: `Adhesive Tape ${spec.tapeB} (Size ${sizeStr})`,
+          quantity: requiredMeters,
+          unit: 'Meters',
+          notes: `Outer adhesive backing for Size ${sizeStr} (1350mm strip)`,
+        }
+      );
+    });
 
     const merged = [...materials, ...standardItems];
     setMaterials(merged);
@@ -554,19 +719,21 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
     } catch {
       // ignore
     }
-    if (onShowToast) onShowToast(`Auto-added standard Fabric Strips & Twin Adhesive Tape for Size ${sizeStr}!`);
+    if (onShowToast) {
+      onShowToast(`Auto-added standard Fabric Strips & Twin Tape for ${Object.keys(sizeMap).length} size group(s)!`);
+    }
   };
 
   // Run AI Daily Analysis Handler
   const handleRunAiDailyAnalysis = async (customDate = selectedAnalysisDate) => {
-    if (!selectedOrder) {
-      if (onShowToast) onShowToast('Please select a production order first', 'error');
+    if (selectedOrders.length === 0) {
+      if (onShowToast) onShowToast('Please select at least one production order first', 'error');
       return;
     }
     try {
       setAnalyzingAi(true);
       const analysis = await generateDailyAiAnalysisWithGemini({
-        order: selectedOrder,
+        order: compositeOrder || selectedOrders[0],
         plan,
         materials,
         targetDate: customDate || todayStr,
@@ -583,14 +750,14 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
 
   // Run AI Adaptive Forecast Handler
   const handleRunAdaptiveForecast = async () => {
-    if (!selectedOrder) {
+    if (selectedOrders.length === 0) {
       if (onShowToast) onShowToast('Please select an order first', 'error');
       return;
     }
     try {
       setAnalyzingForecast(true);
       const forecast = await generateAdaptiveForecastWithGemini({
-        order: selectedOrder,
+        order: compositeOrder || selectedOrders[0],
         plan,
         dailyProgressRecords: continuousDateSchedule,
         netVariance: adaptiveMetrics.netVarianceSoFar,
@@ -610,7 +777,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
   // Handle row selection from Embedded Production Table
   const handleSelectOrderForPlanning = (o) => {
     if (!o) return;
-    setSelectedOrderId(o.id);
+    setSelectedOrderIds([o.id]);
     const timelineEl = document.getElementById('planning-timeline-section');
     if (timelineEl) {
       timelineEl.scrollIntoView({ behavior: 'smooth' });
@@ -622,7 +789,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
 
   // Download Daily AI Report PDF Handler
   const handleDownloadDailyPdf = () => {
-    if (!selectedOrder) {
+    if (selectedOrders.length === 0) {
       if (onShowToast) onShowToast('Please select an order first', 'error');
       return;
     }
@@ -630,7 +797,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
       setExportingPdf(true);
       exportDailyAiPlanPdf({
         plan,
-        order: selectedOrder,
+        order: compositeOrder || selectedOrders[0],
         materials,
         aiAnalysis: aiDailyAnalysis,
         adaptiveForecast: aiAdaptiveForecast,
@@ -772,45 +939,238 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
             </span>
           </div>
 
-          {/* Order Dropdown */}
-          <div>
-            <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block">
-              Active Factory PO Line:
+          {/* Order Multi-Select Component */}
+          <div className="relative" ref={orderDropdownRef}>
+            <label className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center justify-between">
+              <span>Active Factory PO Lines (Multi-Select):</span>
+              <span className="text-[10px] text-indigo-400 font-mono">
+                {selectedOrderIds.length} of {orders.length} Selected
+              </span>
             </label>
-            <select
-              value={selectedOrderId}
-              onChange={(e) => setSelectedOrderId(e.target.value)}
+
+            {/* Dropdown Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setIsOrderDropdownOpen((prev) => !prev)}
               aria-label="Select Production Order"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-medium text-xs focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner"
+              aria-expanded={isOrderDropdownOpen}
+              className="w-full bg-slate-950 border border-slate-700 hover:border-indigo-500/80 rounded-xl px-3.5 py-2.5 text-white font-medium text-xs focus:outline-none focus:border-indigo-500 cursor-pointer shadow-inner flex items-center justify-between transition gap-2"
             >
-              {orders.map((o) => (
-                <option key={o.id} value={o.id} className="bg-slate-900 text-white py-1">
-                  PO {o.poNumber} • {o.colour} • Sz {o.size} — Bal: {formatNumber(o.balanceQty)} pcs ({o.status})
-                </option>
-              ))}
-            </select>
+              <div className="flex items-center gap-2 truncate text-left">
+                <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
+                {selectedOrderIds.length === 0 ? (
+                  <span className="text-slate-400">Select Production Orders... (Click to expand)</span>
+                ) : selectedOrderIds.length === orders.length && orders.length > 0 ? (
+                  <span className="font-semibold text-emerald-400 truncate">
+                    All Active PO Lines Selected ({orders.length} orders • {formatNumber(plannedQuantity)} pcs)
+                  </span>
+                ) : selectedOrderIds.length === 1 && selectedOrder ? (
+                  <span className="truncate">
+                    PO {selectedOrder.poNumber} • {selectedOrder.colour} • Sz {selectedOrder.size} — Bal: {formatNumber(selectedOrder.balanceQty)} pcs
+                  </span>
+                ) : (
+                  <span className="font-semibold text-indigo-300 truncate">
+                    {selectedOrderIds.length} PO Lines Selected ({formatNumber(plannedQuantity)} pcs planned)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-950/80 text-indigo-300 border border-indigo-800/60">
+                  {selectedOrderIds.length}/{orders.length}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+                    isOrderDropdownOpen ? 'rotate-180 text-indigo-400' : ''
+                  }`}
+                />
+              </div>
+            </button>
+
+            {/* Dropdown Menu Popup */}
+            {isOrderDropdownOpen && (
+              <div className="absolute top-full left-0 right-0 mt-2 z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden backdrop-blur-xl">
+                {/* Search & Actions Header */}
+                <div className="p-3 border-b border-slate-800 space-y-2 bg-slate-950/70">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Filter PO #, colour, style, size..."
+                      value={orderDropdownSearch}
+                      onChange={(e) => setOrderDropdownSearch(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  {/* Quick Select Buttons */}
+                  <div className="flex items-center justify-between gap-2 pt-1 text-[11px]">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllOrders}
+                        className="px-2.5 py-1 rounded-md bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/40 text-[10px] font-bold transition cursor-pointer"
+                      >
+                        {selectedOrderIds.length === orders.length ? 'Deselect All' : `Select All (${orders.length})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSelectAllActiveOrders}
+                        className="px-2.5 py-1 rounded-md bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer"
+                      >
+                        Only Active / Bal &gt; 0
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleClearOrderSelection}
+                      className="text-slate-400 hover:text-rose-400 text-[10px] font-semibold transition cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Orders List with Checkboxes */}
+                <div className="max-h-64 overflow-y-auto divide-y divide-slate-800/60 p-1">
+                  {dropdownFilteredOrders.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500">
+                      No production orders matching "{orderDropdownSearch}"
+                    </div>
+                  ) : (
+                    dropdownFilteredOrders.map((o) => {
+                      const isChecked = selectedOrderIds.includes(o.id);
+                      const swatch = getSwatch(o.colour);
+                      return (
+                        <div
+                          key={o.id}
+                          onClick={() => toggleOrderSelection(o.id)}
+                          className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition select-none ${
+                            isChecked
+                              ? 'bg-indigo-950/60 text-white font-medium'
+                              : 'hover:bg-slate-800/60 text-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}} // handled by parent onClick
+                              className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500 cursor-pointer pointer-events-none"
+                            />
+                            <span
+                              className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
+                              style={{ backgroundColor: swatch.bg }}
+                            />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-white text-xs">
+                                  PO {o.poNumber}
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[10px] border border-slate-700">
+                                  Sz {o.size}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 truncate max-w-[200px]">
+                                {o.colour} • {o.style || 'Loop Elastic'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="font-mono text-[11px] font-bold text-amber-400">
+                              Bal: {formatNumber(o.balanceQty)} pcs
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              Order: {formatNumber(o.orderQty)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Dropdown Footer */}
+                <div className="p-2.5 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-[11px] text-slate-400">
+                    <strong className="text-white">{selectedOrderIds.length}</strong> of {orders.length} PO lines selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsOrderDropdownOpen(false)}
+                    className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Selected Order Summary Chip */}
-          {selectedOrder && (
-            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2 rounded-lg bg-slate-900/80">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Order Qty</span>
-                <span className="font-mono font-bold text-white text-sm">
-                  {formatNumber(selectedOrder.orderQty)}
-                </span>
+          {/* Selected Order Summary Chips & Metrics */}
+          {selectedOrders.length > 0 && (
+            <div className="space-y-2">
+              {/* Selected PO Tag Strip */}
+              <div className="flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto p-1.5 rounded-xl bg-slate-950/60 border border-slate-800/80">
+                <span className="text-[10px] uppercase font-bold text-slate-400 px-1">Selected:</span>
+                {selectedOrders.slice(0, 8).map((o) => (
+                  <span
+                    key={o.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-950/70 border border-indigo-800/50 text-[11px] text-indigo-200"
+                  >
+                    <span className="font-mono font-semibold">PO {o.poNumber}</span>
+                    <span className="text-slate-400 text-[10px]">(Sz {o.size})</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleOrderSelection(o.id);
+                      }}
+                      className="hover:text-rose-400 ml-0.5 font-bold cursor-pointer"
+                      title="Remove from plan"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+                {selectedOrders.length > 8 && (
+                  <span className="text-[10px] font-mono text-slate-400 px-1">
+                    +{selectedOrders.length - 8} more
+                  </span>
+                )}
+                {selectedOrders.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleClearOrderSelection}
+                    className="text-[10px] text-slate-400 hover:text-rose-400 underline ml-auto px-1 cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                )}
               </div>
-              <div className="p-2 rounded-lg bg-slate-900/80">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Produced</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">
-                  {formatNumber(selectedOrder.productionQty)}
-                </span>
-              </div>
-              <div className="p-2 rounded-lg bg-slate-900/80">
-                <span className="text-[10px] text-slate-400 uppercase font-bold block">Balance Left</span>
-                <span className="font-mono font-bold text-amber-400 text-sm">
-                  {formatNumber(selectedOrder.balanceQty)}
-                </span>
+
+              {/* Combined Metrics Pill Row */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2 rounded-lg bg-slate-900/80">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Order Qty</span>
+                  <span className="font-mono font-bold text-white text-sm">
+                    {formatNumber(selectedOrdersMetrics.totalOrderQty)}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-900/80">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Floor Produced</span>
+                  <span className="font-mono font-bold text-emerald-400 text-sm">
+                    {formatNumber(selectedOrdersMetrics.totalProductionQty)}
+                  </span>
+                </div>
+                <div className="p-2 rounded-lg bg-slate-900/80">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Balance Left</span>
+                  <span className="font-mono font-bold text-amber-400 text-sm">
+                    {formatNumber(selectedOrdersMetrics.totalBalanceQty)}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -824,7 +1184,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
               <button
                 type="button"
                 onClick={() => setTargetType('balance')}
-                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border ${
+                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
                   targetType === 'balance'
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500 ring-1 ring-amber-500/30'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -835,7 +1195,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
               <button
                 type="button"
                 onClick={() => setTargetType('total')}
-                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border ${
+                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
                   targetType === 'total'
                     ? 'bg-blue-500/20 text-blue-300 border-blue-500 ring-1 ring-blue-500/30'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -846,7 +1206,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
               <button
                 type="button"
                 onClick={() => setTargetType('custom')}
-                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border ${
+                className={`py-2 px-2.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
                   targetType === 'custom'
                     ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500 ring-1 ring-indigo-500/30'
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-700'
@@ -880,31 +1240,107 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
             </span>
           </div>
 
-          {/* Date Pickers */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block">
-                Start Date:
-              </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                aria-label="Production Start Date"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
-              />
+          {/* Date Pickers with Full Custom Selection & Direct Calendar Trigger */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <label className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center justify-between">
+                  <span>Start Date:</span>
+                  <span className="text-[10px] text-cyan-400 font-mono">Custom Range</span>
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    ref={startDateInputRef}
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        if (typeof e.target.showPicker === 'function') e.target.showPicker();
+                      } catch (_) {}
+                    }}
+                    aria-label="Production Start Date"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500 cursor-pointer pr-9 [color-scheme:dark] light:[color-scheme:light]"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => {
+                      try {
+                        startDateInputRef.current?.showPicker?.();
+                      } catch (_) {}
+                    }}
+                    className="absolute right-2.5 p-1 text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
+                    title="Click to open calendar date picker"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <label className="text-[11px] font-semibold text-slate-400 mb-1.5 flex items-center justify-between">
+                  <span>End Date (Target):</span>
+                  <span className="text-[10px] text-cyan-400 font-mono">Custom Range</span>
+                </label>
+                <div className="relative flex items-center">
+                  <input
+                    ref={endDateInputRef}
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
+                    onClick={(e) => {
+                      try {
+                        if (typeof e.target.showPicker === 'function') e.target.showPicker();
+                      } catch (_) {}
+                    }}
+                    aria-label="Production End Date"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500 cursor-pointer pr-9 [color-scheme:dark] light:[color-scheme:light]"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => {
+                      try {
+                        endDateInputRef.current?.showPicker?.();
+                      } catch (_) {}
+                    }}
+                    className="absolute right-2.5 p-1 text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
+                    title="Click to open calendar date picker"
+                  >
+                    <Calendar className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 mb-1.5 block">
-                End Date (Planned Target):
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                aria-label="Production End Date"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
-              />
+
+            {/* Quick Range Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+                Presets:
+              </span>
+              {[
+                { label: '+7 Days', days: 7 },
+                { label: '+10 Days', days: 10 },
+                { label: '+14 Days', days: 14 },
+                { label: '+21 Days', days: 21 },
+                { label: '+30 Days', days: 30 },
+              ].map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => applyDatePreset(p.days)}
+                  className="px-2 py-0.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/40 text-[10px] font-mono transition cursor-pointer"
+                >
+                  {p.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={resetToCurrentMonth}
+                className="px-2 py-0.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-slate-800 hover:border-cyan-500/40 text-[10px] font-mono transition cursor-pointer"
+              >
+                This Month
+              </button>
             </div>
           </div>
 
@@ -1027,6 +1463,33 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-950 text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-slate-800">
               <tr>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredProductionOrders.length > 0 && filteredProductionOrders.every((r) => selectedOrderIds.includes(r.id))}
+                    ref={(el) => {
+                      if (el) {
+                        const someSelected = filteredProductionOrders.some((r) => selectedOrderIds.includes(r.id));
+                        const allSelected = filteredProductionOrders.length > 0 && filteredProductionOrders.every((r) => selectedOrderIds.includes(r.id));
+                        el.indeterminate = someSelected && !allSelected;
+                      }
+                    }}
+                    onChange={() => {
+                      const allSelected = filteredProductionOrders.length > 0 && filteredProductionOrders.every((r) => selectedOrderIds.includes(r.id));
+                      if (allSelected) {
+                        setSelectedOrderIds((prev) => prev.filter((id) => !filteredProductionOrders.some((r) => r.id === id)));
+                      } else {
+                        setSelectedOrderIds((prev) => {
+                          const newSet = new Set(prev);
+                          filteredProductionOrders.forEach((r) => newSet.add(r.id));
+                          return Array.from(newSet);
+                        });
+                      }
+                    }}
+                    className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500 cursor-pointer"
+                    title="Select/Deselect all visible orders"
+                  />
+                </th>
                 <th className="py-3 px-3">Production / Style Name</th>
                 <th className="py-3 px-3">Colour</th>
                 <th className="py-3 px-3 text-center">Size</th>
@@ -1041,7 +1504,7 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
             <tbody className="divide-y divide-slate-800/60 font-sans">
               {filteredProductionOrders.length > 0 ? (
                 filteredProductionOrders.map((row) => {
-                  const isCurrent = selectedOrderId === row.id;
+                  const isSelected = selectedOrderIds.includes(row.id);
                   const progress =
                     row.orderQty > 0
                       ? Math.min(100, Math.round(((Number(row.productionQty) || 0) / Number(row.orderQty)) * 100))
@@ -1051,11 +1514,21 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
                     <tr
                       key={row.id}
                       className={`transition ${
-                        isCurrent
+                        isSelected
                           ? 'bg-indigo-950/40 border-l-4 border-l-indigo-500'
                           : 'hover:bg-slate-800/40'
                       }`}
                     >
+                      {/* Selection Checkbox */}
+                      <td className="py-3 px-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleOrderSelection(row.id)}
+                          className="w-4 h-4 rounded text-indigo-600 bg-slate-900 border-slate-700 focus:ring-indigo-500 cursor-pointer"
+                        />
+                      </td>
+
                       {/* Style & PO */}
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">
@@ -1155,35 +1628,45 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
 
                       {/* Action */}
                       <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectOrderForPlanning(row)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer ${
-                            isCurrent
-                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 ring-1 ring-indigo-400'
-                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
-                          }`}
-                          title="Select this order line for AI planning"
-                        >
-                          {isCurrent ? (
-                            <>
-                              <CheckCircle className="w-3.5 h-3.5 text-cyan-300" />
-                              <span>Planning</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>Plan This Order</span>
-                              <ArrowRight className="w-3 h-3 text-slate-400" />
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => toggleOrderSelection(row.id)}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 ring-1 ring-indigo-400'
+                                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700'
+                            }`}
+                            title={isSelected ? 'Remove order from plan' : 'Add order to plan'}
+                          >
+                            {isSelected ? (
+                              <>
+                                <CheckCircle className="w-3.5 h-3.5 text-cyan-300" />
+                                <span>In Plan</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="w-3 h-3 text-slate-400" />
+                                <span>Add to Plan</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectOrderForPlanning(row)}
+                            className="px-2 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 text-[11px] font-semibold transition cursor-pointer"
+                            title="Plan only this order"
+                          >
+                            Only
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan="9" className="py-6 text-center text-xs text-slate-400">
+                  <td colSpan="10" className="py-6 text-center text-xs text-slate-400">
                     No production orders found matching filters.
                   </td>
                 </tr>
@@ -1784,7 +2267,12 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
                   setSelectedAnalysisDate(e.target.value);
                   handleRunAiDailyAnalysis(e.target.value);
                 }}
-                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
+                onClick={(e) => {
+                  try {
+                    if (typeof e.target.showPicker === 'function') e.target.showPicker();
+                  } catch (_) {}
+                }}
+                className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer [color-scheme:dark] light:[color-scheme:light]"
               />
             </div>
 
@@ -1828,7 +2316,9 @@ export default function ProductionPlanningDashboard({ onShowToast, theme = 'dark
             </div>
             <p className="text-xs text-slate-300 leading-relaxed font-sans">
               {aiDailyAnalysis?.runningProductionToday ||
-                `Active lines are operating for PO #${selectedOrder?.poNumber || '4502991562'} producing Style "${selectedOrder?.style || 'Loop Elastic Band'}" in Colour "${selectedOrder?.colour || 'Talc 69-09-47 57H1'}" (Size ${selectedOrder?.size || '12'}) across assigned machines with continuous 10-slot shift scheduling.`}
+                (selectedOrders.length > 1
+                  ? `Active lines are operating for ${selectedOrders.length} combined production orders (${Array.from(new Set(selectedOrders.map((o) => o.poNumber))).join(', ')}) across assigned machines with continuous 10-slot shift scheduling.`
+                  : `Active lines are operating for PO #${selectedOrder?.poNumber || '4502991562'} producing Style "${selectedOrder?.style || 'Loop Elastic Band'}" in Colour "${selectedOrder?.colour || 'Talc 69-09-47 57H1'}" (Size ${selectedOrder?.size || '12'}) across assigned machines with continuous 10-slot shift scheduling.`)}
             </p>
           </div>
 

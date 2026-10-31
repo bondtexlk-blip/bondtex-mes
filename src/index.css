@@ -169,3 +169,36 @@ html.light body,
 .light .shadow-xl {
   box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.03) !important;
 }
+
+/* ======================================================== */
+/* HIGH-VISIBILITY DATE PICKERS (DARK & LIGHT THEMES)      */
+/* ======================================================== */
+input[type="date"] {
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.9);
+  opacity: 0.85;
+  transition: opacity 0.2s ease, transform 0.15s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.light input[type="date"] {
+  color-scheme: light;
+}
+
+.light input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.75;
+}
+
+.light input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}

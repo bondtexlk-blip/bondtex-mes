@@ -162,8 +162,8 @@ export function exportProductionPlanToExcel(plan) {
     });
 
     // Write file and trigger instant download
-    const cleanPo = (plan.poNumber || 'ORDER').replace(/[^a-zA-Z0-9_-]/g, '');
-    const cleanSize = (plan.size || 'ALL').replace(/[^a-zA-Z0-9_-]/g, '');
+    const cleanPo = (plan.poNumber || 'ORDER').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
+    const cleanSize = (plan.size || 'ALL').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 20);
     const fileName = `Bondtex_AI_Schedule_${cleanPo}_Sz${cleanSize}_${plan.startDate}_to_${plan.endDate}.xlsx`;
 
     XLSX.writeFile(wb, fileName);

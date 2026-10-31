@@ -184,6 +184,7 @@ export async function callGeminiApi(prompt, systemInstruction = '', responseMime
  */
 export async function generateProductionPlanWithGemini({
   order,
+  orders = [],
   targetQuantity,
   startDate,
   endDate,
@@ -193,6 +194,10 @@ export async function generateProductionPlanWithGemini({
   customHolidays = [],
   rampUp = 'none', // 'none' | 'capacity_standard' (Day 1: 30%, Day 2: 60%, Day 3+: 100%)
 }) {
+  const orderList = Array.isArray(orders) && orders.length > 0 ? orders : (order ? [order] : []);
+  const primaryOrder = order || orderList[0] || {};
+  const isMultiOrder = orderList.length > 1;
+
   const { workingDays, count: workingDaysCount, totalCalendarDays, offDays } = calculateWorkingDays(
     startDate,
     endDate,
@@ -200,9 +205,15 @@ export async function generateProductionPlanWithGemini({
   );
 
   const effectiveWorkingDays = Math.max(1, workingDaysCount);
-  const plannedQty = Number(targetQuantity) || Number(order.orderQty) || 10000;
+  const totalOrdersQty = orderList.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+  const plannedQty = Number(targetQuantity) || totalOrdersQty || Number(primaryOrder.orderQty) || 10000;
 
-  // Filter machines by order category or default active machines
+  // Filter machines by order categories or default active machines
+  const orderCategories = new Set(orderList.map((o) => o.category).filter(Boolean));
+  if (orderCategories.size === 0 && primaryOrder.category) {
+    orderCategories.add(primaryOrder.category);
+  }
+
   const assignedMachines = (machines && machines.length > 0
     ? machines
     : [
@@ -213,22 +224,28 @@ export async function generateProductionPlanWithGemini({
         { id: 'MCH-IRN', code: 'MCH-IRN', name: 'Iron Machine', type: 'Thermal Curing', category: 'Strap', dailyTargetQty: 2600 },
         { id: 'MCH-DRY', code: 'MCH-DRY', name: 'Dry Cut Machine', type: 'Guillotine Cutter', category: 'Strap', dailyTargetQty: 2600 },
       ]
-  ).filter((m) => m.category === order.category || order.category === 'Loop' || m.id === 'MCH-01');
+  ).filter((m) => orderCategories.has(m.category) || orderCategories.has('Loop') || m.category === 'Loop' || m.id === 'MCH-01');
 
   const eligibleMachines = assignedMachines.length > 0 ? assignedMachines : machines.slice(0, 3);
 
   // Compute baseline daily targets
   const baseDailyTarget = Math.ceil(plannedQty / effectiveWorkingDays);
 
+  const orderSummaryPromptText = isMultiOrder
+    ? `- Multiple Selected Production Orders (${orderList.length} Active PO Lines):
+${orderList.map((o, idx) => `  ${idx + 1}. PO #${o.poNumber} • ${o.colour || 'Std'} • Size ${o.size} (${o.style || 'Loop Elastic'}) — Order Qty: ${(o.orderQty || 0).toLocaleString()} pcs, Bal: ${(o.balanceQty || 0).toLocaleString()} pcs`).join('\n')}
+- Combined Total Target Quantity: ${plannedQty.toLocaleString()} pcs`
+    : `- Order PO Number: ${primaryOrder.poNumber || 'N/A'}
+- Style: ${primaryOrder.style || 'Loop Elastic Band'}
+- Colourway: ${primaryOrder.colour || 'Standard'}
+- Size: ${primaryOrder.size || '10'}
+- Planned Quantity: ${plannedQty.toLocaleString()} pcs`;
+
   // Prompt Gemini for industrial scheduling strategy
   const prompt = `
 Act as an expert Industrial Production Planning Engineer at Bondtex Manufacturing.
-Analyze this production order and schedule:
-- Order PO Number: ${order.poNumber || 'N/A'}
-- Style: ${order.style || 'Loop Elastic Band'}
-- Colourway: ${order.colour || 'Standard'}
-- Size: ${order.size || '10'}
-- Planned Quantity: ${plannedQty.toLocaleString()} pcs
+Analyze the following production orders and schedule parameters:
+${orderSummaryPromptText}
 - Date Range: ${startDate} to ${endDate}
 - Total Calendar Days: ${totalCalendarDays}
 - Working Days (excluding weekends & public holidays): ${effectiveWorkingDays}
@@ -359,15 +376,28 @@ Please return a valid JSON object strictly matching this schema:
   }
 
   // Compile Master Production Plan Object
+  const uniquePoNumbers = Array.from(new Set(orderList.map((o) => o.poNumber).filter(Boolean)));
+  const uniqueColours = Array.from(new Set(orderList.map((o) => o.colour).filter(Boolean)));
+  const uniqueSizes = Array.from(new Set(orderList.map((o) => String(o.size)).filter(Boolean)));
+
   const plan = {
-    id: `PLAN-${Date.now()}-${order.poNumber || 'PO'}`,
+    id: `PLAN-${Date.now()}-${isMultiOrder ? `MULTI-${orderList.length}` : (primaryOrder.poNumber || 'PO')}`,
     createdAt: new Date().toISOString(),
-    poNumber: order.poNumber,
-    orderId: order.id,
-    colour: order.colour,
-    size: order.size,
-    style: order.style,
-    orderQty: order.orderQty,
+    isMultiOrder,
+    orderCount: orderList.length,
+    orders: orderList,
+    selectedOrderIds: orderList.map((o) => o.id),
+    poNumber: isMultiOrder ? uniquePoNumbers.join(', ') : (primaryOrder.poNumber || 'N/A'),
+    poNumbers: uniquePoNumbers,
+    orderId: primaryOrder.id || (orderList[0]?.id || ''),
+    colour: isMultiOrder
+      ? `${orderList.length} Order Items (${uniqueColours.slice(0, 2).join(', ')}${uniqueColours.length > 2 ? '...' : ''})`
+      : (primaryOrder.colour || 'Standard'),
+    size: isMultiOrder ? uniqueSizes.join(', ') : (primaryOrder.size || '10'),
+    style: isMultiOrder
+      ? (orderList.length === 1 ? orderList[0].style : `${orderList.length} Orders Batch Plan`)
+      : (primaryOrder.style || 'Loop Elastic Band'),
+    orderQty: isMultiOrder ? totalOrdersQty : (primaryOrder.orderQty || plannedQty),
     targetQty: plannedQty,
     startDate,
     endDate,
@@ -381,7 +411,7 @@ Please return a valid JSON object strictly matching this schema:
       aiResponse?.aiStrategySummary ||
       `Optimized line schedule distributing ${plannedQty.toLocaleString()} pcs across ${eligibleMachines.length} machines over ${effectiveWorkingDays} working days (${Math.round(
         plannedQty / effectiveWorkingDays
-      ).toLocaleString()} pcs/day avg).`,
+      ).toLocaleString()} pcs/day avg)${isMultiOrder ? ` across ${orderList.length} combined production orders` : ''}.`,
     bottleneckRisk: aiResponse?.bottleneckRisk || 'Low',
     bottleneckNotes:
       aiResponse?.bottleneckNotes ||
@@ -504,9 +534,28 @@ export async function generateDailyAiAnalysisWithGemini({
   const dayTargetPcs =
     todaySchedule.totalDailyTarget ||
     Math.ceil(
-      (plan?.targetQuantity || order?.balanceQty || 5000) /
+      (plan?.targetQuantity || plan?.targetQty || order?.balanceQty || 5000) /
         Math.max(1, plan?.workingDaysCount || 1)
     );
+
+  const ordersList = plan?.orders || (order?.selectedOrders || (order ? [order] : []));
+  const isMulti = ordersList.length > 1;
+
+  const orderSectionPrompt = isMulti
+    ? `[PRODUCTION ORDER DETAILS - ${ordersList.length} ACTIVE BATCH ORDERS]
+${ordersList.map((o, i) => `${i + 1}. PO #${o.poNumber} • ${o.colour} (Size ${o.size}) - Style: ${o.style || 'Loop Elastic'} - Qty: ${Number(o.orderQty || 0).toLocaleString()} pcs (Bal: ${Number(o.balanceQty || 0).toLocaleString()} pcs)`).join('\n')}
+- Combined Target Qty: ${(plan?.targetQty || order?.orderQty || 0).toLocaleString()} pcs
+- Day's Production Target: ${dayTargetPcs.toLocaleString()} pcs
+- Assigned Machines: ${assignedMachines.map((m) => `${m.name} (${m.code})`).join(', ')}`
+    : `[PRODUCTION ORDER DETAILS]
+- Order PO Number: ${order?.poNumber || plan?.orderPoNumber || '4502991562'}
+- Style: ${order?.style || plan?.orderStyle || 'Loop Elastic Band'}
+- Colourway: ${order?.colour || plan?.orderColour || 'Talc 69-09-47 57H1'}
+- Size: ${order?.size || plan?.orderSize || '12'}
+- Total Order Qty: ${(order?.orderQty || plan?.totalQuantity || 0).toLocaleString()} pcs
+- Order Balance Qty: ${(order?.balanceQty || 0).toLocaleString()} pcs
+- Day's Production Target: ${dayTargetPcs.toLocaleString()} pcs
+- Assigned Machines: ${assignedMachines.map((m) => `${m.name} (${m.code})`).join(', ')}`;
 
   const materialsText =
     materials && materials.length > 0
@@ -522,15 +571,7 @@ export async function generateDailyAiAnalysisWithGemini({
 Act as an Industrial Production Lead & Materials Planner at Bondtex Manufacturing.
 Perform an in-depth Daily Production and Material Usage Analysis for today (${targetDate}):
 
-[PRODUCTION ORDER DETAILS]
-- Order PO Number: ${order?.poNumber || plan?.orderPoNumber || '4502991562'}
-- Style: ${order?.style || plan?.orderStyle || 'Loop Elastic Band'}
-- Colourway: ${order?.colour || plan?.orderColour || 'Talc 69-09-47 57H1'}
-- Size: ${order?.size || plan?.orderSize || '12'}
-- Total Order Qty: ${(order?.orderQty || plan?.totalQuantity || 0).toLocaleString()} pcs
-- Order Balance Qty: ${(order?.balanceQty || 0).toLocaleString()} pcs
-- Day's Production Target: ${dayTargetPcs.toLocaleString()} pcs
-- Assigned Machines: ${assignedMachines.map((m) => `${m.name} (${m.code})`).join(', ')}
+${orderSectionPrompt}
 
 [MANUALLY ENTERED RAW MATERIAL INVENTORY]
 ${materialsText}
