@@ -75,6 +75,30 @@ router.post('/orders', (req, res) => {
   }
 });
 
+// 6B. Update Existing Order
+router.put('/orders/:id', (req, res) => {
+  try {
+    const updated = db.updateOrder(req.params.id, req.body);
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    res.json({ success: true, data: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 6C. Bulk Create or Update Orders (Excel / CSV import)
+router.post('/orders/bulk', (req, res) => {
+  try {
+    const ordersList = req.body.orders || req.body;
+    const result = db.bulkCreateOrUpdateOrders(ordersList);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // 7. Add Daily Log (Plan vs Actual updates)
 router.post('/orders/:id/logs', (req, res) => {
   try {

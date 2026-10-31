@@ -512,6 +512,7 @@ export default function App() {
                 onLogProduction={(order) => setSelectedOrderForLog(order)}
                 onPrintBarcode={(order) => setSelectedOrderForLabel(order)}
                 onOpenBarcodeScanner={() => setBarcodeScannerOpen(true)}
+                onShowToast={showToast}
                 metadata={metadata}
               />
             ) : activeView === 'planning' ? (

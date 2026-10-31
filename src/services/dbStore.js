@@ -597,31 +597,192 @@ class ClientDatabaseStore {
 
   createOrder(orderData) {
     const nextIdx = this.orders.length + 1;
+    const ordQty = Number(orderData.orderQty) || 0;
+    const prodQty = Number(orderData.productionQty) || 0;
+    const delivQty = Number(orderData.deliveryQty) || 0;
+    const floorQty = orderData.floorProductionQty !== undefined ? Number(orderData.floorProductionQty) : prodQty;
+    const balQty = orderData.balanceQty !== undefined ? Number(orderData.balanceQty) : (ordQty - delivQty);
+
+    let initialStatus = orderData.status || 'On Track';
+    if (balQty <= 0) initialStatus = 'Completed';
+    else if (delivQty >= ordQty * 0.9) initialStatus = 'Ahead';
+
     const newOrder = {
-      id: `ORD-${String(nextIdx).padStart(3, '0')}`,
-      poNumber: orderData.poNumber || `450299${1500 + nextIdx}`,
-      rmMaterial: orderData.rmMaterial || '200150259454A2',
-      colour: orderData.colour || 'Standard Black',
-      size: String(orderData.size || '10'),
-      category: orderData.category || 'Loop',
-      style: orderData.style || 'Loop Elastic Band',
-      styleCode: orderData.styleCode || 'LP-NEW',
+      id: orderData.id || `ORD-${String(nextIdx).padStart(3, '0')}`,
+      poNumber: String(orderData.poNumber || `450299${1500 + nextIdx}`).trim(),
+      rmMaterial: String(orderData.rmMaterial || '200150259454A2').trim(),
+      colour: String(orderData.colour || 'Standard Black').trim(),
+      size: String(orderData.size || '10').trim(),
+      category: String(orderData.category || 'Loop').trim(),
+      style: String(orderData.style || 'Loop Elastic Band').trim(),
+      styleCode: orderData.styleCode || (orderData.style ? (orderData.style.split(' - ')[1] || 'LP-NEW') : 'LP-NEW'),
       barcode: `BTX-${orderData.poNumber || nextIdx}-${orderData.size || '10'}`,
-      orderQty: Number(orderData.orderQty) || 10000,
-      productionQty: 0,
-      deliveryQty: 0,
-      balanceQty: Number(orderData.orderQty) || 10000,
-      deliveryBalanceQty: Number(orderData.orderQty) || 10000,
-      startDate: new Date().toISOString().split('T')[0],
-      targetDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-      status: 'Scheduled',
+      orderQty: ordQty,
+      floorProductionQty: floorQty,
+      productionQty: prodQty,
+      deliveryQty: delivQty,
+      balanceQty: balQty,
+      deliveryBalanceQty: balQty,
+      startDate: orderData.startDate || new Date().toISOString().split('T')[0],
+      targetDate: orderData.targetDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+      status: initialStatus,
       priority: orderData.priority || 'Normal',
-      dailyLogs: [],
+      dailyLogs: orderData.dailyLogs || [],
+      createdAt: new Date().toISOString(),
     };
     this.orders.unshift(newOrder);
     this.save();
     firestoreSync.saveDocument('orders', newOrder.id, newOrder);
     return newOrder;
+  }
+
+  updateOrder(id, updates = {}) {
+    const order = this.getOrderById(id);
+    if (!order) return null;
+
+    if (updates.poNumber !== undefined) order.poNumber = String(updates.poNumber).trim();
+    if (updates.rmMaterial !== undefined) order.rmMaterial = String(updates.rmMaterial).trim();
+    if (updates.colour !== undefined) order.colour = String(updates.colour).trim();
+    if (updates.size !== undefined) order.size = String(updates.size).trim();
+    if (updates.category !== undefined) order.category = String(updates.category).trim();
+    if (updates.style !== undefined) order.style = String(updates.style).trim();
+    if (updates.styleCode !== undefined) order.styleCode = String(updates.styleCode).trim();
+    if (updates.priority !== undefined) order.priority = String(updates.priority).trim();
+    if (updates.startDate !== undefined) order.startDate = updates.startDate;
+    if (updates.targetDate !== undefined) order.targetDate = updates.targetDate;
+
+    if (updates.orderQty !== undefined) order.orderQty = Number(updates.orderQty) || 0;
+    if (updates.floorProductionQty !== undefined) order.floorProductionQty = Number(updates.floorProductionQty) || 0;
+    if (updates.productionQty !== undefined) order.productionQty = Number(updates.productionQty) || 0;
+    if (updates.deliveryQty !== undefined) order.deliveryQty = Number(updates.deliveryQty) || 0;
+
+    if (updates.balanceQty !== undefined && updates.balanceQty !== '') {
+      order.balanceQty = Number(updates.balanceQty);
+    } else {
+      order.balanceQty = order.orderQty - order.deliveryQty;
+    }
+    order.deliveryBalanceQty = order.balanceQty;
+
+    // Recalculate status or accept custom status
+    if (updates.status !== undefined && updates.status) {
+      order.status = updates.status;
+    } else if (order.balanceQty <= 0) {
+      order.status = 'Completed';
+    } else if (order.deliveryQty >= order.orderQty * 0.9 || order.productionQty >= order.orderQty * 0.9) {
+      order.status = 'Ahead';
+    }
+
+    order.barcode = `BTX-${order.poNumber}-${order.size}`;
+    order.updatedAt = new Date().toISOString();
+
+    this.save();
+    firestoreSync.saveDocument('orders', order.id, order);
+    return order;
+  }
+
+  bulkCreateOrUpdateOrders(ordersList = []) {
+    if (!Array.isArray(ordersList) || ordersList.length === 0) {
+      return { success: false, message: 'No orders provided', count: 0 };
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const processedOrders = [];
+
+    ordersList.forEach((raw) => {
+      if (!raw || (!raw.poNumber && !raw.id)) return;
+
+      const poClean = String(raw.poNumber || '').trim();
+      const sizeClean = String(raw.size || '').trim();
+
+      // Check if existing order matches by ID or (PO number + Size)
+      const existing = (raw.id && this.getOrderById(raw.id)) ||
+        this.orders.find((o) => o.poNumber === poClean && String(o.size) === sizeClean) ||
+        (poClean && !sizeClean ? this.orders.find((o) => o.poNumber === poClean) : null);
+
+      if (existing) {
+        if (raw.rmMaterial) existing.rmMaterial = String(raw.rmMaterial).trim();
+        if (raw.colour) existing.colour = String(raw.colour).trim();
+        if (raw.size) existing.size = sizeClean;
+        if (raw.category) existing.category = String(raw.category).trim();
+        if (raw.style) existing.style = String(raw.style).trim();
+        if (raw.orderQty !== undefined && raw.orderQty !== '') existing.orderQty = Number(raw.orderQty) || 0;
+        if (raw.floorProductionQty !== undefined && raw.floorProductionQty !== '') existing.floorProductionQty = Number(raw.floorProductionQty) || 0;
+        if (raw.productionQty !== undefined && raw.productionQty !== '') existing.productionQty = Number(raw.productionQty) || 0;
+        if (raw.deliveryQty !== undefined && raw.deliveryQty !== '') existing.deliveryQty = Number(raw.deliveryQty) || 0;
+        if (raw.balanceQty !== undefined && raw.balanceQty !== '') {
+          existing.balanceQty = Number(raw.balanceQty);
+        } else {
+          existing.balanceQty = existing.orderQty - existing.deliveryQty;
+        }
+        existing.deliveryBalanceQty = existing.balanceQty;
+
+        if (raw.status) {
+          existing.status = String(raw.status).trim();
+        } else if (existing.balanceQty <= 0) {
+          existing.status = 'Completed';
+        } else if (existing.deliveryQty >= existing.orderQty * 0.9) {
+          existing.status = 'Ahead';
+        }
+
+        existing.barcode = `BTX-${existing.poNumber}-${existing.size}`;
+        existing.updatedAt = new Date().toISOString();
+        updatedCount++;
+        processedOrders.push(existing);
+        firestoreSync.saveDocument('orders', existing.id, existing);
+      } else {
+        const nextIdx = this.orders.length + 1;
+        const ordQty = Number(raw.orderQty) || 0;
+        const floorQty = raw.floorProductionQty !== undefined && raw.floorProductionQty !== '' ? Number(raw.floorProductionQty) || 0 : (Number(raw.productionQty) || 0);
+        const prodQty = Number(raw.productionQty) || 0;
+        const delivQty = Number(raw.deliveryQty) || 0;
+        const balQty = raw.balanceQty !== undefined && raw.balanceQty !== '' ? Number(raw.balanceQty) : (ordQty - delivQty);
+
+        let initialStatus = 'On Track';
+        if (raw.status) initialStatus = String(raw.status).trim();
+        else if (balQty <= 0) initialStatus = 'Completed';
+        else if (delivQty >= ordQty * 0.9) initialStatus = 'Ahead';
+
+        const newOrder = {
+          id: raw.id || `ORD-${String(nextIdx).padStart(3, '0')}`,
+          poNumber: poClean || `450299${1500 + nextIdx}`,
+          rmMaterial: raw.rmMaterial || '200150259454A2',
+          colour: raw.colour || 'Standard',
+          size: sizeClean || '10',
+          category: raw.category || 'Loop',
+          style: raw.style || 'Loop Elastic Band',
+          styleCode: raw.styleCode || (raw.style ? (raw.style.split(' - ')[1] || 'LP-NEW') : 'LP-NEW'),
+          barcode: `BTX-${poClean || nextIdx}-${sizeClean || '10'}`,
+          orderQty: ordQty,
+          floorProductionQty: floorQty,
+          productionQty: prodQty,
+          deliveryQty: delivQty,
+          balanceQty: balQty,
+          deliveryBalanceQty: balQty,
+          startDate: raw.startDate || new Date().toISOString().split('T')[0],
+          targetDate: raw.targetDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+          status: initialStatus,
+          priority: raw.priority || 'Normal',
+          dailyLogs: [],
+          createdAt: new Date().toISOString(),
+        };
+
+        this.orders.unshift(newOrder);
+        createdCount++;
+        processedOrders.push(newOrder);
+        firestoreSync.saveDocument('orders', newOrder.id, newOrder);
+      }
+    });
+
+    this.ensureOrderCalculations();
+    this.save();
+    return {
+      success: true,
+      totalProcessed: processedOrders.length,
+      createdCount,
+      updatedCount,
+      orders: processedOrders,
+    };
   }
 
   addDailyLog(orderId, logData) {

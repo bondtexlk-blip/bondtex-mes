@@ -23,6 +23,7 @@ export default function OrderDrillDown({
   onLogProduction,
   onPrintBarcode,
   onOpenBarcodeScanner,
+  onShowToast,
   metadata,
 }) {
   const [filters, setFilters] = useState({
@@ -201,6 +202,8 @@ export default function OrderDrillDown({
         onLogProduction={onLogProduction}
         onPrintBarcode={onPrintBarcode}
         onExportCsv={handleExportCsv}
+        onRefreshOrders={fetchOrders}
+        onShowToast={onShowToast}
         sortBy={sortBy}
         sortOrder={sortOrder}
         onSort={handleSort}

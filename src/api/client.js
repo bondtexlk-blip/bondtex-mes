@@ -89,6 +89,31 @@ export const api = {
     return { success: true, data: newOrder };
   },
 
+  // 6B. Update existing order
+  updateOrder: async (id, updates) => {
+    const remote = await safeFetchJson(`${BASE_URL}/orders/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (remote && remote.success) return remote;
+    const updated = dbStore.updateOrder(id, updates);
+    if (!updated) throw new Error('Order not found');
+    return { success: true, data: updated };
+  },
+
+  // 6C. Bulk create or update orders (Excel / CSV upload)
+  bulkCreateOrUpdateOrders: async (ordersList) => {
+    const remote = await safeFetchJson(`${BASE_URL}/orders/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: ordersList }),
+    });
+    if (remote && remote.success) return remote;
+    const result = dbStore.bulkCreateOrUpdateOrders(ordersList);
+    return result;
+  },
+
   // 7. Add daily log
   addDailyLog: async (orderId, logData) => {
     const remote = await safeFetchJson(`${BASE_URL}/orders/${encodeURIComponent(orderId)}/logs`, {
