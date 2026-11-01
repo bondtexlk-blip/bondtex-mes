@@ -18,6 +18,8 @@ import HourlyProductionDashboard from './components/HourlyProductionDashboard';
 import DeliveryReceivedDashboard from './components/DeliveryReceivedDashboard';
 import MaterialCalculationDashboard from './components/MaterialCalculationDashboard';
 import ProductionPlanningDashboard from './components/ProductionPlanningDashboard';
+import ProductionInventoryDashboard from './components/ProductionInventoryDashboard';
+import MaterialRequestForm from './components/MaterialRequestForm';
 import ErrorBoundary from './components/ErrorBoundary';
 import { api } from './api/client';
 import { checkAndRunAutomated24hBackup } from './services/backupService';
@@ -38,6 +40,7 @@ import {
   Calendar,
   Clock,
   Calculator,
+  Warehouse,
 } from 'lucide-react';
 import { formatNumber } from './utils/formatters';
 
@@ -93,6 +96,8 @@ export default function App() {
         const params = new URLSearchParams(window.location.search);
         const viewParam = params.get('view');
         if (viewParam === 'worker') return 'worker';
+        if (viewParam === 'material-request' || viewParam === 'request') return 'material-request';
+        if (viewParam === 'inventory' || viewParam === 'store') return 'inventory';
         if (viewParam === 'daily-production' || viewParam === 'daily') return 'daily-production';
         if (viewParam === 'hourly-production' || viewParam === 'hourly') return 'hourly-production';
         if (viewParam === 'delivery-received' || viewParam === 'delivery') return 'delivery-received';
@@ -158,9 +163,15 @@ export default function App() {
         setActiveView('worker');
         setIsRestrictedWorkerMode(true);
         if (machineParam) setWorkerMachineId(machineParam);
+      } else if (viewParam === 'material-request' || viewParam === 'request') {
+        // Triggered by active floor material request QR scan
+        setActiveView('material-request');
+        setIsRestrictedWorkerMode(false);
       } else {
         setIsRestrictedWorkerMode(false);
-        if (viewParam === 'daily-production' || viewParam === 'daily') {
+        if (viewParam === 'inventory' || viewParam === 'store') {
+          setActiveView('inventory');
+        } else if (viewParam === 'daily-production' || viewParam === 'daily') {
           setActiveView('daily-production');
         } else if (viewParam === 'hourly-production' || viewParam === 'hourly') {
           setActiveView('hourly-production');
@@ -328,6 +339,50 @@ export default function App() {
     );
   }
 
+  // Dedicated Fullscreen QR Material Request Form (Opened when staff scan the Material Request QR)
+  if (activeView === 'material-request') {
+    return (
+      <div className="fixed inset-0 w-screen h-screen bg-[#070b14] text-slate-100 flex flex-col overflow-y-auto z-50 selection:bg-blue-600 selection:text-white">
+        {/* Toast Notification */}
+        {notification && (
+          <div className="fixed top-4 right-4 z-50 animate-bounce">
+            <div
+              className={`px-4 py-2.5 rounded-xl shadow-2xl border text-xs font-semibold flex items-center gap-2 ${
+                notification.type === 'error'
+                  ? 'bg-rose-950/90 text-rose-300 border-rose-500/50'
+                  : 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>{notification.message}</span>
+            </div>
+          </div>
+        )}
+
+        <ErrorBoundary
+          onReset={() => {
+            setActiveView('dashboard');
+            try {
+              window.history.replaceState({}, '', window.location.pathname);
+            } catch {}
+          }}
+        >
+          <MaterialRequestForm
+            onBackToDashboard={() => {
+              setActiveView('inventory');
+              try {
+                window.history.replaceState({}, '', window.location.pathname);
+              } catch {}
+            }}
+            onShowToast={showToast}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+          />
+        </ErrorBoundary>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0b1120] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Toast Notification */}
@@ -431,6 +486,14 @@ export default function App() {
                       </button>
 
                       <button
+                        onClick={() => setActiveView('inventory')}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs transition shadow-lg shadow-teal-600/30 active:scale-95"
+                      >
+                        <Warehouse className="w-4 h-4" />
+                        <span>Production Inventory</span>
+                      </button>
+
+                      <button
                         onClick={() => setActiveView('admin')}
                         className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700/80 font-semibold text-xs transition"
                       >
@@ -530,6 +593,13 @@ export default function App() {
               <MaterialCalculationDashboard
                 onBackToDashboard={() => setActiveView('dashboard')}
                 onShowToast={showToast}
+                theme={theme}
+              />
+            ) : activeView === 'inventory' ? (
+              /* 3D. PRODUCTION INVENTORY & QR APPROVAL WORKFLOW */
+              <ProductionInventoryDashboard
+                onShowToast={showToast}
+                onOpenRequestForm={() => setActiveView('material-request')}
                 theme={theme}
               />
             ) : activeView === 'admin' ? (

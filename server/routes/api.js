@@ -526,4 +526,109 @@ router.delete('/workspaces/:id', (req, res) => {
   }
 });
 
+// ==========================================================
+// PRODUCTION INVENTORY & MATERIAL REQUEST ROUTER ENDPOINTS
+// ==========================================================
+
+// 1. Get Inventory Items & stock summary
+router.get('/inventory', (req, res) => {
+  try {
+    const result = db.getInventoryItems(req.query);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 2. Get single Inventory Item
+router.get('/inventory/:id', (req, res) => {
+  try {
+    const item = db.getInventoryItemById(req.params.id);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+    res.json({ success: true, data: item });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 3. Add new inventory item
+router.post('/inventory', (req, res) => {
+  try {
+    const result = db.addInventoryItem(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 4. Update inventory item details
+router.put('/inventory/:id', (req, res) => {
+  try {
+    const result = db.updateInventoryItem(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 5. Adjust item stock count
+router.post('/inventory/:id/adjust', (req, res) => {
+  try {
+    const result = db.adjustInventoryStock(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 6. Get Material Requests
+router.get('/material-requests', (req, res) => {
+  try {
+    const result = db.getMaterialRequests(req.query);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// 7. Submit Material Request (QR Floor Form) - strictly does NOT deduct stock
+router.post('/material-requests', (req, res) => {
+  try {
+    const result = db.createMaterialRequest(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 8. Approve Material Request - strictly deducts stock here
+router.post('/material-requests/:id/approve', (req, res) => {
+  try {
+    const result = db.approveMaterialRequest(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 9. Reject Material Request - does NOT deduct stock
+router.post('/material-requests/:id/reject', (req, res) => {
+  try {
+    const result = db.rejectMaterialRequest(req.params.id, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// 10. Get Inventory Transaction Logs
+router.get('/inventory-logs', (req, res) => {
+  try {
+    const result = db.getInventoryLogs(req.query);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;

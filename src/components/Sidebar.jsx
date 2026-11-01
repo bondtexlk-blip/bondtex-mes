@@ -20,6 +20,7 @@ import {
   Calculator,
   Cpu,
   Sparkles,
+  Warehouse,
   X,
 } from 'lucide-react';
 
@@ -222,6 +223,28 @@ export default function Sidebar({
                 </div>
                 <span className="flex items-center gap-1 text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800/50 px-1.5 py-0.5 rounded font-mono">
                   Yield
+                </span>
+              </button>
+
+              {/* Production Inventory Page / Tab (Directly below Material Calculation) */}
+              <button
+                onClick={() => {
+                  setActiveView('inventory');
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
+                  activeView === 'inventory'
+                    ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 shadow-sm'
+                    : 'text-slate-300 hover:bg-slate-800/80 hover:text-slate-100'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Warehouse className="w-4 h-4 text-emerald-400" />
+                  <span>Production Inventory</span>
+                </div>
+                <span className="flex items-center gap-1 text-[10px] bg-cyan-950 text-cyan-400 border border-cyan-800/50 px-1.5 py-0.5 rounded font-mono">
+                  <QrCode className="w-2.5 h-2.5" />
+                  QR Store
                 </span>
               </button>
 

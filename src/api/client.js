@@ -458,6 +458,105 @@ export const api = {
     if (remote && remote.success) return remote;
     return dbStore.deleteOrderWorkspace(id);
   },
+
+  // 24. Production Inventory & QR Material Request Workflow APIs
+  getInventoryItems: async (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') params.append(key, val);
+    });
+    const remote = await safeFetchJson(`${BASE_URL}/inventory?${params.toString()}`);
+    if (remote && remote.success) return remote;
+    return { success: true, ...dbStore.getInventoryItems(filters) };
+  },
+
+  getInventoryItemById: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`);
+    if (remote && remote.success) return remote;
+    const item = dbStore.getInventoryItemById(id);
+    if (!item) throw new Error('Inventory item not found');
+    return { success: true, data: item };
+  },
+
+  addInventoryItem: async (data) => {
+    const remote = await safeFetchJson(`${BASE_URL}/inventory`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.addInventoryItem(data);
+  },
+
+  updateInventoryItem: async (id, updates) => {
+    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.updateInventoryItem(id, updates);
+  },
+
+  adjustInventoryStock: async (id, data) => {
+    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}/adjust`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.adjustInventoryStock(id, data);
+  },
+
+  getMaterialRequests: async (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') params.append(key, val);
+    });
+    const remote = await safeFetchJson(`${BASE_URL}/material-requests?${params.toString()}`);
+    if (remote && remote.success) return remote;
+    return { success: true, ...dbStore.getMaterialRequests(filters) };
+  },
+
+  createMaterialRequest: async (data) => {
+    const remote = await safeFetchJson(`${BASE_URL}/material-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.createMaterialRequest(data);
+  },
+
+  approveMaterialRequest: async (id, data = {}) => {
+    const remote = await safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.approveMaterialRequest(id, data);
+  },
+
+  rejectMaterialRequest: async (id, data = {}) => {
+    const remote = await safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.rejectMaterialRequest(id, data);
+  },
+
+  getInventoryLogs: async (filters = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, val]) => {
+      if (val !== undefined && val !== null && val !== '') params.append(key, val);
+    });
+    const remote = await safeFetchJson(`${BASE_URL}/inventory-logs?${params.toString()}`);
+    if (remote && remote.success) return remote;
+    return { success: true, ...dbStore.getInventoryLogs(filters) };
+  },
 };
 
 export default api;

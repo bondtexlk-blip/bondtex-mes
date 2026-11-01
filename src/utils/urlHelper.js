@@ -42,3 +42,16 @@ export const buildMachinePortalUrl = (machineCodeOrId, customHost) => {
   const code = encodeURIComponent(machineCodeOrId || 'MCH-01');
   return `${host}/?view=worker&machine=${code}`;
 };
+
+/**
+ * Formats a full mobile-friendly QR material request scan URL.
+ * When scanned by production operators, opens the 2-Hour Material Request Form directly.
+ * @param {string} [customHost] - Optional host override
+ * @param {string} [itemId] - Optional pre-selected item
+ * @returns {string} - Full executable URL
+ */
+export const buildMaterialRequestUrl = (customHost, itemId) => {
+  const host = resolveProductionHost(customHost);
+  const itemParam = itemId ? `&item=${encodeURIComponent(itemId)}` : '';
+  return `${host}/?view=material-request${itemParam}`;
+};

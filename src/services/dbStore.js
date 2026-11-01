@@ -8,6 +8,9 @@ import {
   initialOrders,
   initialProductionLogs,
   initialDeliveryReceivedLogs,
+  initialInventoryItems,
+  initialMaterialRequests,
+  initialInventoryLogs,
 } from '../data/seedData.js';
 import { firestoreSync, firebaseRealtime } from '../firebase.js';
 
@@ -36,6 +39,9 @@ class ClientDatabaseStore {
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
     this.productionPlans = [];
+    this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
+    this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
+    this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
     this.activeWorkspace = { ...DEFAULT_WORKSPACE };
     this.workspaces = [];
     this.subscribers = [];
@@ -92,6 +98,9 @@ class ClientDatabaseStore {
       this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
       this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
       this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
+      if (Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length) this.inventoryItems = cloudState.inventoryItems;
+      if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
+      if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
       if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
       if (Array.isArray(cloudState.machines)) this.machines = cloudState.machines;
       if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
@@ -114,6 +123,9 @@ class ClientDatabaseStore {
             deliveryReceivedLogs: this.deliveryReceivedLogs,
             outsourceConsignments: this.outsourceConsignments || [],
             productionPlans: this.productionPlans || [],
+            inventoryItems: this.inventoryItems || [],
+            materialRequests: this.materialRequests || [],
+            inventoryLogs: this.inventoryLogs || [],
             lastSaved: this.lastSaved,
           });
           localStorage.setItem(STORAGE_KEY, payloadStr);
@@ -204,6 +216,15 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.productionPlans)) {
       this.productionPlans = cloudState.productionPlans;
     }
+    if (Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length) {
+      this.inventoryItems = cloudState.inventoryItems;
+    }
+    if (Array.isArray(cloudState.materialRequests)) {
+      this.materialRequests = cloudState.materialRequests;
+    }
+    if (Array.isArray(cloudState.inventoryLogs)) {
+      this.inventoryLogs = cloudState.inventoryLogs;
+    }
 
     this.ensureSpecialMachines();
     this.ensureOrderCalculations();
@@ -220,6 +241,9 @@ class ClientDatabaseStore {
           deliveryReceivedLogs: this.deliveryReceivedLogs,
           outsourceConsignments: this.outsourceConsignments || [],
           productionPlans: this.productionPlans || [],
+          inventoryItems: this.inventoryItems || [],
+          materialRequests: this.materialRequests || [],
+          inventoryLogs: this.inventoryLogs || [],
           lastSaved: this.lastSaved,
         });
         localStorage.setItem(STORAGE_KEY, payloadStr);
@@ -285,6 +309,15 @@ class ClientDatabaseStore {
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) && parsed.deliveryReceivedLogs.length ? parsed.deliveryReceivedLogs : JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
+        this.inventoryItems = Array.isArray(parsed.inventoryItems) && parsed.inventoryItems.length
+          ? parsed.inventoryItems
+          : JSON.parse(JSON.stringify(initialInventoryItems));
+        this.materialRequests = Array.isArray(parsed.materialRequests)
+          ? parsed.materialRequests
+          : JSON.parse(JSON.stringify(initialMaterialRequests));
+        this.inventoryLogs = Array.isArray(parsed.inventoryLogs)
+          ? parsed.inventoryLogs
+          : JSON.parse(JSON.stringify(initialInventoryLogs));
         this.lastSaved = parsed.lastSaved || null;
 
         // Restore Workspace
@@ -399,6 +432,9 @@ class ClientDatabaseStore {
         deliveryReceivedLogs: this.deliveryReceivedLogs,
         outsourceConsignments: this.outsourceConsignments || [],
         productionPlans: this.productionPlans || [],
+        inventoryItems: this.inventoryItems || [],
+        materialRequests: this.materialRequests || [],
+        inventoryLogs: this.inventoryLogs || [],
         lastSaved: nowIso,
         lastUpdated: nowIso,
         lastDeviceId: this.deviceId,
@@ -685,6 +721,9 @@ class ClientDatabaseStore {
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
     this.productionPlans = [];
+    this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
+    this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
+    this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
     this.ensureSpecialMachines();
     this.save(broadcastToCloud);
     return { success: true, count: this.orders.length };
@@ -2698,6 +2737,400 @@ class ClientDatabaseStore {
       remainingQty,
       historicalAverage,
       logs: dayLogs,
+    };
+  }
+
+  // =========================================================================
+  // PRODUCTION INVENTORY & STOREKEEPER APPROVAL WORKFLOW ENGINE
+  // =========================================================================
+
+  getInventoryItems(filters = {}) {
+    let items = Array.isArray(this.inventoryItems) ? [...this.inventoryItems] : [];
+
+    if (filters.category && filters.category !== 'All') {
+      const catLower = filters.category.toLowerCase();
+      items = items.filter((i) => (i.category || '').toLowerCase() === catLower);
+    }
+
+    if (filters.search) {
+      const s = filters.search.toLowerCase().trim();
+      items = items.filter(
+        (i) =>
+          (i.name || '').toLowerCase().includes(s) ||
+          (i.code || '').toLowerCase().includes(s) ||
+          (i.category || '').toLowerCase().includes(s) ||
+          (i.location || '').toLowerCase().includes(s) ||
+          (i.supplier || '').toLowerCase().includes(s)
+      );
+    }
+
+    if (filters.status) {
+      if (filters.status === 'Low') {
+        items = items.filter((i) => i.currentStock > 0 && i.currentStock <= i.reorderLevel);
+      } else if (filters.status === 'Out') {
+        items = items.filter((i) => i.currentStock <= 0);
+      } else if (filters.status === 'InStock') {
+        items = items.filter((i) => i.currentStock > i.reorderLevel);
+      }
+    }
+
+    const allItems = this.inventoryItems || [];
+    const pendingRequests = (this.materialRequests || []).filter((r) => r.status === 'Pending');
+
+    const summary = {
+      totalItems: allItems.length,
+      inStockCount: allItems.filter((i) => i.currentStock > i.reorderLevel).length,
+      lowStockCount: allItems.filter((i) => i.currentStock > 0 && i.currentStock <= i.reorderLevel).length,
+      outOfStockCount: allItems.filter((i) => i.currentStock <= 0).length,
+      totalPendingRequests: pendingRequests.length,
+    };
+
+    return {
+      items,
+      summary,
+      totalCount: items.length,
+    };
+  }
+
+  getInventoryItemById(id) {
+    return (this.inventoryItems || []).find((i) => i.id === id || i.code === id) || null;
+  }
+
+  addInventoryItem(itemData) {
+    if (!itemData || !itemData.name) {
+      throw new Error('Material name is required');
+    }
+    if (!this.inventoryItems) this.inventoryItems = [];
+
+    const newId = `INV-${String(this.inventoryItems.length + 1).padStart(3, '0')}`;
+    const code = itemData.code?.trim() || `RM-${(itemData.category || 'GEN').slice(0, 2).toUpperCase()}-${String(Date.now()).slice(-4)}`;
+    const currentStock = Math.max(0, Number(itemData.currentStock) || 0);
+    const reorderLevel = Math.max(0, Number(itemData.reorderLevel) || 0);
+
+    const newItem = {
+      id: newId,
+      code,
+      name: itemData.name.trim(),
+      category: itemData.category || 'Other',
+      unit: itemData.unit || 'Units',
+      currentStock,
+      reorderLevel,
+      location: itemData.location?.trim() || 'Warehouse Main Bay',
+      supplier: itemData.supplier?.trim() || 'Bondtex Store Supplier',
+      notes: itemData.notes?.trim() || '',
+      lastUpdated: new Date().toISOString(),
+    };
+
+    this.inventoryItems.unshift(newItem);
+
+    // Initial audit log
+    if (currentStock > 0) {
+      if (!this.inventoryLogs) this.inventoryLogs = [];
+      this.inventoryLogs.unshift({
+        id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        type: 'Item_Created',
+        itemId: newItem.id,
+        itemCode: newItem.code,
+        itemName: newItem.name,
+        qtyChange: currentStock,
+        balanceBefore: 0,
+        balanceAfter: currentStock,
+        unit: newItem.unit,
+        referenceId: 'INIT-STOCK',
+        performedBy: itemData.createdBy || 'Storekeeper',
+        department: 'Store Warehouse',
+        notes: `Initial registration of ${newItem.name} with ${currentStock} ${newItem.unit}`,
+      });
+    }
+
+    this.save();
+    return { success: true, item: newItem };
+  }
+
+  updateInventoryItem(id, updates) {
+    const item = (this.inventoryItems || []).find((i) => i.id === id || i.code === id);
+    if (!item) throw new Error(`Inventory item ${id} not found`);
+
+    if (updates.name !== undefined) item.name = updates.name.trim();
+    if (updates.code !== undefined) item.code = updates.code.trim();
+    if (updates.category !== undefined) item.category = updates.category;
+    if (updates.unit !== undefined) item.unit = updates.unit;
+    if (updates.reorderLevel !== undefined) item.reorderLevel = Math.max(0, Number(updates.reorderLevel) || 0);
+    if (updates.location !== undefined) item.location = updates.location;
+    if (updates.supplier !== undefined) item.supplier = updates.supplier;
+    if (updates.notes !== undefined) item.notes = updates.notes;
+    item.lastUpdated = new Date().toISOString();
+
+    this.save();
+    return { success: true, item };
+  }
+
+  adjustInventoryStock(id, { adjustmentQty, type = 'Restock', notes = '', performedBy = 'Storekeeper' }) {
+    const item = (this.inventoryItems || []).find((i) => i.id === id || i.code === id);
+    if (!item) throw new Error(`Inventory item ${id} not found`);
+
+    const delta = Number(adjustmentQty);
+    if (isNaN(delta) || delta === 0) {
+      throw new Error('Valid non-zero adjustment quantity is required');
+    }
+
+    const balanceBefore = Number(item.currentStock) || 0;
+    const balanceAfter = Math.max(0, balanceBefore + delta);
+
+    item.currentStock = balanceAfter;
+    item.lastUpdated = new Date().toISOString();
+
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    const log = {
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: type || (delta > 0 ? 'Restock' : 'Adjustment'),
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      qtyChange: delta,
+      balanceBefore,
+      balanceAfter,
+      unit: item.unit,
+      referenceId: notes || 'STOCK-ADJUSTMENT',
+      performedBy: performedBy || 'Storekeeper',
+      department: 'Store Warehouse',
+      notes: notes || `${type} of ${delta > 0 ? '+' : ''}${delta} ${item.unit} by ${performedBy}`,
+    };
+    this.inventoryLogs.unshift(log);
+
+    this.save();
+    return { success: true, item, log };
+  }
+
+  getMaterialRequests(filters = {}) {
+    let requests = Array.isArray(this.materialRequests) ? [...this.materialRequests] : [];
+
+    if (filters.status && filters.status !== 'All') {
+      requests = requests.filter((r) => r.status === filters.status);
+    }
+
+    if (filters.search) {
+      const s = filters.search.toLowerCase().trim();
+      requests = requests.filter(
+        (r) =>
+          (r.id || '').toLowerCase().includes(s) ||
+          (r.itemName || '').toLowerCase().includes(s) ||
+          (r.itemCode || '').toLowerCase().includes(s) ||
+          (r.requesterName || '').toLowerCase().includes(s) ||
+          (r.department || '').toLowerCase().includes(s) ||
+          (r.machineCode || '').toLowerCase().includes(s) ||
+          (r.poNumber || '').toLowerCase().includes(s)
+      );
+    }
+
+    if (filters.itemId) {
+      requests = requests.filter((r) => r.itemId === filters.itemId);
+    }
+
+    // Sort newest first
+    requests.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    return {
+      requests,
+      totalCount: requests.length,
+      pendingCount: requests.filter((r) => r.status === 'Pending').length,
+      approvedCount: requests.filter((r) => r.status === 'Approved').length,
+      rejectedCount: requests.filter((r) => r.status === 'Rejected').length,
+    };
+  }
+
+  createMaterialRequest(requestData) {
+    if (!this.materialRequests) this.materialRequests = [];
+
+    const item = (this.inventoryItems || []).find(
+      (i) => i.id === requestData.itemId || i.code === requestData.itemCode
+    );
+
+    if (!item) {
+      throw new Error('Selected raw material item was not found in store inventory');
+    }
+
+    const requestedQty = Number(requestData.requestedQty);
+    if (!requestedQty || requestedQty <= 0) {
+      throw new Error('Please enter a valid requested quantity greater than 0');
+    }
+
+    const nextSeq = this.materialRequests.length + 1001;
+    const reqId = `REQ-${nextSeq}`;
+
+    const newRequest = {
+      id: reqId,
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      category: item.category,
+      unit: item.unit,
+      requestedQty,
+      productionCycle: requestData.productionCycle || '2-Hour Standard Cycle',
+      requesterName: requestData.requesterName?.trim() || 'Floor Operator',
+      requesterEmpId: requestData.requesterEmpId?.trim() || '',
+      department: requestData.department || 'Production Line',
+      machineCode: requestData.machineCode || '',
+      poNumber: requestData.poNumber?.trim() || '',
+      purpose: requestData.purpose?.trim() || 'Material request for 2-hour production cycle',
+      timestamp: new Date().toISOString(),
+      status: 'Pending', // STRICT: Always pending until Storekeeper approval!
+    };
+
+    // STRICT: Do NOT deduct inventory stock here!
+    this.materialRequests.unshift(newRequest);
+    this.save();
+
+    return {
+      success: true,
+      data: newRequest,
+      message: `Material Request #${reqId} submitted! Waiting for storekeeper approval.`,
+    };
+  }
+
+  approveMaterialRequest(requestId, { approvedBy = 'Storekeeper', notes = '' } = {}) {
+    const request = (this.materialRequests || []).find((r) => r.id === requestId);
+    if (!request) {
+      throw new Error(`Material Request #${requestId} not found`);
+    }
+
+    if (request.status !== 'Pending') {
+      throw new Error(`Request #${requestId} has already been processed (Status: ${request.status})`);
+    }
+
+    const item = (this.inventoryItems || []).find((i) => i.id === request.itemId);
+    if (!item) {
+      throw new Error(`Inventory item for request #${requestId} not found`);
+    }
+
+    const requestedQty = Number(request.requestedQty) || 0;
+    if (item.currentStock < requestedQty) {
+      throw new Error(
+        `Insufficient store stock! Available balance: ${item.currentStock} ${item.unit}, Requested: ${requestedQty} ${item.unit}. Cannot approve.`
+      );
+    }
+
+    // STRICT LOGIC: Deduct requested quantity from store inventory only upon explicit approval!
+    const stockBefore = Number(item.currentStock) || 0;
+    item.currentStock = Math.max(0, stockBefore - requestedQty);
+    const stockAfter = item.currentStock;
+    item.lastUpdated = new Date().toISOString();
+
+    // Mark request as Approved
+    request.status = 'Approved';
+    request.approvedAt = new Date().toISOString();
+    request.approvedBy = approvedBy || 'Storekeeper';
+    request.approvalNotes = notes || '';
+    request.stockBefore = stockBefore;
+    request.stockAfter = stockAfter;
+
+    // Log the transaction
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    const log = {
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: 'Approved_Request',
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      qtyChange: -requestedQty,
+      balanceBefore: stockBefore,
+      balanceAfter: stockAfter,
+      unit: item.unit,
+      referenceId: request.id,
+      performedBy: approvedBy || 'Storekeeper',
+      department: request.department || 'Production Line',
+      notes: notes || `Approved 2-hour cycle request #${request.id} for ${request.requesterName} (${request.productionCycle || ''})`,
+    };
+    this.inventoryLogs.unshift(log);
+
+    this.save();
+
+    return {
+      success: true,
+      request,
+      item,
+      log,
+      message: `Request #${request.id} approved! Deducted ${requestedQty} ${item.unit} from ${item.name}. New balance: ${stockAfter} ${item.unit}.`,
+    };
+  }
+
+  rejectMaterialRequest(requestId, { rejectedBy = 'Storekeeper', reason = 'Declined by storekeeper' } = {}) {
+    const request = (this.materialRequests || []).find((r) => r.id === requestId);
+    if (!request) {
+      throw new Error(`Material Request #${requestId} not found`);
+    }
+
+    if (request.status !== 'Pending') {
+      throw new Error(`Request #${requestId} has already been processed (Status: ${request.status})`);
+    }
+
+    // STRICT: Stock is NOT deducted
+    request.status = 'Rejected';
+    request.rejectedAt = new Date().toISOString();
+    request.rejectedBy = rejectedBy || 'Storekeeper';
+    request.rejectionReason = reason || 'Declined by storekeeper';
+
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    const log = {
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: 'Rejected_Request',
+      itemId: request.itemId,
+      itemCode: request.itemCode,
+      itemName: request.itemName,
+      qtyChange: 0,
+      balanceBefore: null,
+      balanceAfter: null,
+      unit: request.unit,
+      referenceId: request.id,
+      performedBy: rejectedBy || 'Storekeeper',
+      department: request.department || 'Production Line',
+      notes: `Rejected request #${request.id} (${request.requestedQty} ${request.unit}) - Reason: ${reason}`,
+    };
+    this.inventoryLogs.unshift(log);
+
+    this.save();
+
+    return {
+      success: true,
+      request,
+      log,
+      message: `Request #${request.id} rejected. No stock was deducted.`,
+    };
+  }
+
+  getInventoryLogs(filters = {}) {
+    let logs = Array.isArray(this.inventoryLogs) ? [...this.inventoryLogs] : [];
+
+    if (filters.itemId) {
+      logs = logs.filter((l) => l.itemId === filters.itemId);
+    }
+
+    if (filters.type && filters.type !== 'All') {
+      logs = logs.filter((l) => l.type === filters.type);
+    }
+
+    if (filters.search) {
+      const s = filters.search.toLowerCase().trim();
+      logs = logs.filter(
+        (l) =>
+          (l.itemName || '').toLowerCase().includes(s) ||
+          (l.itemCode || '').toLowerCase().includes(s) ||
+          (l.referenceId || '').toLowerCase().includes(s) ||
+          (l.performedBy || '').toLowerCase().includes(s) ||
+          (l.department || '').toLowerCase().includes(s) ||
+          (l.notes || '').toLowerCase().includes(s)
+      );
+    }
+
+    logs.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    return {
+      logs,
+      totalCount: logs.length,
     };
   }
 }

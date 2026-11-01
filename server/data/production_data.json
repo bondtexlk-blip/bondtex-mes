@@ -933,23 +933,23 @@
       "barcode": "BTX-4502991550-10",
       "orderQty": 21612,
       "productionQty": 21612,
-      "floorProductionQty": 21612,
       "deliveryQty": 21612,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-14",
-      "targetDate": "2026-11-03",
+      "startDate": "2026-10-18",
+      "targetDate": "2026-11-07",
       "status": "Completed",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 4322,
           "actualQty": 21612,
           "deliveryQty": 21612,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 21612
     },
     {
       "id": "ORD-002",
@@ -963,23 +963,23 @@
       "barcode": "BTX-4502991550-12",
       "orderQty": 24496,
       "productionQty": 24496,
-      "floorProductionQty": 24496,
       "deliveryQty": 24496,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-13",
-      "targetDate": "2026-11-04",
+      "startDate": "2026-10-17",
+      "targetDate": "2026-11-08",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 4899,
           "actualQty": 24496,
           "deliveryQty": 24496,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 24496
     },
     {
       "id": "ORD-003",
@@ -993,23 +993,23 @@
       "barcode": "BTX-4502991550-14",
       "orderQty": 6700,
       "productionQty": 6700,
-      "floorProductionQty": 6700,
       "deliveryQty": 6700,
       "balanceQty": 0,
       "deliveryBalanceQty": 0,
-      "startDate": "2026-10-12",
-      "targetDate": "2026-11-05",
+      "startDate": "2026-10-16",
+      "targetDate": "2026-11-09",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 1340,
           "actualQty": 6700,
           "deliveryQty": 6700,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 6700
     },
     {
       "id": "ORD-004",
@@ -1022,24 +1022,24 @@
       "styleCode": "LP-54A2",
       "barcode": "BTX-4502991550-16",
       "orderQty": 756,
-      "productionQty": 756,
-      "floorProductionQty": 756,
-      "deliveryQty": 756,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-11",
-      "targetDate": "2026-11-06",
-      "status": "Completed",
+      "productionQty": 755,
+      "deliveryQty": 755,
+      "balanceQty": 1,
+      "deliveryBalanceQty": 1,
+      "startDate": "2026-10-15",
+      "targetDate": "2026-11-10",
+      "status": "Ahead",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 151,
-          "actualQty": 756,
-          "deliveryQty": 756,
+          "actualQty": 755,
+          "deliveryQty": 755,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 755
     },
     {
       "id": "ORD-005",
@@ -1052,24 +1052,24 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-10",
       "orderQty": 35003,
-      "productionQty": 35003,
-      "floorProductionQty": 35003,
-      "deliveryQty": 35003,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-10",
-      "targetDate": "2026-11-07",
-      "status": "Completed",
+      "productionQty": 34803,
+      "deliveryQty": 34803,
+      "balanceQty": 200,
+      "deliveryBalanceQty": 200,
+      "startDate": "2026-10-14",
+      "targetDate": "2026-11-11",
+      "status": "Ahead",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 7001,
-          "actualQty": 35003,
-          "deliveryQty": 35003,
+          "actualQty": 34803,
+          "deliveryQty": 34803,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 34803
     },
     {
       "id": "ORD-006",
@@ -1082,24 +1082,24 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-12",
       "orderQty": 20874,
-      "productionQty": 20874,
-      "floorProductionQty": 20874,
-      "deliveryQty": 20874,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-09",
-      "targetDate": "2026-11-08",
-      "status": "Completed",
+      "productionQty": 20350,
+      "deliveryQty": 20350,
+      "balanceQty": 524,
+      "deliveryBalanceQty": 524,
+      "startDate": "2026-10-13",
+      "targetDate": "2026-11-12",
+      "status": "Ahead",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 4175,
-          "actualQty": 20874,
-          "deliveryQty": 20874,
+          "actualQty": 20350,
+          "deliveryQty": 20350,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 20350
     },
     {
       "id": "ORD-007",
@@ -1112,24 +1112,24 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-14",
       "orderQty": 1351,
-      "productionQty": 1351,
-      "floorProductionQty": 1351,
-      "deliveryQty": 1351,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-09",
+      "productionQty": 1353,
+      "deliveryQty": 1353,
+      "balanceQty": -2,
+      "deliveryBalanceQty": -2,
+      "startDate": "2026-10-12",
+      "targetDate": "2026-11-13",
       "status": "Completed",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 270,
-          "actualQty": 1351,
-          "deliveryQty": 1351,
+          "actualQty": 1353,
+          "deliveryQty": 1353,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 1353
     },
     {
       "id": "ORD-008",
@@ -1142,24 +1142,24 @@
       "styleCode": "LP-39H6",
       "barcode": "BTX-4502991532-16",
       "orderQty": 447,
-      "productionQty": 447,
-      "floorProductionQty": 447,
-      "deliveryQty": 447,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-14",
-      "targetDate": "2026-11-10",
+      "productionQty": 450,
+      "deliveryQty": 450,
+      "balanceQty": -3,
+      "deliveryBalanceQty": -3,
+      "startDate": "2026-10-18",
+      "targetDate": "2026-11-14",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 89,
-          "actualQty": 447,
-          "deliveryQty": 447,
+          "actualQty": 450,
+          "deliveryQty": 450,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 450
     },
     {
       "id": "ORD-009",
@@ -1172,24 +1172,24 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-10",
       "orderQty": 61714,
-      "productionQty": 61714,
-      "floorProductionQty": 61714,
-      "deliveryQty": 61714,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-13",
-      "targetDate": "2026-11-03",
-      "status": "Completed",
+      "productionQty": 48200,
+      "deliveryQty": 48200,
+      "balanceQty": 13514,
+      "deliveryBalanceQty": 13514,
+      "startDate": "2026-10-17",
+      "targetDate": "2026-11-07",
+      "status": "Behind Plan",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 12343,
-          "actualQty": 61714,
-          "deliveryQty": 61714,
+          "actualQty": 48200,
+          "deliveryQty": 48200,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 48200
     },
     {
       "id": "ORD-010",
@@ -1202,24 +1202,24 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-12",
       "orderQty": 31682,
-      "productionQty": 31682,
-      "floorProductionQty": 31682,
-      "deliveryQty": 31682,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-12",
-      "targetDate": "2026-11-04",
-      "status": "Completed",
+      "productionQty": 15200,
+      "deliveryQty": 15200,
+      "balanceQty": 16482,
+      "deliveryBalanceQty": 16482,
+      "startDate": "2026-10-16",
+      "targetDate": "2026-11-08",
+      "status": "Behind Plan",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 6336,
-          "actualQty": 31682,
-          "deliveryQty": 31682,
+          "actualQty": 15200,
+          "deliveryQty": 15200,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 15200
     },
     {
       "id": "ORD-011",
@@ -1232,24 +1232,24 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-14",
       "orderQty": 6408,
-      "productionQty": 6408,
-      "floorProductionQty": 6408,
-      "deliveryQty": 6408,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-11",
-      "targetDate": "2026-11-05",
-      "status": "Completed",
+      "productionQty": 3600,
+      "deliveryQty": 3600,
+      "balanceQty": 2808,
+      "deliveryBalanceQty": 2808,
+      "startDate": "2026-10-15",
+      "targetDate": "2026-11-09",
+      "status": "Behind Plan",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 1282,
-          "actualQty": 6408,
-          "deliveryQty": 6408,
+          "actualQty": 3600,
+          "deliveryQty": 3600,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 3600
     },
     {
       "id": "ORD-012",
@@ -1262,24 +1262,24 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-16",
       "orderQty": 291,
-      "productionQty": 291,
-      "floorProductionQty": 291,
-      "deliveryQty": 291,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-10",
-      "targetDate": "2026-11-06",
+      "productionQty": 297,
+      "deliveryQty": 297,
+      "balanceQty": -6,
+      "deliveryBalanceQty": -6,
+      "startDate": "2026-10-14",
+      "targetDate": "2026-11-10",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 58,
-          "actualQty": 291,
-          "deliveryQty": 291,
+          "actualQty": 297,
+          "deliveryQty": 297,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 297
     },
     {
       "id": "ORD-013",
@@ -1292,24 +1292,16 @@
       "styleCode": "LP-65H8",
       "barcode": "BTX-4502991599-18",
       "orderQty": 64,
-      "productionQty": 64,
-      "floorProductionQty": 64,
-      "deliveryQty": 64,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-09",
-      "targetDate": "2026-11-07",
-      "status": "Completed",
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 64,
+      "deliveryBalanceQty": 64,
+      "startDate": "2026-10-13",
+      "targetDate": "2026-11-11",
+      "status": "Scheduled",
       "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-27",
-          "planQty": 13,
-          "actualQty": 64,
-          "deliveryQty": 64,
-          "notes": "Factory verified Loop production records"
-        }
-      ]
+      "dailyLogs": [],
+      "floorProductionQty": 0
     },
     {
       "id": "ORD-014",
@@ -1322,24 +1314,24 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-10",
       "orderQty": 923,
-      "productionQty": 923,
-      "floorProductionQty": 923,
-      "deliveryQty": 923,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-08",
-      "status": "Completed",
+      "productionQty": 400,
+      "deliveryQty": 400,
+      "balanceQty": 523,
+      "deliveryBalanceQty": 523,
+      "startDate": "2026-10-12",
+      "targetDate": "2026-11-12",
+      "status": "Behind Plan",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 185,
-          "actualQty": 923,
-          "deliveryQty": 923,
+          "actualQty": 400,
+          "deliveryQty": 400,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 400
     },
     {
       "id": "ORD-015",
@@ -1352,24 +1344,24 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-12",
       "orderQty": 2506,
-      "productionQty": 2506,
-      "floorProductionQty": 2506,
-      "deliveryQty": 2506,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-14",
-      "targetDate": "2026-11-09",
+      "productionQty": 2600,
+      "deliveryQty": 2600,
+      "balanceQty": -94,
+      "deliveryBalanceQty": -94,
+      "startDate": "2026-10-18",
+      "targetDate": "2026-11-13",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 501,
-          "actualQty": 2506,
-          "deliveryQty": 2506,
+          "actualQty": 2600,
+          "deliveryQty": 2600,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 2600
     },
     {
       "id": "ORD-016",
@@ -1382,24 +1374,24 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-14",
       "orderQty": 2420,
-      "productionQty": 2420,
-      "floorProductionQty": 2420,
-      "deliveryQty": 2420,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-13",
-      "targetDate": "2026-11-10",
-      "status": "Completed",
+      "productionQty": 1400,
+      "deliveryQty": 1400,
+      "balanceQty": 1020,
+      "deliveryBalanceQty": 1020,
+      "startDate": "2026-10-17",
+      "targetDate": "2026-11-14",
+      "status": "Behind Plan",
       "priority": "High",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 484,
-          "actualQty": 2420,
-          "deliveryQty": 2420,
+          "actualQty": 1400,
+          "deliveryQty": 1400,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 1400
     },
     {
       "id": "ORD-017",
@@ -1412,24 +1404,24 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-16",
       "orderQty": 1500,
-      "productionQty": 1500,
-      "floorProductionQty": 1500,
-      "deliveryQty": 1500,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-12",
-      "targetDate": "2026-11-03",
-      "status": "Completed",
+      "productionQty": 275,
+      "deliveryQty": 275,
+      "balanceQty": 1225,
+      "deliveryBalanceQty": 1225,
+      "startDate": "2026-10-16",
+      "targetDate": "2026-11-07",
+      "status": "Behind Plan",
       "priority": "Critical",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 300,
-          "actualQty": 1500,
-          "deliveryQty": 1500,
+          "actualQty": 275,
+          "deliveryQty": 275,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 275
     },
     {
       "id": "ORD-018",
@@ -1442,24 +1434,24 @@
       "styleCode": "LP-33F6",
       "barcode": "BTX-4502991520-18",
       "orderQty": 214,
-      "productionQty": 214,
-      "floorProductionQty": 214,
-      "deliveryQty": 214,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-11",
-      "targetDate": "2026-11-04",
+      "productionQty": 216,
+      "deliveryQty": 216,
+      "balanceQty": -2,
+      "deliveryBalanceQty": -2,
+      "startDate": "2026-10-15",
+      "targetDate": "2026-11-08",
       "status": "Completed",
       "priority": "Normal",
       "dailyLogs": [
         {
-          "date": "2026-10-27",
+          "date": "2026-10-31",
           "planQty": 43,
-          "actualQty": 214,
-          "deliveryQty": 214,
+          "actualQty": 216,
+          "deliveryQty": 216,
           "notes": "Factory verified Loop production records"
         }
-      ]
+      ],
+      "floorProductionQty": 216
     },
     {
       "id": "ORD-019",
@@ -1472,24 +1464,16 @@
       "styleCode": "LP-57H1",
       "barcode": "BTX-4502991562-10",
       "orderQty": 29699,
-      "productionQty": 29699,
-      "floorProductionQty": 29699,
-      "deliveryQty": 29699,
-      "balanceQty": 0,
-      "deliveryBalanceQty": 0,
-      "startDate": "2026-10-10",
-      "targetDate": "2026-11-05",
-      "status": "Completed",
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 29699,
+      "deliveryBalanceQty": 29699,
+      "startDate": "2026-10-14",
+      "targetDate": "2026-11-09",
+      "status": "Scheduled",
       "priority": "High",
-      "dailyLogs": [
-        {
-          "date": "2026-10-27",
-          "planQty": 5940,
-          "actualQty": 29699,
-          "deliveryQty": 29699,
-          "notes": "Factory verified Loop production records"
-        }
-      ]
+      "dailyLogs": [],
+      "floorProductionQty": 0
     },
     {
       "id": "ORD-020",
@@ -1502,24 +1486,16 @@
       "styleCode": "LP-57H1",
       "barcode": "BTX-4502991562-12",
       "orderQty": 19055,
-      "productionQty": 13827,
-      "floorProductionQty": 13827,
-      "deliveryQty": 13827,
-      "balanceQty": 5228,
-      "deliveryBalanceQty": 5228,
-      "startDate": "2026-10-09",
-      "targetDate": "2026-11-06",
-      "status": "Behind Plan",
+      "productionQty": 0,
+      "deliveryQty": 0,
+      "balanceQty": 19055,
+      "deliveryBalanceQty": 19055,
+      "startDate": "2026-10-13",
+      "targetDate": "2026-11-10",
+      "status": "Scheduled",
       "priority": "Normal",
-      "dailyLogs": [
-        {
-          "date": "2026-10-27",
-          "planQty": 3811,
-          "actualQty": 13827,
-          "deliveryQty": 13827,
-          "notes": "Factory verified Loop production records"
-        }
-      ]
+      "dailyLogs": [],
+      "floorProductionQty": 0
     },
     {
       "id": "ORD-021",
@@ -1533,15 +1509,15 @@
       "barcode": "BTX-4502991562-14",
       "orderQty": 3260,
       "productionQty": 0,
-      "floorProductionQty": 0,
       "deliveryQty": 0,
       "balanceQty": 3260,
       "deliveryBalanceQty": 3260,
-      "startDate": "2026-10-08",
-      "targetDate": "2026-11-07",
+      "startDate": "2026-10-12",
+      "targetDate": "2026-11-11",
       "status": "Scheduled",
       "priority": "Critical",
-      "dailyLogs": []
+      "dailyLogs": [],
+      "floorProductionQty": 0
     },
     {
       "id": "ORD-022",
@@ -1555,15 +1531,15 @@
       "barcode": "BTX-4502991562-16",
       "orderQty": 451,
       "productionQty": 0,
-      "floorProductionQty": 0,
       "deliveryQty": 0,
       "balanceQty": 451,
       "deliveryBalanceQty": 451,
-      "startDate": "2026-10-14",
-      "targetDate": "2026-11-08",
+      "startDate": "2026-10-18",
+      "targetDate": "2026-11-12",
       "status": "Scheduled",
       "priority": "High",
-      "dailyLogs": []
+      "dailyLogs": [],
+      "floorProductionQty": 0
     },
     {
       "id": "ORD-023",
@@ -1577,15 +1553,15 @@
       "barcode": "BTX-4502991562-18",
       "orderQty": 63,
       "productionQty": 0,
-      "floorProductionQty": 0,
       "deliveryQty": 0,
       "balanceQty": 63,
       "deliveryBalanceQty": 63,
-      "startDate": "2026-10-13",
-      "targetDate": "2026-11-09",
+      "startDate": "2026-10-17",
+      "targetDate": "2026-11-13",
       "status": "Scheduled",
       "priority": "Normal",
-      "dailyLogs": []
+      "dailyLogs": [],
+      "floorProductionQty": 0
     }
   ],
   "machines": [
@@ -2012,174 +1988,208 @@
       "batchesLogged": 0
     }
   ],
-  "productionLogs": [
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-28",
-      "id": "LOG-1792845610001",
-      "machineId": "MCH-01",
-      "machineName": "Machine 01",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry - Talc 12",
-      "operator": "Sunil Perera",
-      "operatorName": "Sunil Perera",
-      "poNumber": "4502991562",
-      "qty": 650,
-      "rawQty": 650,
-      "shift": "Day Shift",
-      "size": "12",
-      "style": "Loop Elastic Band - 57H1",
-      "time": "11:45 AM",
-      "timeSlot": "10:45 - 11:45",
-      "timestamp": "2026-10-28T06:15:00.000Z"
-    },
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-28",
-      "id": "LOG-1792845610002",
-      "machineId": "MCH-02",
-      "machineName": "Machine 02",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry - Talc 12",
-      "operator": "Kavinda Perera",
-      "operatorName": "Kavinda Perera",
-      "poNumber": "4502991562",
-      "qty": 700,
-      "rawQty": 700,
-      "shift": "Day Shift",
-      "size": "12",
-      "style": "Loop Elastic Band - 57H1",
-      "time": "12:45 PM",
-      "timeSlot": "11:45 - 12:45",
-      "timestamp": "2026-10-28T07:15:00.000Z"
-    },
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-28",
-      "id": "LOG-1792845610003",
-      "machineId": "MCH-06",
-      "machineName": "Loop Insert",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry - Talc 12",
-      "operator": "Chithra",
-      "operatorName": "Chithra",
-      "poNumber": "4502991562",
-      "qty": 600,
-      "rawQty": 600,
-      "shift": "Day Shift",
-      "size": "12",
-      "style": "Loop Elastic Band - 57H1",
-      "time": "02:30 PM",
-      "timeSlot": "14:15 - 15:15",
-      "timestamp": "2026-10-28T09:00:00.000Z"
-    },
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-23",
-      "id": "LOG-1792761647290",
-      "machineId": "MCH-06",
-      "machineName": "Loop Insert",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry",
-      "operator": "Chithra",
-      "operatorName": "Chithra",
-      "poNumber": "4502991550",
-      "qty": 300,
-      "rawQty": 300,
-      "shift": "Day Shift",
-      "size": "10",
-      "style": "Loop Elastic Band - 54A2",
-      "time": "06:50 PM",
-      "timeSlot": "14:15 - 15:15",
-      "timestamp": "2026-10-23T13:20:47.290Z"
-    },
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-23",
-      "id": "LOG-1792761630169",
-      "machineId": "MCH-06",
-      "machineName": "Loop Insert",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry",
-      "operator": "Chithra",
-      "operatorName": "Chithra",
-      "poNumber": "4502991550",
-      "qty": 300,
-      "rawQty": 300,
-      "shift": "Day Shift",
-      "size": "10",
-      "style": "Loop Elastic Band - 54A2",
-      "time": "06:50 PM",
-      "timeSlot": "12:45 - 14:15",
-      "timestamp": "2026-10-23T13:20:30.169Z"
-    },
-    {
-      "category": "Loop",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-23",
-      "id": "LOG-1792735991621",
-      "machineId": "MCH-IRN",
-      "machineName": "Iron Machine",
-      "multiplier": 1,
-      "notes": "Floor QR scan entry",
-      "operator": "Dilini",
-      "operatorName": "Dilini",
-      "poNumber": "4502991550",
-      "qty": 100,
-      "rawQty": 100,
-      "shift": "Day Shift",
-      "size": "12",
-      "style": "Strap Webbing Band - 39H6",
-      "time": "11:43 AM",
-      "timeSlot": "10:45 - 11:45",
-      "timestamp": "2026-10-23T06:13:11.621Z"
-    }
-  ],
-  "deliveryReceivedLogs": [
-    {
-      "balanceDeduction": 13827,
-      "calculationEffect": "Deducted 13,827 pcs from Remaining Balance (Remaining Balance: 5,228 pcs, Total Delivered: 13,827 pcs)",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-28",
-      "dayTargetDeduction": 0,
-      "handlerName": "Floor Dispatcher",
-      "id": "DLR-TALC-12-VERIFIED",
-      "notes": "Factory verified Permanent Delivery - Remaining balance 5,228 pcs",
-      "orderStatusAfter": "Behind Plan",
-      "poNumber": "4502991562",
-      "productQtyAfter": 13827,
-      "qty": 13827,
-      "size": "12",
-      "subCategory": "Permanent",
-      "systemBalanceAfter": 5228,
-      "timestamp": "2026-10-28T08:00:00.000Z",
-      "type": "Delivery"
-    },
-    {
-      "balanceDeduction": 29699,
-      "calculationEffect": "Deducted 29,699 pcs from Remaining Balance (Remaining Balance: 0 pcs, Total Delivered: 29,699 pcs)",
-      "colour": "Talc 69-09-47 57H1",
-      "date": "2026-10-27",
-      "dayTargetDeduction": 0,
-      "handlerName": "Floor Dispatcher",
-      "id": "DLR-TALC-10-VERIFIED",
-      "notes": "Factory verified Permanent Delivery - Order 100% completed",
-      "orderStatusAfter": "Completed",
-      "poNumber": "4502991562",
-      "productQtyAfter": 29699,
-      "qty": 29699,
-      "size": "10",
-      "subCategory": "Permanent",
-      "systemBalanceAfter": 0,
-      "timestamp": "2026-10-27T16:00:00.000Z",
-      "type": "Delivery"
-    }
-  ],
+  "productionLogs": [],
+  "deliveryReceivedLogs": [],
   "outsourceConsignments": [],
-  "lastUpdated": "2026-11-01T10:25:04.198Z"
+  "inventoryItems": [
+    {
+      "id": "INV-001",
+      "code": "RM-ST-25",
+      "name": "High Tenacity Bonded Nylon Straps 25mm",
+      "category": "Straps",
+      "unit": "Meters",
+      "currentStock": 12500,
+      "reorderLevel": 2500,
+      "location": "Rack S-01",
+      "supplier": "Bondtex Primary Mills",
+      "notes": "Premium strap raw material for high speed looms",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-002",
+      "code": "RM-ST-38",
+      "name": "Woven Elastic Strap Band 38mm",
+      "category": "Straps",
+      "unit": "Meters",
+      "currentStock": 8400,
+      "reorderLevel": 1800,
+      "location": "Rack S-02",
+      "supplier": "Bondtex Primary Mills",
+      "notes": "Heavy duty strap webbing for activewear bands",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-003",
+      "code": "RM-AD-12",
+      "name": "High-Bond Heat-Seal Adhesive Film Tape 12mm",
+      "category": "Adhesive",
+      "unit": "Rolls",
+      "currentStock": 320,
+      "reorderLevel": 60,
+      "location": "Cabinet A-01",
+      "supplier": "Adhesive Tech Lanka",
+      "notes": "Specially engineered for Loop strip bonding (Tape A)",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-004",
+      "code": "RM-AD-17",
+      "name": "Hot Melt Double-Sided Adhesive Tape 17mm",
+      "category": "Adhesive",
+      "unit": "Rolls",
+      "currentStock": 280,
+      "reorderLevel": 50,
+      "location": "Cabinet A-02",
+      "supplier": "Adhesive Tech Lanka",
+      "notes": "Specially engineered for Loop strip bonding (Tape B)",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-005",
+      "code": "RM-FC-01",
+      "name": "Polyethylene Protective File Covers (Clear)",
+      "category": "File Covers",
+      "unit": "Pcs",
+      "currentStock": 4800,
+      "reorderLevel": 1000,
+      "location": "Bin F-03",
+      "supplier": "Packwell Packaging Ltd",
+      "notes": "Used to protect finished batches before packing",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-006",
+      "code": "RM-TS-01",
+      "name": "Anti-Static Silicone Separator Tissue Paper (50 GSM)",
+      "category": "Tissue",
+      "unit": "Rolls",
+      "currentStock": 195,
+      "reorderLevel": 45,
+      "location": "Shelf T-02",
+      "supplier": "Specialty Paper Mills",
+      "notes": "Prevents adhesive layer sticking during 2-hour heating runs",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-007",
+      "code": "RM-YN-01",
+      "name": "Raw Spandex Core Elastic Yarn 840D",
+      "category": "Yarn",
+      "unit": "Kgs",
+      "currentStock": 740,
+      "reorderLevel": 180,
+      "location": "Storage Y-01",
+      "supplier": "ElasTex Global",
+      "notes": "Core yarn for loop knitting machines",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    },
+    {
+      "id": "INV-008",
+      "code": "RM-BX-01",
+      "name": "Heavy-Duty Corrugated Export Shipping Boxes (40x30x25cm)",
+      "category": "Packaging",
+      "unit": "Boxes",
+      "currentStock": 1500,
+      "reorderLevel": 300,
+      "location": "Warehouse Bay 4",
+      "supplier": "Colombo Box Makers",
+      "notes": "Master export packaging carton",
+      "lastUpdated": "2026-11-01T18:39:30.485Z"
+    }
+  ],
+  "materialRequests": [
+    {
+      "id": "REQ-1001",
+      "itemId": "INV-001",
+      "itemCode": "RM-ST-25",
+      "itemName": "High Tenacity Bonded Nylon Straps 25mm",
+      "category": "Straps",
+      "unit": "Meters",
+      "requestedQty": 600,
+      "productionCycle": "10:00 - 12:00 (Cycle 2)",
+      "requesterName": "Kamal Gunawardena",
+      "requesterEmpId": "EMP-104",
+      "department": "Strap Section Loom Line 1",
+      "machineCode": "MCH-01",
+      "poNumber": "4502991532",
+      "purpose": "Routine 2-hour production run for PO #4502991532",
+      "timestamp": "2026-11-01T18:14:30.485Z",
+      "status": "Pending"
+    },
+    {
+      "id": "REQ-1002",
+      "itemId": "INV-003",
+      "itemCode": "RM-AD-12",
+      "itemName": "High-Bond Heat-Seal Adhesive Film Tape 12mm",
+      "category": "Adhesive",
+      "unit": "Rolls",
+      "requestedQty": 20,
+      "productionCycle": "12:30 - 14:30 (Cycle 3)",
+      "requesterName": "Nimal Fernando",
+      "requesterEmpId": "EMP-102",
+      "department": "Loop Assembly Station 2",
+      "machineCode": "MCH-02",
+      "poNumber": "4502991562",
+      "purpose": "2-hour loop strip thermal tape application",
+      "timestamp": "2026-11-01T18:29:30.485Z",
+      "status": "Pending"
+    },
+    {
+      "id": "REQ-1000",
+      "itemId": "INV-005",
+      "itemCode": "RM-FC-01",
+      "itemName": "Polyethylene Protective File Covers (Clear)",
+      "category": "File Covers",
+      "unit": "Pcs",
+      "requestedQty": 500,
+      "productionCycle": "08:00 - 10:00 (Cycle 1)",
+      "requesterName": "Sunil Perera",
+      "requesterEmpId": "EMP-101",
+      "department": "Packing Line 1",
+      "machineCode": "MCH-03",
+      "poNumber": "4502991550",
+      "purpose": "Morning batch export file protection",
+      "timestamp": "2026-11-01T16:39:30.485Z",
+      "status": "Approved",
+      "approvedAt": "2026-11-01T16:49:30.485Z",
+      "approvedBy": "Storekeeper Sunil",
+      "stockBefore": 5300,
+      "stockAfter": 4800
+    }
+  ],
+  "inventoryLogs": [
+    {
+      "id": "LOG-INV-001",
+      "timestamp": "2026-11-01T16:49:30.485Z",
+      "type": "Approved_Request",
+      "itemId": "INV-005",
+      "itemCode": "RM-FC-01",
+      "itemName": "Polyethylene Protective File Covers (Clear)",
+      "qtyChange": -500,
+      "balanceBefore": 5300,
+      "balanceAfter": 4800,
+      "unit": "Pcs",
+      "referenceId": "REQ-1000",
+      "performedBy": "Storekeeper Sunil",
+      "department": "Packing Line 1",
+      "notes": "Approved 2-hour cycle material request #REQ-1000"
+    },
+    {
+      "id": "LOG-INV-000",
+      "timestamp": "2026-10-31T18:39:30.485Z",
+      "type": "Restock",
+      "itemId": "INV-001",
+      "itemCode": "RM-ST-25",
+      "itemName": "High Tenacity Bonded Nylon Straps 25mm",
+      "qtyChange": 5000,
+      "balanceBefore": 7500,
+      "balanceAfter": 12500,
+      "unit": "Meters",
+      "referenceId": "PO-GRN-9982",
+      "performedBy": "Storekeeper Head",
+      "department": "Raw Materials Main Warehouse",
+      "notes": "Warehouse shipment received from Bondtex Primary Mills"
+    }
+  ],
+  "lastUpdated": "2026-11-01T18:39:30.489Z"
 }

@@ -9,6 +9,8 @@ import {
   ChevronDown,
   Sparkles,
   Calculator,
+  Boxes,
+  Warehouse,
   Sun,
   Moon,
 } from 'lucide-react';
@@ -154,6 +156,17 @@ export default function Navbar({
           >
             <Calculator className="w-3.5 h-3.5" />
             Calculation
+          </button>
+          <button
+            onClick={() => setActiveView('inventory')}
+            className={`px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 ${
+              activeView === 'inventory'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-emerald-400 hover:text-emerald-300'
+            }`}
+          >
+            <Warehouse className="w-3.5 h-3.5" />
+            Inventory
           </button>
           <button
             onClick={() => setActiveView('admin')}
