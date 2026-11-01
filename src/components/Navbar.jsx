@@ -25,6 +25,7 @@ export default function Navbar({
   onToggleTheme,
   sidebarOpen,
   onToggleSidebar,
+  activeWorkspace = null,
 }) {
   const [time, setTime] = useState(new Date());
 
@@ -71,6 +72,16 @@ export default function Navbar({
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                 Cloud Sync Active
               </span>
+              {activeWorkspace && (
+                <span
+                  title={`Global Active Order: ${activeWorkspace.buyerName || activeWorkspace.name}. All live pages & users see this order.`}
+                  className="hidden md:inline-flex items-center gap-1.5 text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                  <span className="text-slate-400 font-normal">Order:</span>
+                  <span className="text-white font-black max-w-[130px] truncate">{activeWorkspace.buyerName || activeWorkspace.name}</span>
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-400 hidden sm:block">
               Apparel & Narrow Fabric Manufacturing Suite

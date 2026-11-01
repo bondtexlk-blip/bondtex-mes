@@ -477,4 +477,53 @@ router.get('/backup/status', (req, res) => {
   });
 });
 
+// ==========================================================
+// ORDER WORKSPACE MANAGEMENT ENDPOINTS
+// ==========================================================
+
+router.get('/workspaces/active', (req, res) => {
+  try {
+    const data = db.getActiveWorkspace();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/workspaces', (req, res) => {
+  try {
+    const data = db.getWorkspaces();
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/workspaces', (req, res) => {
+  try {
+    const result = db.createOrderWorkspace(req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/workspaces/:id/switch', (req, res) => {
+  try {
+    const result = db.switchOrderWorkspace(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/workspaces/:id', (req, res) => {
+  try {
+    const result = db.deleteOrderWorkspace(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
 export default router;

@@ -14,6 +14,15 @@ const __dirname = path.dirname(__filename);
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'production_data.json');
 
+const DEFAULT_WORKSPACE = {
+  id: 'ws_baseline_2026',
+  buyerName: 'Bondtex Primary (MAS / Brandix)',
+  name: 'Factory Baseline Order (22-Oct Ground Truth)',
+  notes: 'Master factory ground truth dataset initialized with baseline orders and tracking history.',
+  createdAt: '2026-10-22T08:00:00.000Z',
+  status: 'Active',
+};
+
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -28,6 +37,8 @@ class ProductionDatabase {
     this.productionLogs = [];
     this.deliveryReceivedLogs = [];
     this.outsourceConsignments = [];
+    this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+    this.workspaces = [];
     this.init();
   }
 
@@ -43,6 +54,33 @@ class ProductionDatabase {
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+
+        if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
+          this.activeWorkspace = parsed.activeWorkspace;
+        } else {
+          this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+        }
+
+        if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
+          this.workspaces = parsed.workspaces;
+        } else {
+          this.workspaces = [
+            {
+              ...DEFAULT_WORKSPACE,
+              orderCount: this.orders.length,
+              totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+              totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+              totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+              totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+              totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+              orders: JSON.parse(JSON.stringify(this.orders)),
+              productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+              deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+              outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+            },
+          ];
+        }
+
         this.ensureSpecialMachines();
         this.ensureOrderCalculations();
       } else {
@@ -86,6 +124,9 @@ class ProductionDatabase {
         DATA_FILE,
         JSON.stringify(
           {
+            activeWorkspace: this.activeWorkspace,
+            activeWorkspaceId: this.activeWorkspace?.id,
+            workspaces: this.workspaces,
             categories: this.categories,
             orders: this.orders,
             machines: this.machines,
@@ -102,6 +143,232 @@ class ProductionDatabase {
     } catch (err) {
       console.error('Failed to persist database file:', err);
     }
+  }
+
+  // ==========================================================
+  // ORDER WORKSPACE MANAGEMENT ENGINE (SERVER)
+  // ==========================================================
+
+  getActiveWorkspace() {
+    if (!this.activeWorkspace || !this.activeWorkspace.id) {
+      this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+    }
+    return {
+      ...this.activeWorkspace,
+      orderCount: (this.orders || []).length,
+      totalOrderQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+      totalFloorQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+      totalDeliveryQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+      totalBalanceQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+    };
+  }
+
+  getWorkspaces() {
+    const active = this.getActiveWorkspace();
+    const list = (this.workspaces || []).map((w) => {
+      const orderList = Array.isArray(w.orders) ? w.orders : [];
+      const isActive = w.id === active.id;
+      return {
+        id: w.id,
+        buyerName: w.buyerName || 'Unnamed Buyer',
+        name: w.name || `Order - ${w.buyerName || w.id}`,
+        notes: w.notes || '',
+        createdAt: w.createdAt,
+        archivedAt: w.archivedAt,
+        status: isActive ? 'Active' : (w.status || 'Archived'),
+        orderCount: isActive ? this.orders.length : (w.orderCount !== undefined ? w.orderCount : orderList.length),
+        totalOrderQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
+          : (w.totalOrderQty !== undefined ? w.totalOrderQty : orderList.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)),
+        totalProductionQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
+          : (w.totalProductionQty !== undefined ? w.totalProductionQty : orderList.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)),
+        totalFloorQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0)
+          : (w.totalFloorQty !== undefined ? w.totalFloorQty : orderList.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0)),
+        totalDeliveryQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0)
+          : (w.totalDeliveryQty !== undefined ? w.totalDeliveryQty : orderList.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0)),
+        totalBalanceQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0)
+          : (w.totalBalanceQty !== undefined ? w.totalBalanceQty : orderList.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0)),
+        orders: orderList,
+      };
+    });
+
+    return {
+      activeWorkspace: active,
+      workspaces: list,
+    };
+  }
+
+  createOrderWorkspace({ buyerName, workspaceName, notes = '', resetMode = 'zero_counts' }) {
+    if (!buyerName || !buyerName.trim()) {
+      throw new Error('Buyer Name is required to start a new order workspace.');
+    }
+
+    const cleanBuyer = buyerName.trim();
+    const cleanTitle = (workspaceName && workspaceName.trim()) || `Order - ${cleanBuyer}`;
+    const nowIso = new Date().toISOString();
+
+    // 1. Snapshot current active workspace
+    const currentWsId = this.activeWorkspace?.id || `ws_${Date.now()}_archived`;
+    const currentSnapshot = {
+      id: currentWsId,
+      buyerName: this.activeWorkspace?.buyerName || 'Previous Order',
+      name: this.activeWorkspace?.name || `Order - ${this.activeWorkspace?.buyerName || 'Archived'}`,
+      notes: this.activeWorkspace?.notes || '',
+      createdAt: this.activeWorkspace?.createdAt || nowIso,
+      archivedAt: nowIso,
+      status: 'Archived',
+      orderCount: this.orders.length,
+      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+      totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+      totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+      totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+      orders: JSON.parse(JSON.stringify(this.orders)),
+      productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+      deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+      outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+    };
+
+    const existingIdx = this.workspaces.findIndex((w) => w.id === currentWsId);
+    if (existingIdx >= 0) {
+      this.workspaces[existingIdx] = currentSnapshot;
+    } else {
+      this.workspaces.unshift(currentSnapshot);
+    }
+
+    // 2. Create the new workspace
+    const newWsId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newWorkspace = {
+      id: newWsId,
+      buyerName: cleanBuyer,
+      name: cleanTitle,
+      notes: notes.trim(),
+      createdAt: nowIso,
+      status: 'Active',
+    };
+
+    // 3. Reset counts, floor qty, and balances to zero across entire system
+    if (resetMode === 'blank') {
+      this.orders = [];
+    } else {
+      this.orders = this.orders.map((o) => ({
+        ...o,
+        orderQty: 0,
+        floorProductionQty: 0,
+        productionQty: 0,
+        deliveryQty: 0,
+        balanceQty: 0,
+        deliveryBalanceQty: 0,
+        dailyLogs: [],
+        status: 'Scheduled',
+      }));
+    }
+
+    this.productionLogs = [];
+    this.deliveryReceivedLogs = [];
+    this.outsourceConsignments = [];
+
+    this.activeWorkspace = newWorkspace;
+    this.workspaces.unshift({
+      ...newWorkspace,
+      orderCount: this.orders.length,
+      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: 0,
+      totalFloorQty: 0,
+      totalDeliveryQty: 0,
+      totalBalanceQty: 0,
+      orders: JSON.parse(JSON.stringify(this.orders)),
+      productionLogs: [],
+      deliveryReceivedLogs: [],
+      outsourceConsignments: [],
+    });
+
+    this.save();
+
+    return {
+      success: true,
+      workspace: this.activeWorkspace,
+      archivedPrevious: currentSnapshot,
+      message: `Started new order workspace for "${cleanBuyer}"! Production counts, floor quantities, and balances reset to ZERO.`,
+    };
+  }
+
+  switchOrderWorkspace(targetWorkspaceId) {
+    if (!targetWorkspaceId) throw new Error('Workspace ID is required to switch.');
+
+    if (this.activeWorkspace?.id === targetWorkspaceId) {
+      return { success: true, workspace: this.activeWorkspace, message: 'Already on active workspace.' };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    if (this.activeWorkspace) {
+      const currentWsId = this.activeWorkspace.id;
+      const currentSnapshot = {
+        ...this.activeWorkspace,
+        archivedAt: nowIso,
+        status: 'Archived',
+        orderCount: this.orders.length,
+        totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+        totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+        totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+        totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+        totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+        orders: JSON.parse(JSON.stringify(this.orders)),
+        productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+        deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+        outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+      };
+
+      const curIdx = this.workspaces.findIndex((w) => w.id === currentWsId);
+      if (curIdx >= 0) {
+        this.workspaces[curIdx] = currentSnapshot;
+      } else {
+        this.workspaces.unshift(currentSnapshot);
+      }
+    }
+
+    const targetWs = this.workspaces.find((w) => w.id === targetWorkspaceId);
+    if (!targetWs) {
+      throw new Error(`Workspace #${targetWorkspaceId} not found in archives.`);
+    }
+
+    this.activeWorkspace = {
+      id: targetWs.id,
+      buyerName: targetWs.buyerName || 'Loaded Order',
+      name: targetWs.name || `Order - ${targetWs.buyerName || 'Loaded'}`,
+      notes: targetWs.notes || '',
+      createdAt: targetWs.createdAt || nowIso,
+      status: 'Active',
+    };
+
+    this.orders = Array.isArray(targetWs.orders) ? JSON.parse(JSON.stringify(targetWs.orders)) : [];
+    this.productionLogs = Array.isArray(targetWs.productionLogs) ? JSON.parse(JSON.stringify(targetWs.productionLogs)) : [];
+    this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? JSON.parse(JSON.stringify(targetWs.deliveryReceivedLogs)) : [];
+    this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? JSON.parse(JSON.stringify(targetWs.outsourceConsignments)) : [];
+
+    this.ensureOrderCalculations();
+    this.save();
+
+    return {
+      success: true,
+      workspace: this.activeWorkspace,
+      message: `Loaded previous order workspace "${targetWs.name || targetWs.buyerName}"! All metrics updated dynamically.`,
+    };
+  }
+
+  deleteOrderWorkspace(workspaceId) {
+    if (this.activeWorkspace?.id === workspaceId) {
+      throw new Error('Cannot delete active workspace. Switch to another order first.');
+    }
+    this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
+    this.save();
+    return { success: true };
   }
 
   reset() {

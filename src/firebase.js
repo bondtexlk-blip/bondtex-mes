@@ -157,6 +157,32 @@ export const firebaseRealtime = {
     }
   },
 
+  async saveWorkspaceArchive(workspace) {
+    try {
+      if (!workspace || !workspace.id) return null;
+      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspace.id)}.json`;
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(workspace),
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  async getWorkspaceArchive(workspaceId) {
+    try {
+      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
   async pushSnapshot(state) {
     try {
       if (!state || !Array.isArray(state.orders)) return null;

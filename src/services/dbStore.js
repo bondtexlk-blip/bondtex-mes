@@ -13,7 +13,18 @@ import { firestoreSync, firebaseRealtime } from '../firebase.js';
 
 const STORAGE_KEY = 'bondtex_loop_real_v9';
 const VAULT_KEY = 'bondtex_permanent_vault_backup';
+const WORKSPACES_STORAGE_KEY = 'bondtex_workspaces_archive_v1';
+const ACTIVE_WORKSPACE_KEY = 'bondtex_active_workspace_v1';
 const OLD_STORAGE_KEYS = ['bondtex_loop_real_v9', 'bondtex_loop_real_v8', 'bondtex_loop_real_v7'];
+
+export const DEFAULT_WORKSPACE = {
+  id: 'ws_baseline_2026',
+  buyerName: 'Bondtex Primary (MAS / Brandix)',
+  name: 'Factory Baseline Order (22-Oct Ground Truth)',
+  notes: 'Master factory ground truth dataset initialized with baseline orders and tracking history.',
+  createdAt: '2026-10-22T08:00:00.000Z',
+  status: 'Active',
+};
 
 class ClientDatabaseStore {
   constructor() {
@@ -25,6 +36,8 @@ class ClientDatabaseStore {
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
     this.productionPlans = [];
+    this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+    this.workspaces = [];
     this.subscribers = [];
     this.lastSaved = null;
     this.deviceId = 'srv';
@@ -56,6 +69,71 @@ class ClientDatabaseStore {
   applyCloudState(cloudState) {
     if (!cloudState) return;
     if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastSaved) return;
+
+    // 1. GLOBAL WORKSPACE SWITCH DETECTION:
+    // If the cloud state has an activeWorkspaceId different from local, this is an intentional
+    // global workspace switch or new order activation performed by the Admin.
+    const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
+    const localWsId = this.activeWorkspace?.id;
+    const isDifferentWorkspace = Boolean(cloudWsId && localWsId && cloudWsId !== localWsId);
+
+    if (isDifferentWorkspace) {
+      console.log(`[Cloud Sync] Global Workspace switch detected: ${localWsId} -> ${cloudWsId} (${cloudState.activeWorkspace?.buyerName || ''})`);
+      this.activeWorkspace = cloudState.activeWorkspace || {
+        id: cloudWsId,
+        buyerName: cloudState.buyerName || 'Active Order',
+        status: 'Active',
+      };
+      if (Array.isArray(cloudState.workspaces) && cloudState.workspaces.length) {
+        this.workspaces = cloudState.workspaces;
+      }
+      this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
+      this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
+      this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
+      this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
+      this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
+      if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
+      if (Array.isArray(cloudState.machines)) this.machines = cloudState.machines;
+      if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
+
+      this.ensureSpecialMachines();
+      this.ensureOrderCalculations();
+      this.lastSaved = cloudState.lastUpdated || new Date().toISOString();
+
+      if (typeof window !== 'undefined') {
+        try {
+          const payloadStr = JSON.stringify({
+            activeWorkspace: this.activeWorkspace,
+            activeWorkspaceId: this.activeWorkspace?.id,
+            workspaces: this.workspaces,
+            categories: this.categories,
+            orders: this.orders,
+            machines: this.machines,
+            workers: this.workers,
+            productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
+            productionPlans: this.productionPlans || [],
+            lastSaved: this.lastSaved,
+          });
+          localStorage.setItem(STORAGE_KEY, payloadStr);
+          localStorage.setItem(VAULT_KEY, payloadStr);
+          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces));
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+        } catch {}
+      }
+
+      this.notifySubscribers();
+      return;
+    }
+
+    // Inside the SAME workspace:
+    if (cloudState.activeWorkspace) {
+      this.activeWorkspace = cloudState.activeWorkspace;
+    }
+    if (Array.isArray(cloudState.workspaces) && cloudState.workspaces.length) {
+      this.workspaces = cloudState.workspaces;
+    }
 
     // Multi-Device Data Protection & Anti-Downgrade Guard:
     // Ensures no older device, reset script, or transient sync ever regresses factory production progress
@@ -208,6 +286,46 @@ class ClientDatabaseStore {
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
         this.lastSaved = parsed.lastSaved || null;
+
+        // Restore Workspace
+        if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
+          this.activeWorkspace = parsed.activeWorkspace;
+        } else if (typeof window !== 'undefined') {
+          const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+          if (rawActive) {
+            try { this.activeWorkspace = JSON.parse(rawActive); } catch {}
+          }
+        }
+        if (!this.activeWorkspace || !this.activeWorkspace.id) {
+          this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+        }
+
+        if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
+          this.workspaces = parsed.workspaces;
+        } else if (typeof window !== 'undefined') {
+          const rawWs = localStorage.getItem(WORKSPACES_STORAGE_KEY);
+          if (rawWs) {
+            try { this.workspaces = JSON.parse(rawWs); } catch {}
+          }
+        }
+        if (!Array.isArray(this.workspaces) || this.workspaces.length === 0) {
+          this.workspaces = [
+            {
+              ...DEFAULT_WORKSPACE,
+              orderCount: this.orders.length,
+              totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+              totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+              totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+              totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+              totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+              orders: JSON.parse(JSON.stringify(this.orders)),
+              productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+              deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+              outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+              productionPlans: JSON.parse(JSON.stringify(this.productionPlans || [])),
+            },
+          ];
+        }
       } else {
         this.reset(false);
       }
@@ -270,6 +388,9 @@ class ClientDatabaseStore {
       this.lastSaved = nowIso;
 
       const payload = {
+        activeWorkspace: this.activeWorkspace,
+        activeWorkspaceId: this.activeWorkspace?.id,
+        workspaces: this.workspaces,
         categories: this.categories,
         orders: this.orders,
         machines: this.machines,
@@ -288,6 +409,8 @@ class ClientDatabaseStore {
           const payloadStr = JSON.stringify(payload);
           localStorage.setItem(STORAGE_KEY, payloadStr);
           localStorage.setItem(VAULT_KEY, payloadStr);
+          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces));
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
         } catch {
           // ignore quota
         }
@@ -303,6 +426,254 @@ class ClientDatabaseStore {
     } catch (e) {
       console.warn('Failed to save state to localStorage:', e);
     }
+  }
+
+  // ==========================================================
+  // ORDER WORKSPACE MANAGEMENT ENGINE (GLOBAL WORKSPACE STATE)
+  // ==========================================================
+
+  getActiveWorkspace() {
+    if (!this.activeWorkspace || !this.activeWorkspace.id) {
+      this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+    }
+    return {
+      ...this.activeWorkspace,
+      orderCount: (this.orders || []).length,
+      totalOrderQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+      totalFloorQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+      totalDeliveryQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+      totalBalanceQty: (this.orders || []).reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+    };
+  }
+
+  getWorkspaces() {
+    const active = this.getActiveWorkspace();
+    const list = (this.workspaces || []).map((w) => {
+      const orderList = Array.isArray(w.orders) ? w.orders : [];
+      const isActive = w.id === active.id;
+      return {
+        id: w.id,
+        buyerName: w.buyerName || 'Unnamed Buyer',
+        name: w.name || `Order - ${w.buyerName || w.id}`,
+        notes: w.notes || '',
+        createdAt: w.createdAt,
+        archivedAt: w.archivedAt,
+        status: isActive ? 'Active' : (w.status || 'Archived'),
+        orderCount: isActive ? this.orders.length : (w.orderCount !== undefined ? w.orderCount : orderList.length),
+        totalOrderQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
+          : (w.totalOrderQty !== undefined ? w.totalOrderQty : orderList.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)),
+        totalProductionQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
+          : (w.totalProductionQty !== undefined ? w.totalProductionQty : orderList.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)),
+        totalFloorQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0)
+          : (w.totalFloorQty !== undefined ? w.totalFloorQty : orderList.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0)),
+        totalDeliveryQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0)
+          : (w.totalDeliveryQty !== undefined ? w.totalDeliveryQty : orderList.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0)),
+        totalBalanceQty: isActive
+          ? this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0)
+          : (w.totalBalanceQty !== undefined ? w.totalBalanceQty : orderList.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0)),
+        orders: orderList,
+      };
+    });
+
+    return {
+      activeWorkspace: active,
+      workspaces: list,
+    };
+  }
+
+  createOrderWorkspace({ buyerName, workspaceName, notes = '', resetMode = 'zero_counts' }) {
+    if (!buyerName || !buyerName.trim()) {
+      throw new Error('Buyer Name is required to start a new order workspace.');
+    }
+
+    const cleanBuyer = buyerName.trim();
+    const cleanTitle = (workspaceName && workspaceName.trim()) || `Order - ${cleanBuyer}`;
+    const nowIso = new Date().toISOString();
+
+    // 1. Safely snapshot and archive the current active workspace
+    const currentWsId = this.activeWorkspace?.id || `ws_${Date.now()}_archived`;
+    const currentSnapshot = {
+      id: currentWsId,
+      buyerName: this.activeWorkspace?.buyerName || 'Previous Order',
+      name: this.activeWorkspace?.name || `Order - ${this.activeWorkspace?.buyerName || 'Archived'}`,
+      notes: this.activeWorkspace?.notes || '',
+      createdAt: this.activeWorkspace?.createdAt || nowIso,
+      archivedAt: nowIso,
+      status: 'Archived',
+      orderCount: this.orders.length,
+      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+      totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+      totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+      totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+      orders: JSON.parse(JSON.stringify(this.orders)),
+      productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+      deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+      outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+      productionPlans: JSON.parse(JSON.stringify(this.productionPlans || [])),
+    };
+
+    // Update or insert into workspaces list
+    const existingIdx = this.workspaces.findIndex((w) => w.id === currentWsId);
+    if (existingIdx >= 0) {
+      this.workspaces[existingIdx] = currentSnapshot;
+    } else {
+      this.workspaces.unshift(currentSnapshot);
+    }
+
+    // Background push archive to Firebase Realtime
+    try {
+      firebaseRealtime.saveWorkspaceArchive(currentSnapshot);
+    } catch {}
+
+    // 2. Create the new workspace
+    const newWsId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const newWorkspace = {
+      id: newWsId,
+      buyerName: cleanBuyer,
+      name: cleanTitle,
+      notes: notes.trim(),
+      createdAt: nowIso,
+      status: 'Active',
+    };
+
+    // 3. RESET all production counts, floor quantities, and balances to ZERO across the entire dashboard and all pages
+    // Exception: Calculation page formulas and constants remain fixed and isolated
+    if (resetMode === 'blank') {
+      this.orders = [];
+    } else {
+      this.orders = this.orders.map((o) => ({
+        ...o,
+        orderQty: 0,
+        floorProductionQty: 0,
+        productionQty: 0,
+        deliveryQty: 0,
+        balanceQty: 0,
+        deliveryBalanceQty: 0,
+        dailyLogs: [],
+        status: 'Scheduled',
+      }));
+    }
+
+    // Reset all production activity logs for this new workspace
+    this.productionLogs = [];
+    this.deliveryReceivedLogs = [];
+    this.outsourceConsignments = [];
+    this.productionPlans = [];
+
+    // Set active workspace
+    this.activeWorkspace = newWorkspace;
+
+    // Add new workspace to workspaces list
+    this.workspaces.unshift({
+      ...newWorkspace,
+      orderCount: this.orders.length,
+      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalProductionQty: 0,
+      totalFloorQty: 0,
+      totalDeliveryQty: 0,
+      totalBalanceQty: 0,
+      orders: JSON.parse(JSON.stringify(this.orders)),
+      productionLogs: [],
+      deliveryReceivedLogs: [],
+      outsourceConsignments: [],
+      productionPlans: [],
+    });
+
+    // 4. Save and broadcast to all devices globally
+    this.save(true);
+
+    return {
+      success: true,
+      workspace: this.activeWorkspace,
+      archivedPrevious: currentSnapshot,
+      message: `Started new order workspace for "${cleanBuyer}"! Production counts, floor quantities, and balances reset to ZERO.`,
+    };
+  }
+
+  switchOrderWorkspace(targetWorkspaceId) {
+    if (!targetWorkspaceId) throw new Error('Workspace ID is required to switch.');
+
+    if (this.activeWorkspace?.id === targetWorkspaceId) {
+      return { success: true, workspace: this.activeWorkspace, message: 'Already on active workspace.' };
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 1. Snapshot current active workspace before leaving it
+    if (this.activeWorkspace) {
+      const currentWsId = this.activeWorkspace.id;
+      const currentSnapshot = {
+        ...this.activeWorkspace,
+        archivedAt: nowIso,
+        status: 'Archived',
+        orderCount: this.orders.length,
+        totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+        totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+        totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+        totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+        totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+        orders: JSON.parse(JSON.stringify(this.orders)),
+        productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
+        deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
+        outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
+        productionPlans: JSON.parse(JSON.stringify(this.productionPlans || [])),
+      };
+
+      const curIdx = this.workspaces.findIndex((w) => w.id === currentWsId);
+      if (curIdx >= 0) {
+        this.workspaces[curIdx] = currentSnapshot;
+      } else {
+        this.workspaces.unshift(currentSnapshot);
+      }
+    }
+
+    // 2. Find target workspace in archives
+    const targetWs = this.workspaces.find((w) => w.id === targetWorkspaceId);
+    if (!targetWs) {
+      throw new Error(`Workspace #${targetWorkspaceId} not found in archives.`);
+    }
+
+    // 3. Restore target workspace data
+    this.activeWorkspace = {
+      id: targetWs.id,
+      buyerName: targetWs.buyerName || 'Loaded Order',
+      name: targetWs.name || `Order - ${targetWs.buyerName || 'Loaded'}`,
+      notes: targetWs.notes || '',
+      createdAt: targetWs.createdAt || nowIso,
+      status: 'Active',
+    };
+
+    this.orders = Array.isArray(targetWs.orders) ? JSON.parse(JSON.stringify(targetWs.orders)) : [];
+    this.productionLogs = Array.isArray(targetWs.productionLogs) ? JSON.parse(JSON.stringify(targetWs.productionLogs)) : [];
+    this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? JSON.parse(JSON.stringify(targetWs.deliveryReceivedLogs)) : [];
+    this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? JSON.parse(JSON.stringify(targetWs.outsourceConsignments)) : [];
+    this.productionPlans = Array.isArray(targetWs.productionPlans) ? JSON.parse(JSON.stringify(targetWs.productionPlans)) : [];
+
+    this.ensureOrderCalculations();
+
+    // 4. Save and broadcast globally
+    this.save(true);
+
+    return {
+      success: true,
+      workspace: this.activeWorkspace,
+      message: `Loaded previous order workspace "${targetWs.name || targetWs.buyerName}"! All metrics updated dynamically.`,
+    };
+  }
+
+  deleteOrderWorkspace(workspaceId) {
+    if (this.activeWorkspace?.id === workspaceId) {
+      throw new Error('Cannot delete the currently active order workspace. Switch to another order first.');
+    }
+    this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
+    this.save(true);
+    return { success: true };
   }
 
   reset(broadcastToCloud = true) {

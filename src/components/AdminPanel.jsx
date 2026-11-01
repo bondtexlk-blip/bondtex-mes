@@ -38,10 +38,12 @@ import {
   Download,
   Send,
   HardDrive,
+  FolderPlus,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api/client';
 import MachineQrPrintModal from './MachineQrPrintModal';
+import OrderWorkspaceManagement from './OrderWorkspaceManagement';
 import { formatNumber } from '../utils/formatters';
 import { buildMachinePortalUrl, resolveProductionHost, PRODUCTION_HOST } from '../utils/urlHelper';
 import {
@@ -622,6 +624,18 @@ export default function AdminPanel({
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
                   24h
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('workspace')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition ${
+                  adminTab === 'workspace'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <FolderPlus className="w-4 h-4 text-amber-400" />
+                <span>New Order / Workspace</span>
               </button>
             </div>
           </div>
@@ -2043,6 +2057,16 @@ export default function AdminPanel({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* TAB 4: NEW ORDER / WORKSPACE MANAGEMENT                   */}
+      {/* ========================================================== */}
+      {adminTab === 'workspace' && (
+        <OrderWorkspaceManagement
+          onShowToast={onShowToast}
+          onDataUpdated={onDataUpdated}
+        />
       )}
 
       {/* Print QR Badge Modal */}

@@ -130,6 +130,7 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [planVsActualData, setPlanVsActualData] = useState([]);
   const [metadata, setMetadata] = useState({ styles: [], sizes: [], colours: [], rmMaterials: [], poNumbers: [] });
+  const [activeWorkspace, setActiveWorkspace] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState(null);
 
@@ -199,17 +200,19 @@ export default function App() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [overviewRes, categoriesRes, chartRes, metaRes] = await Promise.all([
+      const [overviewRes, categoriesRes, chartRes, metaRes, wsRes] = await Promise.all([
         api.getOverview(),
         api.getCategories(),
         api.getPlanVsActual('All'),
         api.getMetadata(),
+        api.getActiveWorkspace(),
       ]);
 
       if (overviewRes.success) setOverview(overviewRes.data);
       if (categoriesRes.success) setCategories(categoriesRes.data);
       if (chartRes.success) setPlanVsActualData(chartRes.data);
       if (metaRes.success) setMetadata(metaRes.data);
+      if (wsRes && wsRes.success) setActiveWorkspace(wsRes.data);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
       showToast('Error connecting to backend API', 'error');
@@ -356,6 +359,7 @@ export default function App() {
         onToggleTheme={toggleTheme}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+        activeWorkspace={activeWorkspace}
       />
 
       {/* Main Layout (Sidebar + Content Area) */}

@@ -419,6 +419,45 @@ export const api = {
   getMachineDayStats: async (machineId, dateStr) => {
     return { success: true, data: dbStore.getMachineDayStats(machineId, dateStr) };
   },
+
+  // 23. Order Workspace Management APIs (Global Workspace State)
+  getActiveWorkspace: async () => {
+    const remote = await safeFetchJson(`${BASE_URL}/workspaces/active`);
+    if (remote && remote.success) return remote;
+    return { success: true, data: dbStore.getActiveWorkspace() };
+  },
+
+  getWorkspaces: async () => {
+    const remote = await safeFetchJson(`${BASE_URL}/workspaces`);
+    if (remote && remote.success) return remote;
+    return { success: true, ...dbStore.getWorkspaces() };
+  },
+
+  createOrderWorkspace: async (payload) => {
+    const remote = await safeFetchJson(`${BASE_URL}/workspaces`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.createOrderWorkspace(payload);
+  },
+
+  switchOrderWorkspace: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}/switch`, {
+      method: 'POST',
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.switchOrderWorkspace(id);
+  },
+
+  deleteOrderWorkspace: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    if (remote && remote.success) return remote;
+    return dbStore.deleteOrderWorkspace(id);
+  },
 };
 
 export default api;
