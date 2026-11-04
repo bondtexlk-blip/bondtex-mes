@@ -439,24 +439,27 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    const localResult = dbStore.createOrderWorkspace(payload);
     if (remote && remote.success) return remote;
-    return dbStore.createOrderWorkspace(payload);
+    return localResult;
   },
 
   switchOrderWorkspace: async (id) => {
     const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}/switch`, {
       method: 'POST',
     });
+    const localResult = dbStore.switchOrderWorkspace(id);
     if (remote && remote.success) return remote;
-    return dbStore.switchOrderWorkspace(id);
+    return localResult;
   },
 
   deleteOrderWorkspace: async (id) => {
     const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
+    const localResult = dbStore.deleteOrderWorkspace(id);
     if (remote && remote.success) return remote;
-    return dbStore.deleteOrderWorkspace(id);
+    return localResult;
   },
 
   // 24. Production Inventory & QR Material Request Workflow APIs

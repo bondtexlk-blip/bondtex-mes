@@ -142,6 +142,48 @@ export const REALTIME_DB_URL = 'https://bondtexlk-f16f5-default-rtdb.firebaseio.
  * High-speed Realtime Database Sync Engine for multi-device live synchronization (Laptop, Phone, Tablet)
  */
 export const firebaseRealtime = {
+  // Singular Active Workspace Pointer in Firebase (survives refreshes & syncs globally across all devices)
+  async setActiveWorkspacePointer(workspace) {
+    if (!workspace || !workspace.id) return null;
+    try {
+      const payload = {
+        id: workspace.id,
+        buyerName: workspace.buyerName || 'Active Order',
+        name: workspace.name || `Order - ${workspace.buyerName || workspace.id}`,
+        notes: workspace.notes || '',
+        status: 'Active',
+        updatedAt: new Date().toISOString(),
+      };
+      await Promise.all([
+        fetch(`${REALTIME_DB_URL}/activeWorkspace.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }),
+        fetch(`${REALTIME_DB_URL}/activeWorkspaceId.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(workspace.id),
+        }),
+      ]);
+      return payload;
+    } catch (err) {
+      console.warn('Realtime cloud activeWorkspace pointer push note:', err?.message);
+      return null;
+    }
+  },
+
+  async getActiveWorkspacePointer() {
+    try {
+      const res = await fetch(`${REALTIME_DB_URL}/activeWorkspace.json`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.warn('Realtime cloud activeWorkspace pointer pull note:', err?.message);
+      return null;
+    }
+  },
+
   async pushState(state) {
     try {
       const url = `${REALTIME_DB_URL}/state.json`;
@@ -180,6 +222,19 @@ export const firebaseRealtime = {
       return await res.json();
     } catch {
       return null;
+    }
+  },
+
+  async pullAllWorkspaces() {
+    try {
+      const url = `${REALTIME_DB_URL}/workspaces.json`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data) return [];
+      return Object.values(data);
+    } catch {
+      return [];
     }
   },
 

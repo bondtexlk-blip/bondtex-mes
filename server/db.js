@@ -114,9 +114,9 @@ class ProductionDatabase {
       // Balance allows negative values when actual/delivery exceeds order plan
       o.balanceQty = o.orderQty - o.deliveryQty;
       o.deliveryBalanceQty = o.balanceQty;
-      if (o.balanceQty <= 0) {
+      if (o.orderQty > 0 && o.balanceQty <= 0) {
         o.status = 'Completed';
-      } else if (o.deliveryQty >= o.orderQty * 0.9) {
+      } else if (o.deliveryQty >= o.orderQty * 0.9 && o.orderQty > 0) {
         o.status = 'Ahead';
       } else if (o.deliveryQty === 0) {
         o.status = 'Scheduled';
@@ -265,11 +265,16 @@ class ProductionDatabase {
     };
 
     // 3. Reset counts, floor qty, and balances to zero across entire system
+    const catalogSource = (this.orders && this.orders.length > 0)
+      ? this.orders
+      : JSON.parse(JSON.stringify(initialOrders));
+
     if (resetMode === 'blank') {
       this.orders = [];
     } else {
-      this.orders = this.orders.map((o) => ({
+      this.orders = catalogSource.map((o, idx) => ({
         ...o,
+        id: o.id || `ORD-${String(idx + 1).padStart(3, '0')}`,
         orderQty: 0,
         floorProductionQty: 0,
         productionQty: 0,
@@ -285,11 +290,17 @@ class ProductionDatabase {
     this.deliveryReceivedLogs = [];
     this.outsourceConsignments = [];
 
+    if (Array.isArray(this.machines)) {
+      this.machines.forEach((m) => {
+        m.todayLogs = [];
+      });
+    }
+
     this.activeWorkspace = newWorkspace;
     this.workspaces.unshift({
       ...newWorkspace,
       orderCount: this.orders.length,
-      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalOrderQty: 0,
       totalProductionQty: 0,
       totalFloorQty: 0,
       totalDeliveryQty: 0,
@@ -363,6 +374,14 @@ class ProductionDatabase {
     this.productionLogs = Array.isArray(targetWs.productionLogs) ? JSON.parse(JSON.stringify(targetWs.productionLogs)) : [];
     this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? JSON.parse(JSON.stringify(targetWs.deliveryReceivedLogs)) : [];
     this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? JSON.parse(JSON.stringify(targetWs.outsourceConsignments)) : [];
+
+    if (Array.isArray(this.machines)) {
+      this.machines.forEach((m) => {
+        m.todayLogs = (this.productionLogs || []).filter(
+          (l) => l.machineId === m.id || l.machineCode === m.id || l.machineCode === m.code
+        );
+      });
+    }
 
     this.ensureOrderCalculations();
     this.save();

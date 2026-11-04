@@ -233,6 +233,9 @@ class ClientDatabaseStore {
     if (typeof window !== 'undefined') {
       try {
         const payloadStr = JSON.stringify({
+          activeWorkspace: this.activeWorkspace,
+          activeWorkspaceId: this.activeWorkspace?.id,
+          workspaces: this.workspaces || [],
           categories: this.categories,
           orders: this.orders,
           machines: this.machines,
@@ -248,6 +251,8 @@ class ClientDatabaseStore {
         });
         localStorage.setItem(STORAGE_KEY, payloadStr);
         localStorage.setItem(VAULT_KEY, payloadStr);
+        localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
+        localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
       } catch {
         // ignore storage quota errors
       }
@@ -370,15 +375,50 @@ class ClientDatabaseStore {
 
     // Connect to Firebase Realtime Database for live cross-device sync (Laptop <-> Phone)
     if (typeof window !== 'undefined') {
-      // 1. Initial Cloud Pull (ensures phone or laptop always opens with latest cloud data)
-      firebaseRealtime
-        .pullState()
-        .then((cloudState) => {
-          if (cloudState && Array.isArray(cloudState.orders) && cloudState.orders.length > 0) {
+      // 1. Initial Cloud Pull (survives page refreshes & syncs global active workspace pointer)
+      Promise.allSettled([
+        firebaseRealtime.getActiveWorkspacePointer(),
+        firebaseRealtime.pullState(),
+        firebaseRealtime.pullAllWorkspaces(),
+      ])
+        .then(async ([ptrRes, stateRes, allWsRes]) => {
+          const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
+          const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
+          const allWorkspaces = allWsRes.status === 'fulfilled' && Array.isArray(allWsRes.value) ? allWsRes.value : null;
+
+          if (allWorkspaces && allWorkspaces.length > 0) {
+            const existingIds = new Set(this.workspaces.map((w) => w.id));
+            allWorkspaces.forEach((ws) => {
+              if (ws && ws.id && !existingIds.has(ws.id)) {
+                this.workspaces.push(ws);
+              }
+            });
+          }
+
+          const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+
+          if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
+            // Cloud indicates a different active workspace
+            if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+              this.applyCloudState(cloudState);
+            } else {
+              let targetWs = this.workspaces.find((w) => w.id === targetActiveId);
+              if (!targetWs) {
+                targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
+              }
+              if (targetWs) {
+                this.switchOrderWorkspace(targetActiveId);
+              } else if (cloudState) {
+                this.applyCloudState(cloudState);
+              }
+            }
+          } else if (cloudState) {
             this.applyCloudState(cloudState);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.warn('Initial cloud sync note:', err);
+        });
 
       // 2. Realtime SSE Listener (when laptop saves, phone updates immediately in real-time)
       this.unsubscribeCloud = firebaseRealtime.listenToChanges((cloudState) => {
@@ -386,6 +426,38 @@ class ClientDatabaseStore {
           this.applyCloudState(cloudState);
         }
       });
+    }
+  }
+
+  async pullCloudState() {
+    if (typeof window === 'undefined') return null;
+    try {
+      const [cloudActivePointer, cloudState] = await Promise.all([
+        firebaseRealtime.getActiveWorkspacePointer(),
+        firebaseRealtime.pullState(),
+      ]);
+      const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+      if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
+        if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+          this.applyCloudState(cloudState);
+        } else {
+          let targetWs = this.workspaces.find((w) => w.id === targetActiveId);
+          if (!targetWs) {
+            targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
+          }
+          if (targetWs) {
+            this.switchOrderWorkspace(targetActiveId);
+          } else if (cloudState) {
+            this.applyCloudState(cloudState);
+          }
+        }
+      } else if (cloudState) {
+        this.applyCloudState(cloudState);
+      }
+      return { success: true, activeWorkspace: this.activeWorkspace };
+    } catch (e) {
+      console.warn('pullCloudState note:', e);
+      return { success: false, error: e?.message };
     }
   }
 
@@ -402,9 +474,9 @@ class ClientDatabaseStore {
       // Balance allows negative values when actual/delivery exceeds order plan
       o.balanceQty = o.orderQty - o.deliveryQty;
       o.deliveryBalanceQty = o.balanceQty;
-      if (o.balanceQty <= 0) {
+      if (o.orderQty > 0 && o.balanceQty <= 0) {
         o.status = 'Completed';
-      } else if (o.deliveryQty >= o.orderQty * 0.9) {
+      } else if (o.deliveryQty >= o.orderQty * 0.9 && o.orderQty > 0) {
         o.status = 'Ahead';
       } else if (o.deliveryQty === 0) {
         o.status = 'Scheduled';
@@ -420,10 +492,14 @@ class ClientDatabaseStore {
       const nowIso = new Date().toISOString();
       this.lastSaved = nowIso;
 
+      if (!this.activeWorkspace || !this.activeWorkspace.id) {
+        this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+      }
+
       const payload = {
         activeWorkspace: this.activeWorkspace,
-        activeWorkspaceId: this.activeWorkspace?.id,
-        workspaces: this.workspaces,
+        activeWorkspaceId: this.activeWorkspace.id,
+        workspaces: this.workspaces || [],
         categories: this.categories,
         orders: this.orders,
         machines: this.machines,
@@ -454,6 +530,7 @@ class ClientDatabaseStore {
 
       // Automatically broadcast state to Firebase Realtime Database
       if (broadcastToCloud && typeof window !== 'undefined') {
+        firebaseRealtime.setActiveWorkspacePointer(this.activeWorkspace);
         firebaseRealtime.pushState(payload);
         firebaseRealtime.pushSnapshot(payload);
       }
@@ -531,7 +608,7 @@ class ClientDatabaseStore {
     const cleanTitle = (workspaceName && workspaceName.trim()) || `Order - ${cleanBuyer}`;
     const nowIso = new Date().toISOString();
 
-    // 1. Safely snapshot and archive the current active workspace
+    // 1. Safely snapshot and archive the current active workspace before resetting
     const currentWsId = this.activeWorkspace?.id || `ws_${Date.now()}_archived`;
     const currentSnapshot = {
       id: currentWsId,
@@ -562,7 +639,7 @@ class ClientDatabaseStore {
       this.workspaces.unshift(currentSnapshot);
     }
 
-    // Background push archive to Firebase Realtime
+    // Persist archive to Firebase Realtime
     try {
       firebaseRealtime.saveWorkspaceArchive(currentSnapshot);
     } catch {}
@@ -578,13 +655,18 @@ class ClientDatabaseStore {
       status: 'Active',
     };
 
-    // 3. RESET all production counts, floor quantities, and balances to ZERO across the entire dashboard and all pages
-    // Exception: Calculation page formulas and constants remain fixed and isolated
+    // 3. ZERO ALL COUNTS LOGIC:
+    // PO catalog structure strictly remains, but ALL numerical counts (floor qty, production qty, delivery qty, balances) are strictly set to 0.
+    const catalogSource = (this.orders && this.orders.length > 0)
+      ? this.orders
+      : JSON.parse(JSON.stringify(initialOrders));
+
     if (resetMode === 'blank') {
       this.orders = [];
     } else {
-      this.orders = this.orders.map((o) => ({
+      this.orders = catalogSource.map((o, idx) => ({
         ...o,
+        id: o.id || `ORD-${String(idx + 1).padStart(3, '0')}`,
         orderQty: 0,
         floorProductionQty: 0,
         productionQty: 0,
@@ -602,6 +684,13 @@ class ClientDatabaseStore {
     this.outsourceConsignments = [];
     this.productionPlans = [];
 
+    // Clear machine floor logs
+    if (Array.isArray(this.machines)) {
+      this.machines.forEach((m) => {
+        m.todayLogs = [];
+      });
+    }
+
     // Set active workspace
     this.activeWorkspace = newWorkspace;
 
@@ -609,7 +698,7 @@ class ClientDatabaseStore {
     this.workspaces.unshift({
       ...newWorkspace,
       orderCount: this.orders.length,
-      totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+      totalOrderQty: 0,
       totalProductionQty: 0,
       totalFloorQty: 0,
       totalDeliveryQty: 0,
@@ -621,7 +710,20 @@ class ClientDatabaseStore {
       productionPlans: [],
     });
 
-    // 4. Save and broadcast to all devices globally
+    // 4. Update the singular active workspace pointer in Firebase & LocalStorage immediately
+    try {
+      firebaseRealtime.setActiveWorkspacePointer(newWorkspace);
+      firebaseRealtime.saveWorkspaceArchive({
+        ...newWorkspace,
+        orders: this.orders,
+        productionLogs: [],
+        deliveryReceivedLogs: [],
+        outsourceConsignments: [],
+        productionPlans: [],
+      });
+    } catch {}
+
+    // 5. Save and broadcast to all devices globally
     this.save(true);
 
     return {
@@ -667,16 +769,30 @@ class ClientDatabaseStore {
       } else {
         this.workspaces.unshift(currentSnapshot);
       }
+
+      try {
+        firebaseRealtime.saveWorkspaceArchive(currentSnapshot);
+      } catch {}
     }
 
-    // 2. Find target workspace in archives
-    const targetWs = this.workspaces.find((w) => w.id === targetWorkspaceId);
+    // 2. Find target workspace in archives (or fallback to local workspaces)
+    let targetWs = this.workspaces.find((w) => w.id === targetWorkspaceId);
+    if (!targetWs && typeof window !== 'undefined') {
+      try {
+        const rawArchives = localStorage.getItem(WORKSPACES_STORAGE_KEY);
+        if (rawArchives) {
+          const list = JSON.parse(rawArchives);
+          if (Array.isArray(list)) targetWs = list.find((w) => w.id === targetWorkspaceId);
+        }
+      } catch {}
+    }
+
     if (!targetWs) {
       throw new Error(`Workspace #${targetWorkspaceId} not found in archives.`);
     }
 
     // 3. Restore target workspace data
-    this.activeWorkspace = {
+    const activeWsObj = {
       id: targetWs.id,
       buyerName: targetWs.buyerName || 'Loaded Order',
       name: targetWs.name || `Order - ${targetWs.buyerName || 'Loaded'}`,
@@ -684,6 +800,13 @@ class ClientDatabaseStore {
       createdAt: targetWs.createdAt || nowIso,
       status: 'Active',
     };
+    this.activeWorkspace = activeWsObj;
+
+    if ((!targetWs.orders || targetWs.orders.length === 0) && (targetWs.id === DEFAULT_WORKSPACE.id || (targetWs.id && targetWs.id.includes('baseline')))) {
+      targetWs.orders = JSON.parse(JSON.stringify(initialOrders));
+      targetWs.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
+      targetWs.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
+    }
 
     this.orders = Array.isArray(targetWs.orders) ? JSON.parse(JSON.stringify(targetWs.orders)) : [];
     this.productionLogs = Array.isArray(targetWs.productionLogs) ? JSON.parse(JSON.stringify(targetWs.productionLogs)) : [];
@@ -691,9 +814,31 @@ class ClientDatabaseStore {
     this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? JSON.parse(JSON.stringify(targetWs.outsourceConsignments)) : [];
     this.productionPlans = Array.isArray(targetWs.productionPlans) ? JSON.parse(JSON.stringify(targetWs.productionPlans)) : [];
 
+    // Clear machine logs from previous workspace
+    if (Array.isArray(this.machines)) {
+      this.machines.forEach((m) => {
+        m.todayLogs = (this.productionLogs || []).filter(
+          (l) => l.machineId === m.id || l.machineCode === m.id || l.machineCode === m.code
+        );
+      });
+    }
+
     this.ensureOrderCalculations();
 
-    // 4. Save and broadcast globally
+    // 4. Update the singular active workspace pointer in Firebase & LocalStorage immediately
+    try {
+      firebaseRealtime.setActiveWorkspacePointer(activeWsObj);
+      firebaseRealtime.saveWorkspaceArchive({
+        ...activeWsObj,
+        orders: this.orders,
+        productionLogs: this.productionLogs,
+        deliveryReceivedLogs: this.deliveryReceivedLogs,
+        outsourceConsignments: this.outsourceConsignments,
+        productionPlans: this.productionPlans,
+      });
+    } catch {}
+
+    // 5. Save and broadcast globally
     this.save(true);
 
     return {
