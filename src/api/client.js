@@ -487,8 +487,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    const localResult = dbStore.addInventoryItem(data);
     if (remote && remote.success) return remote;
-    return dbStore.addInventoryItem(data);
+    return localResult;
   },
 
   updateInventoryItem: async (id, updates) => {
@@ -497,8 +498,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
+    const localResult = dbStore.updateInventoryItem(id, updates);
     if (remote && remote.success) return remote;
-    return dbStore.updateInventoryItem(id, updates);
+    return localResult;
+  },
+
+  deleteInventoryItem: async (id) => {
+    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    const localResult = dbStore.deleteInventoryItem(id);
+    if (remote && remote.success) return remote;
+    return localResult;
   },
 
   adjustInventoryStock: async (id, data) => {
@@ -507,8 +518,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    const localResult = dbStore.adjustInventoryStock(id, data);
     if (remote && remote.success) return remote;
-    return dbStore.adjustInventoryStock(id, data);
+    return localResult;
   },
 
   getMaterialRequests: async (filters = {}) => {
@@ -527,8 +539,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    const localResult = dbStore.createMaterialRequest(data);
     if (remote && remote.success) return remote;
-    return dbStore.createMaterialRequest(data);
+    return localResult;
   },
 
   approveMaterialRequest: async (id, data = {}) => {
@@ -537,8 +550,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    const localResult = dbStore.approveMaterialRequest(id, data);
     if (remote && remote.success) return remote;
-    return dbStore.approveMaterialRequest(id, data);
+    return localResult;
   },
 
   rejectMaterialRequest: async (id, data = {}) => {
@@ -547,8 +561,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
+    const localResult = dbStore.rejectMaterialRequest(id, data);
     if (remote && remote.success) return remote;
-    return dbStore.rejectMaterialRequest(id, data);
+    return localResult;
   },
 
   getInventoryLogs: async (filters = {}) => {

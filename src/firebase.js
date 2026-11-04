@@ -187,15 +187,127 @@ export const firebaseRealtime = {
   async pushState(state) {
     try {
       const url = `${REALTIME_DB_URL}/state.json`;
-      const res = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(state),
-      });
+      const promises = [
+        fetch(url, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state),
+        }),
+      ];
+
+      // Mirror inventory to dedicated cloud endpoints for strict ground-truth persistence
+      if (Array.isArray(state?.inventoryItems)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/inventoryItems.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state.inventoryItems),
+          })
+        );
+      }
+      if (Array.isArray(state?.materialRequests)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/materialRequests.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state.materialRequests),
+          })
+        );
+      }
+      if (Array.isArray(state?.inventoryLogs)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/inventoryLogs.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state.inventoryLogs),
+          })
+        );
+      }
+
+      const [res] = await Promise.all(promises);
       return await res.json();
     } catch (err) {
       console.warn('Realtime cloud push note (offline):', err?.message);
       return null;
+    }
+  },
+
+  async pushInventory(inventoryItems, materialRequests, inventoryLogs) {
+    try {
+      const promises = [];
+      if (Array.isArray(inventoryItems)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/inventoryItems.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(inventoryItems),
+          })
+        );
+      }
+      if (Array.isArray(materialRequests)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/materialRequests.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(materialRequests),
+          })
+        );
+      }
+      if (Array.isArray(inventoryLogs)) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/inventoryLogs.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(inventoryLogs),
+          })
+        );
+      }
+      await Promise.all(promises);
+      return true;
+    } catch (err) {
+      console.warn('Realtime cloud inventory push note:', err?.message);
+      return false;
+    }
+  },
+
+  async pullInventory() {
+    try {
+      const [itemsRes, reqsRes, logsRes] = await Promise.all([
+        fetch(`${REALTIME_DB_URL}/inventoryItems.json`),
+        fetch(`${REALTIME_DB_URL}/materialRequests.json`),
+        fetch(`${REALTIME_DB_URL}/inventoryLogs.json`),
+      ]);
+      const inventoryItems = itemsRes.ok ? await itemsRes.json() : null;
+      const materialRequests = reqsRes.ok ? await reqsRes.json() : null;
+      const inventoryLogs = logsRes.ok ? await logsRes.json() : null;
+
+      const normalizeList = (val) => {
+        if (!val) return null;
+        if (Array.isArray(val)) return val;
+        if (typeof val === 'object') return Object.values(val);
+        return null;
+      };
+
+      return {
+        inventoryItems: normalizeList(inventoryItems),
+        materialRequests: normalizeList(materialRequests),
+        inventoryLogs: normalizeList(inventoryLogs),
+      };
+    } catch (err) {
+      console.warn('Realtime cloud inventory pull note:', err?.message);
+      return { inventoryItems: null, materialRequests: null, inventoryLogs: null };
+    }
+  },
+
+  async deleteInventoryItem(itemId) {
+    try {
+      if (!itemId) return false;
+      await fetch(`${REALTIME_DB_URL}/inventoryItems/${encodeURIComponent(itemId)}.json`, {
+        method: 'DELETE',
+      });
+      return true;
+    } catch {
+      return false;
     }
   },
 
@@ -321,6 +433,14 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          if (!Array.isArray(cloudState.inventoryItems) || cloudState.inventoryItems.length === 0) {
+            const inv = await firebaseRealtime.pullInventory();
+            if (inv && Array.isArray(inv.inventoryItems) && inv.inventoryItems.length > 0) {
+              cloudState.inventoryItems = inv.inventoryItems;
+              cloudState.materialRequests = inv.materialRequests || [];
+              cloudState.inventoryLogs = inv.inventoryLogs || [];
+            }
+          }
           onUpdate(cloudState);
         }
       } catch {
@@ -333,6 +453,14 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          if (!Array.isArray(cloudState.inventoryItems) || cloudState.inventoryItems.length === 0) {
+            const inv = await firebaseRealtime.pullInventory();
+            if (inv && Array.isArray(inv.inventoryItems) && inv.inventoryItems.length > 0) {
+              cloudState.inventoryItems = inv.inventoryItems;
+              cloudState.materialRequests = inv.materialRequests || [];
+              cloudState.inventoryLogs = inv.inventoryLogs || [];
+            }
+          }
           onUpdate(cloudState);
         }
       } catch {

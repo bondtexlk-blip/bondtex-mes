@@ -314,7 +314,7 @@ class ClientDatabaseStore {
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) && parsed.deliveryReceivedLogs.length ? parsed.deliveryReceivedLogs : JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
-        this.inventoryItems = Array.isArray(parsed.inventoryItems) && parsed.inventoryItems.length
+        this.inventoryItems = Array.isArray(parsed.inventoryItems)
           ? parsed.inventoryItems
           : JSON.parse(JSON.stringify(initialInventoryItems));
         this.materialRequests = Array.isArray(parsed.materialRequests)
@@ -375,16 +375,18 @@ class ClientDatabaseStore {
 
     // Connect to Firebase Realtime Database for live cross-device sync (Laptop <-> Phone)
     if (typeof window !== 'undefined') {
-      // 1. Initial Cloud Pull (survives page refreshes & syncs global active workspace pointer)
+      // 1. Initial Cloud Pull (survives page refreshes & syncs global active workspace pointer and inventory)
       Promise.allSettled([
         firebaseRealtime.getActiveWorkspacePointer(),
         firebaseRealtime.pullState(),
         firebaseRealtime.pullAllWorkspaces(),
+        firebaseRealtime.pullInventory(),
       ])
-        .then(async ([ptrRes, stateRes, allWsRes]) => {
+        .then(async ([ptrRes, stateRes, allWsRes, invRes]) => {
           const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
           const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
           const allWorkspaces = allWsRes.status === 'fulfilled' && Array.isArray(allWsRes.value) ? allWsRes.value : null;
+          const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
 
           if (allWorkspaces && allWorkspaces.length > 0) {
             const existingIds = new Set(this.workspaces.map((w) => w.id));
@@ -393,6 +395,31 @@ class ClientDatabaseStore {
                 this.workspaces.push(ws);
               }
             });
+          }
+
+          // Strict Inventory Cloud Ground-Truth Synchronization
+          if (cloudInventory && Array.isArray(cloudInventory.inventoryItems) && cloudInventory.inventoryItems.length > 0) {
+            this.inventoryItems = cloudInventory.inventoryItems;
+            if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
+            if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
+          } else if (cloudState && Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length > 0) {
+            this.inventoryItems = cloudState.inventoryItems;
+            if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
+            if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
+          } else {
+            // First time seeding Firebase cloud inventory!
+            if (!this.inventoryItems || this.inventoryItems.length === 0) {
+              this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
+              this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
+              this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
+            }
+            firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+          }
+
+          if (cloudState) {
+            cloudState.inventoryItems = this.inventoryItems;
+            cloudState.materialRequests = this.materialRequests;
+            cloudState.inventoryLogs = this.inventoryLogs;
           }
 
           const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
@@ -432,10 +459,26 @@ class ClientDatabaseStore {
   async pullCloudState() {
     if (typeof window === 'undefined') return null;
     try {
-      const [cloudActivePointer, cloudState] = await Promise.all([
+      const [cloudActivePointer, cloudState, cloudInventory] = await Promise.all([
         firebaseRealtime.getActiveWorkspacePointer(),
         firebaseRealtime.pullState(),
+        firebaseRealtime.pullInventory(),
       ]);
+
+      if (cloudInventory && Array.isArray(cloudInventory.inventoryItems) && cloudInventory.inventoryItems.length > 0) {
+        this.inventoryItems = cloudInventory.inventoryItems;
+        if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
+        if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
+      }
+
+      if (cloudState) {
+        if (!Array.isArray(cloudState.inventoryItems) || cloudState.inventoryItems.length === 0) {
+          cloudState.inventoryItems = this.inventoryItems;
+          cloudState.materialRequests = this.materialRequests;
+          cloudState.inventoryLogs = this.inventoryLogs;
+        }
+      }
+
       const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
       if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
         if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
@@ -877,6 +920,9 @@ class ClientDatabaseStore {
   // Returns full serializable database state snapshot
   getState() {
     return {
+      activeWorkspace: this.activeWorkspace,
+      activeWorkspaceId: this.activeWorkspace?.id,
+      workspaces: this.workspaces || [],
       categories: Array.isArray(this.categories) ? this.categories : [],
       orders: Array.isArray(this.orders) ? this.orders : [],
       machines: Array.isArray(this.machines) ? this.machines : [],
@@ -885,6 +931,9 @@ class ClientDatabaseStore {
       deliveryReceivedLogs: Array.isArray(this.deliveryReceivedLogs) ? this.deliveryReceivedLogs : [],
       outsourceConsignments: Array.isArray(this.outsourceConsignments) ? this.outsourceConsignments : [],
       productionPlans: Array.isArray(this.productionPlans) ? this.productionPlans : [],
+      inventoryItems: this.inventoryItems || [],
+      materialRequests: this.materialRequests || [],
+      inventoryLogs: this.inventoryLogs || [],
       lastSaved: this.lastSaved || new Date().toISOString(),
       lastUpdated: this.lastSaved || new Date().toISOString(),
       lastDeviceId: this.deviceId || 'srv',
@@ -2989,7 +3038,10 @@ class ClientDatabaseStore {
       });
     }
 
-    this.save();
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
     return { success: true, item: newItem };
   }
 
@@ -3002,13 +3054,66 @@ class ClientDatabaseStore {
     if (updates.category !== undefined) item.category = updates.category;
     if (updates.unit !== undefined) item.unit = updates.unit;
     if (updates.reorderLevel !== undefined) item.reorderLevel = Math.max(0, Number(updates.reorderLevel) || 0);
-    if (updates.location !== undefined) item.location = updates.location;
-    if (updates.supplier !== undefined) item.supplier = updates.supplier;
-    if (updates.notes !== undefined) item.notes = updates.notes;
+    if (updates.location !== undefined) item.location = (updates.location || '').trim();
+    if (updates.supplier !== undefined) item.supplier = (updates.supplier || '').trim();
+    if (updates.notes !== undefined) item.notes = (updates.notes || '').trim();
     item.lastUpdated = new Date().toISOString();
 
-    this.save();
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    this.inventoryLogs.unshift({
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: 'Item_Updated',
+      itemId: item.id,
+      itemCode: item.code,
+      itemName: item.name,
+      qtyChange: 0,
+      balanceBefore: item.currentStock,
+      balanceAfter: item.currentStock,
+      unit: item.unit,
+      referenceId: 'EDIT-DETAILS',
+      performedBy: updates.updatedBy || 'Storekeeper',
+      department: 'Store Warehouse',
+      notes: `Updated item details for ${item.name}`,
+    });
+
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
     return { success: true, item };
+  }
+
+  deleteInventoryItem(id) {
+    const idx = (this.inventoryItems || []).findIndex((i) => i.id === id || i.code === id);
+    if (idx === -1) throw new Error(`Inventory item ${id} not found`);
+    const removed = this.inventoryItems[idx];
+    this.inventoryItems.splice(idx, 1);
+
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    this.inventoryLogs.unshift({
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: 'Item_Deleted',
+      itemId: removed.id,
+      itemCode: removed.code,
+      itemName: removed.name,
+      qtyChange: -removed.currentStock,
+      balanceBefore: removed.currentStock,
+      balanceAfter: 0,
+      unit: removed.unit,
+      referenceId: 'DELETE-ITEM',
+      performedBy: 'Storekeeper',
+      department: 'Store Warehouse',
+      notes: `Deleted raw material ${removed.name} (${removed.code}) from store inventory`,
+    });
+
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.deleteInventoryItem(removed.id);
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
+    return { success: true, item: removed };
   }
 
   adjustInventoryStock(id, { adjustmentQty, type = 'Restock', notes = '', performedBy = 'Storekeeper' }) {
@@ -3045,7 +3150,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save();
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
     return { success: true, item, log };
   }
 
@@ -3126,7 +3234,10 @@ class ClientDatabaseStore {
 
     // STRICT: Do NOT deduct inventory stock here!
     this.materialRequests.unshift(newRequest);
-    this.save();
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
 
     return {
       success: true,
@@ -3191,7 +3302,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save();
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
 
     return {
       success: true,
@@ -3237,7 +3351,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save();
+    this.save(true);
+    if (typeof window !== 'undefined') {
+      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    }
 
     return {
       success: true,

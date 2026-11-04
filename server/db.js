@@ -2738,6 +2738,34 @@ class ProductionDatabase {
     return { success: true, item };
   }
 
+  deleteInventoryItem(id) {
+    const idx = (this.inventoryItems || []).findIndex((i) => i.id === id || i.code === id);
+    if (idx === -1) throw new Error(`Inventory item ${id} not found`);
+    const removed = this.inventoryItems[idx];
+    this.inventoryItems.splice(idx, 1);
+
+    if (!this.inventoryLogs) this.inventoryLogs = [];
+    this.inventoryLogs.unshift({
+      id: `LOG-INV-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      type: 'Item_Deleted',
+      itemId: removed.id,
+      itemCode: removed.code,
+      itemName: removed.name,
+      qtyChange: -removed.currentStock,
+      balanceBefore: removed.currentStock,
+      balanceAfter: 0,
+      unit: removed.unit,
+      referenceId: 'DELETE-ITEM',
+      performedBy: 'Storekeeper',
+      department: 'Store Warehouse',
+      notes: `Deleted raw material ${removed.name} (${removed.code}) from store inventory`,
+    });
+
+    this.save();
+    return { success: true, item: removed };
+  }
+
   adjustInventoryStock(id, { adjustmentQty, type = 'Restock', notes = '', performedBy = 'Storekeeper' }) {
     const item = (this.inventoryItems || []).find((i) => i.id === id || i.code === id);
     if (!item) throw new Error(`Inventory item ${id} not found`);

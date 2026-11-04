@@ -571,6 +571,16 @@ router.put('/inventory/:id', (req, res) => {
   }
 });
 
+// 4b. Delete inventory item
+router.delete('/inventory/:id', (req, res) => {
+  try {
+    const result = db.deleteInventoryItem(req.params.id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
 // 5. Adjust item stock count
 router.post('/inventory/:id/adjust', (req, res) => {
   try {

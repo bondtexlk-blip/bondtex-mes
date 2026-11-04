@@ -30,6 +30,8 @@ import {
   Building,
   Check,
   ChevronDown,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api/client';
@@ -64,6 +66,10 @@ export default function ProductionInventoryDashboard({
 
   // Modals
   const [addMaterialModalOpen, setAddMaterialModalOpen] = useState(false);
+  const [editMaterialModalOpen, setEditMaterialModalOpen] = useState(false);
+  const [selectedItemForEdit, setSelectedItemForEdit] = useState(null);
+  const [deleteConfirmModalOpen, setDeleteConfirmModalOpen] = useState(false);
+  const [selectedItemForDelete, setSelectedItemForDelete] = useState(null);
   const [adjustStockModalOpen, setAdjustStockModalOpen] = useState(false);
   const [selectedItemForAdjust, setSelectedItemForAdjust] = useState(null);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -832,17 +838,41 @@ export default function ProductionInventoryDashboard({
 
                           {/* Store Actions */}
                           <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-2">
+                            <div className="flex items-center justify-center gap-1.5">
                               {/* Restock / Adjust */}
                               <button
                                 onClick={() => {
                                   setSelectedItemForAdjust(item);
                                   setAdjustStockModalOpen(true);
                                 }}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px] transition active:scale-95 cursor-pointer"
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px] transition active:scale-95 cursor-pointer"
                                 title="Add Restock or Adjust Count"
                               >
-                                Restock / Adjust
+                                Restock
+                              </button>
+
+                              {/* Edit Item Details */}
+                              <button
+                                onClick={() => {
+                                  setSelectedItemForEdit(item);
+                                  setEditMaterialModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition active:scale-95 cursor-pointer"
+                                title="Edit Raw Material Details"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                              </button>
+
+                              {/* Delete Item */}
+                              <button
+                                onClick={() => {
+                                  setSelectedItemForDelete(item);
+                                  setDeleteConfirmModalOpen(true);
+                                }}
+                                className="p-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 transition active:scale-95 cursor-pointer"
+                                title="Delete Raw Material"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                               </button>
 
                               {/* Item QR Code */}
@@ -1505,6 +1535,270 @@ export default function ProductionInventoryDashboard({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1B: EDIT RAW MATERIAL DETAILS MODAL */}
+      {/* ========================================================================= */}
+      {editMaterialModalOpen && selectedItemForEdit && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-slate-900 border border-blue-500/30 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                  <Pencil className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Edit Raw Material Details</h3>
+                  <p className="text-xs text-slate-400">Modify catalog specifications, reorder triggers & shelf location</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setEditMaterialModalOpen(false);
+                  setSelectedItemForEdit(null);
+                }}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const name = form.matName.value.trim();
+                const code = form.matCode.value.trim();
+                const category = form.matCategory.value;
+                const unit = form.matUnit.value;
+                const reorderLevel = Number(form.matReorder.value) || 0;
+                const location = form.matLocation.value.trim();
+                const supplier = form.matSupplier.value.trim();
+                const notes = form.matNotes.value.trim();
+
+                try {
+                  setActionInProgress(true);
+                  const res = await api.updateInventoryItem(selectedItemForEdit.id, {
+                    name,
+                    code,
+                    category,
+                    unit,
+                    reorderLevel,
+                    location,
+                    supplier,
+                    notes,
+                    updatedBy: 'Storekeeper',
+                  });
+
+                  if (res && res.success !== false) {
+                    if (onShowToast) onShowToast(`Updated material "${name}" details successfully!`);
+                    setEditMaterialModalOpen(false);
+                    setSelectedItemForEdit(null);
+                    await loadData();
+                  } else {
+                    if (onShowToast) onShowToast(res?.message || 'Failed to update item', 'error');
+                  }
+                } catch (err) {
+                  if (onShowToast) onShowToast(err.message, 'error');
+                } finally {
+                  setActionInProgress(false);
+                }
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-semibold text-slate-300">Material Name *</label>
+                <input
+                  name="matName"
+                  required
+                  defaultValue={selectedItemForEdit.name}
+                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-300">Item Code *</label>
+                  <input
+                    name="matCode"
+                    required
+                    defaultValue={selectedItemForEdit.code}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-300">Category *</label>
+                  <select
+                    name="matCategory"
+                    defaultValue={selectedItemForEdit.category || 'Other'}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                  >
+                    <option value="Straps">Straps</option>
+                    <option value="Adhesive">Adhesive</option>
+                    <option value="File Covers">File Covers</option>
+                    <option value="Tissue">Tissue</option>
+                    <option value="Yarn">Yarn</option>
+                    <option value="Packaging">Packaging</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-300">Unit of Measurement *</label>
+                  <select
+                    name="matUnit"
+                    defaultValue={selectedItemForEdit.unit || 'Units'}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                  >
+                    <option value="Meters">Meters</option>
+                    <option value="Rolls">Rolls</option>
+                    <option value="Pcs">Pcs</option>
+                    <option value="Kgs">Kgs</option>
+                    <option value="Boxes">Boxes</option>
+                    <option value="Units">Units</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-300">Reorder Alert Level *</label>
+                  <input
+                    type="number"
+                    name="matReorder"
+                    required
+                    min="0"
+                    step="any"
+                    defaultValue={selectedItemForEdit.reorderLevel}
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-semibold text-slate-300">Warehouse Shelf / Location</label>
+                  <input
+                    name="matLocation"
+                    defaultValue={selectedItemForEdit.location || ''}
+                    placeholder="e.g. Rack S-01, Shelf B"
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold text-slate-300">Supplier Name</label>
+                  <input
+                    name="matSupplier"
+                    defaultValue={selectedItemForEdit.supplier || ''}
+                    placeholder="e.g. Bondtex Primary Mills"
+                    className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-300">Technical Notes / Specs</label>
+                <input
+                  name="matNotes"
+                  defaultValue={selectedItemForEdit.notes || ''}
+                  placeholder="e.g. High tenacity nylon yarn, 54A2 elastic strap..."
+                  className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-white focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditMaterialModalOpen(false);
+                    setSelectedItemForEdit(null);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionInProgress}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold transition shadow-lg shadow-blue-900/30 cursor-pointer"
+                >
+                  {actionInProgress ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 1C: DELETE CONFIRMATION MODAL */}
+      {/* ========================================================================= */}
+      {deleteConfirmModalOpen && selectedItemForDelete && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-rose-400">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Delete Raw Material?</h3>
+                <p className="text-xs text-slate-400">This action will remove the item from active store inventory.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-1">
+              <div className="text-white font-bold">{selectedItemForDelete.name}</div>
+              <div className="text-slate-400 font-mono text-[11px]">
+                Code: <span className="text-cyan-400">{selectedItemForDelete.code}</span> | Category: <span className="text-slate-300">{selectedItemForDelete.category}</span>
+              </div>
+              <div className="text-slate-400 text-[11px]">
+                Current Available Stock: <span className="font-mono font-bold text-amber-400">{selectedItemForDelete.currentStock?.toLocaleString()} {selectedItemForDelete.unit}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Are you sure you want to permanently delete this material? All future floor QR requests for this code will be unavailable.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirmModalOpen(false);
+                  setSelectedItemForDelete(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={actionInProgress}
+                onClick={async () => {
+                  try {
+                    setActionInProgress(true);
+                    const res = await api.deleteInventoryItem(selectedItemForDelete.id);
+                    if (res && res.success !== false) {
+                      if (onShowToast) onShowToast(`Deleted "${selectedItemForDelete.name}" from store inventory!`);
+                      setDeleteConfirmModalOpen(false);
+                      setSelectedItemForDelete(null);
+                      await loadData();
+                    } else {
+                      if (onShowToast) onShowToast(res?.message || 'Failed to delete item', 'error');
+                    }
+                  } catch (err) {
+                    if (onShowToast) onShowToast(err.message, 'error');
+                  } finally {
+                    setActionInProgress(false);
+                  }
+                }}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition shadow-lg shadow-rose-900/30 cursor-pointer"
+              >
+                {actionInProgress ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}
