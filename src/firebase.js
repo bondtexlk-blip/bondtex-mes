@@ -423,6 +423,7 @@ export const firebaseRealtime = {
     let eventSource = null;
     let pollInterval = null;
     let stopped = false;
+    let lastHandledTimestamp = null;
 
     const connectStream = () => {
       if (stopped) return;
@@ -434,7 +435,14 @@ export const firebaseRealtime = {
               const payload = JSON.parse(e.data);
               if (payload && payload.data) {
                 if (payload.path === '/' || !payload.path) {
-                  onUpdate(payload.data);
+                  const state = payload.data;
+                  if (state && state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
+                    return;
+                  }
+                  if (state && state.lastUpdated) {
+                    lastHandledTimestamp = state.lastUpdated;
+                  }
+                  onUpdate(state);
                 }
               }
             } catch (err) {
@@ -447,7 +455,7 @@ export const firebaseRealtime = {
               eventSource.close();
               eventSource = null;
             }
-            if (!stopped) setTimeout(connectStream, 4000);
+            if (!stopped) setTimeout(connectStream, 15000);
           };
         }
       } catch (err) {
@@ -457,12 +465,16 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Periodic fallback poll (every 4 seconds) to ensure mobile phones wake up and sync instantly on unlock
+    // Gentle fallback poll (every 30 seconds, only when tab is visible and has active focus)
     pollInterval = setInterval(async () => {
       if (stopped) return;
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          if (cloudState.lastUpdated === lastHandledTimestamp) return;
+          lastHandledTimestamp = cloudState.lastUpdated;
+
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
             if (inv && Array.isArray(inv.inventoryItems)) {
@@ -476,13 +488,16 @@ export const firebaseRealtime = {
       } catch {
         // ignore
       }
-    }, 4000);
+    }, 30000);
 
     // Sync immediately on window focus / tab visibility change (e.g. user opens phone or switches back to tab)
     const handleFocus = async () => {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          if (cloudState.lastUpdated === lastHandledTimestamp) return;
+          lastHandledTimestamp = cloudState.lastUpdated;
+
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
             if (inv && Array.isArray(inv.inventoryItems)) {

@@ -31,10 +31,10 @@ export const DEFAULT_WORKSPACE = {
 
 class ClientDatabaseStore {
   constructor() {
-    this.categories = [];
-    this.orders = [];
-    this.machines = [];
-    this.workers = [];
+    this.categories = JSON.parse(JSON.stringify(initialCategories));
+    this.orders = JSON.parse(JSON.stringify(initialOrders));
+    this.machines = JSON.parse(JSON.stringify(initialMachines));
+    this.workers = JSON.parse(JSON.stringify(initialWorkers));
     this.productionLogs = JSON.parse(JSON.stringify(initialProductionLogs));
     this.deliveryReceivedLogs = JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
     this.outsourceConsignments = [];
@@ -46,9 +46,79 @@ class ClientDatabaseStore {
     this.workspaces = [];
     this.subscribers = [];
     this.lastSaved = null;
+    this.lastAppliedCloudTimestamp = null;
+    this._notifyTimeout = null;
     this.deviceId = 'srv';
     this.initialized = false;
+
+    // Load cached database instantly from LocalStorage on construction (0ms delay)
+    this.loadSynchronousLocalCache();
+
+    this.ensureSpecialMachines();
+    this.ensureOrderCalculations();
+
     this.readyPromise = this.init();
+  }
+
+  loadSynchronousLocalCache() {
+    try {
+      this.deviceId =
+        typeof window !== 'undefined'
+          ? localStorage.getItem('bondtex_dev_id') ||
+            (() => {
+              const id = 'DEV-' + Math.random().toString(36).slice(2, 9) + '-' + Date.now();
+              try {
+                localStorage.setItem('bondtex_dev_id', id);
+              } catch {}
+              return id;
+            })()
+          : 'srv';
+
+      let parsed = null;
+      if (typeof window !== 'undefined') {
+        const rawPrimary = localStorage.getItem(STORAGE_KEY);
+        if (rawPrimary) {
+          try { parsed = JSON.parse(rawPrimary); } catch {}
+        }
+        if (!parsed) {
+          const rawVault = localStorage.getItem(VAULT_KEY);
+          if (rawVault) {
+            try { parsed = JSON.parse(rawVault); } catch {}
+          }
+        }
+      }
+
+      if (parsed && Array.isArray(parsed.orders)) {
+        this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
+        this.orders = parsed.orders;
+        this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
+          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
+        this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
+        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
+        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+        this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+        this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
+        this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
+        this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
+        this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
+        this.lastSaved = parsed.lastSaved || null;
+
+        if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
+          this.activeWorkspace = parsed.activeWorkspace;
+        } else if (typeof window !== 'undefined') {
+          const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
+          if (rawActive) {
+            try { this.activeWorkspace = JSON.parse(rawActive); } catch {}
+          }
+        }
+
+        if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
+          this.workspaces = parsed.workspaces;
+        }
+      }
+    } catch (err) {
+      console.warn('Local cache sync warning:', err);
+    }
   }
 
   // Subscribe to live database updates from any device (laptop, phone, tablet)
@@ -62,21 +132,39 @@ class ClientDatabaseStore {
     return () => {};
   }
 
+  // Debounced notification to eliminate high-frequency React re-renders and CPU lockups
   notifySubscribers() {
-    this.subscribers.forEach((cb) => {
-      try {
-        cb();
-      } catch (err) {
-        console.error('Subscriber callback notification error:', err);
-      }
-    });
+    if (this._notifyTimeout) clearTimeout(this._notifyTimeout);
+    this._notifyTimeout = setTimeout(() => {
+      this.subscribers.forEach((cb) => {
+        try {
+          cb();
+        } catch (err) {
+          console.error('Subscriber callback notification error:', err);
+        }
+      });
+    }, 50);
   }
 
   // Apply real-time cloud state pushed from Firebase Realtime Database
   applyCloudState(cloudState) {
     if (!cloudState) return;
-    if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastSaved) return;
     if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) return;
+
+    // Strict timestamp comparison: only apply if cloud is ACTUALLY NEWER than local
+    if (cloudState.lastUpdated && this.lastSaved) {
+      const cloudTime = new Date(cloudState.lastUpdated).getTime();
+      const localTime = new Date(this.lastSaved).getTime();
+      if (!isNaN(cloudTime) && !isNaN(localTime) && cloudTime <= localTime) {
+        return;
+      }
+    }
+
+    // Guard against re-applying the exact same cloud snapshot repeatedly
+    if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastAppliedCloudTimestamp) {
+      return;
+    }
+    this.lastAppliedCloudTimestamp = cloudState.lastUpdated;
 
     // 1. GLOBAL WORKSPACE SWITCH DETECTION:
     // If the cloud state has an activeWorkspaceId different from local, this is an intentional
@@ -221,213 +309,117 @@ class ClientDatabaseStore {
 
   async init() {
     this.subscribers = [];
-    this.deviceId =
-      typeof window !== 'undefined'
-        ? localStorage.getItem('bondtex_dev_id') ||
-          (() => {
-            const id = 'DEV-' + Math.random().toString(36).slice(2, 9) + '-' + Date.now();
-            try {
-              localStorage.setItem('bondtex_dev_id', id);
-            } catch {}
-            return id;
-          })()
-        : 'srv';
 
-    // Fast synchronous read of local cache as baseline
-    try {
-      let parsed = null;
-      if (typeof window !== 'undefined') {
-        const rawPrimary = localStorage.getItem(STORAGE_KEY);
-        if (rawPrimary) {
-          try { parsed = JSON.parse(rawPrimary); } catch {}
-        }
-        if (!parsed) {
-          const rawVault = localStorage.getItem(VAULT_KEY);
-          if (rawVault) {
-            try { parsed = JSON.parse(rawVault); } catch {}
-          }
-        }
-      }
-
-      if (parsed && Array.isArray(parsed.orders)) {
-        this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : JSON.parse(JSON.stringify(initialCategories));
-        this.orders = parsed.orders;
-        this.machines = (Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines)))
-          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
-        this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
-        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
-        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
-        this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
-        this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
-        this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : [];
-        this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
-        this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
-        this.lastSaved = parsed.lastSaved || null;
-
-        if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
-          this.activeWorkspace = parsed.activeWorkspace;
-        } else if (typeof window !== 'undefined') {
-          const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
-          if (rawActive) {
-            try { this.activeWorkspace = JSON.parse(rawActive); } catch {}
-          }
-        }
-
-        if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
-          this.workspaces = parsed.workspaces;
-        }
-      }
-    } catch {}
-
-    this.ensureSpecialMachines();
-    this.ensureOrderCalculations();
-
-    // STRICT CLOUD HYDRATION (authoritative ground truth from Firebase RTDB)
+    // Background cloud hydration with 3.5s timeout (never blocks instant UI rendering)
     if (typeof fetch !== 'undefined') {
       try {
-        const [ptrRes, stateRes, allWsRes, invRes] = await Promise.allSettled([
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve('timeout'), 3500));
+        const syncPromise = Promise.allSettled([
           firebaseRealtime.getActiveWorkspacePointer(),
           firebaseRealtime.pullState(),
-          firebaseRealtime.pullAllWorkspaces(),
           firebaseRealtime.pullInventory(),
         ]);
 
-        const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
-        const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
-        const allWorkspaces = allWsRes.status === 'fulfilled' && Array.isArray(allWsRes.value) ? allWsRes.value : [];
-        const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
+        const raceResult = await Promise.race([syncPromise, timeoutPromise]);
+        if (raceResult !== 'timeout' && Array.isArray(raceResult)) {
+          const [ptrRes, stateRes, invRes] = raceResult;
+          const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
+          const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
+          const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
 
-        // 1. Strict Inventory Hydration from Cloud Ground Truth
-        if (cloudInventory && Array.isArray(cloudInventory.inventoryItems)) {
-          this.inventoryItems = cloudInventory.inventoryItems;
-          if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
-          if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
-        } else if (cloudState && Array.isArray(cloudState.inventoryItems)) {
-          this.inventoryItems = cloudState.inventoryItems;
-          if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
-          if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
-        } else if (!this.inventoryItems || this.inventoryItems.length === 0) {
-          // First time seeding Firebase cloud inventory! Only seed if cloud literally has null/empty store
-          this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
-          this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
-          this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
-          await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
-        }
-
-        // 2. Strict Workspaces List Hydration from Cloud
-        if (allWorkspaces && allWorkspaces.length > 0) {
-          this.workspaces = allWorkspaces;
-        } else if (cloudState && Array.isArray(cloudState.workspaces) && cloudState.workspaces.length > 0) {
-          this.workspaces = cloudState.workspaces;
-        }
-
-        // 3. Strict Active Workspace Hydration from Cloud Active Pointer
-        const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
-
-        if (targetActiveId) {
-          if (cloudState && !cloudState.activeWorkspaceId && cloudActivePointer?.id === targetActiveId) {
-            cloudState.activeWorkspaceId = targetActiveId;
-            cloudState.activeWorkspace = cloudActivePointer;
+          // 1. Strict Inventory Hydration from Cloud Ground Truth
+          if (cloudInventory && Array.isArray(cloudInventory.inventoryItems)) {
+            this.inventoryItems = cloudInventory.inventoryItems;
+            if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
+            if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
+          } else if (cloudState && Array.isArray(cloudState.inventoryItems)) {
+            this.inventoryItems = cloudState.inventoryItems;
+            if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
+            if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
           }
-          if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
-            // Cloud state matches the active workspace pointer exactly
-            this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
-              id: targetActiveId,
-              buyerName: cloudState.buyerName || 'Active Order',
+
+          // 2. Strict Workspaces List Hydration from Cloud
+          if (cloudState && Array.isArray(cloudState.workspaces) && cloudState.workspaces.length > 0) {
+            this.workspaces = cloudState.workspaces;
+          }
+
+          // 3. Strict Active Workspace Hydration from Cloud Active Pointer
+          const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+
+          if (targetActiveId) {
+            if (cloudState && !cloudState.activeWorkspaceId && cloudActivePointer?.id === targetActiveId) {
+              cloudState.activeWorkspaceId = targetActiveId;
+              cloudState.activeWorkspace = cloudActivePointer;
+            }
+            if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+              this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
+                id: targetActiveId,
+                buyerName: cloudState.buyerName || 'Active Order',
+                status: 'Active',
+              };
+              this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
+              this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
+              this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
+              this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
+              this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
+              if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
+              if (Array.isArray(cloudState.machines)) this.machines = cloudState.machines;
+              if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
+            } else {
+              let targetWs = (this.workspaces || []).find((w) => w.id === targetActiveId);
+              if (!targetWs) {
+                targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
+              }
+              if (targetWs) {
+                this.activeWorkspace = {
+                  id: targetWs.id,
+                  buyerName: targetWs.buyerName || 'Active Order',
+                  name: targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`,
+                  notes: targetWs.notes || '',
+                  status: 'Active',
+                  createdAt: targetWs.createdAt || new Date().toISOString(),
+                };
+                this.orders = Array.isArray(targetWs.orders) ? targetWs.orders : [];
+                this.productionLogs = Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [];
+                this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
+                this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
+                this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
+              } else if (cloudState) {
+                this.applyCloudState(cloudState);
+              }
+            }
+          } else if (cloudState) {
+            this.applyCloudState(cloudState);
+          }
+
+          if (this.activeWorkspace && this.activeWorkspace.id) {
+            const actIdx = (this.workspaces || []).findIndex((w) => w.id === this.activeWorkspace.id);
+            const actObj = {
+              ...this.activeWorkspace,
               status: 'Active',
             };
-            this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
-            this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
-            this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
-            this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
-            this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
-            if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
-            if (Array.isArray(cloudState.machines)) this.machines = cloudState.machines;
-            if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
-          } else {
-            // Target active workspace is in archives
-            let targetWs = (this.workspaces || []).find((w) => w.id === targetActiveId);
-            if (!targetWs) {
-              targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
-            }
-            if (targetWs) {
-              this.activeWorkspace = {
-                id: targetWs.id,
-                buyerName: targetWs.buyerName || 'Active Order',
-                name: targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`,
-                notes: targetWs.notes || '',
-                status: 'Active',
-                createdAt: targetWs.createdAt || new Date().toISOString(),
-              };
-              this.orders = Array.isArray(targetWs.orders) ? targetWs.orders : [];
-              this.productionLogs = Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [];
-              this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
-              this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
-              this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
-            } else if (cloudState) {
-              this.applyCloudState(cloudState);
+            if (actIdx >= 0) {
+              this.workspaces[actIdx] = { ...this.workspaces[actIdx], ...actObj };
+            } else {
+              this.workspaces.unshift(actObj);
             }
           }
-        } else if (cloudState) {
-          this.applyCloudState(cloudState);
-        }
 
-        // Ensure active workspace is in workspaces list
-        if (this.activeWorkspace && this.activeWorkspace.id) {
-          const actIdx = (this.workspaces || []).findIndex((w) => w.id === this.activeWorkspace.id);
-          const actObj = {
-            ...this.activeWorkspace,
-            status: 'Active',
-            orderCount: this.orders.length,
-            totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
-            totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
-            totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
-            totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
-            totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
-          };
-          if (actIdx >= 0) {
-            this.workspaces[actIdx] = { ...this.workspaces[actIdx], ...actObj };
-          } else {
-            this.workspaces.unshift(actObj);
+          this.ensureSpecialMachines();
+          this.ensureOrderCalculations();
+
+          if (cloudState && cloudState.lastUpdated) {
+            this.lastSaved = cloudState.lastUpdated;
+            this.lastAppliedCloudTimestamp = cloudState.lastUpdated;
           }
+
+          this.notifySubscribers();
         }
-
-        this.ensureSpecialMachines();
-        this.ensureOrderCalculations();
-        this.lastSaved = new Date().toISOString();
-
-        // Write fresh cloud hydration to local storage
-        try {
-          const payloadStr = JSON.stringify({
-            activeWorkspace: this.activeWorkspace,
-            activeWorkspaceId: this.activeWorkspace?.id,
-            workspaces: this.workspaces || [],
-            categories: this.categories,
-            orders: this.orders,
-            machines: this.machines,
-            workers: this.workers,
-            productionLogs: this.productionLogs,
-            deliveryReceivedLogs: this.deliveryReceivedLogs,
-            outsourceConsignments: this.outsourceConsignments || [],
-            productionPlans: this.productionPlans || [],
-            inventoryItems: this.inventoryItems || [],
-            materialRequests: this.materialRequests || [],
-            inventoryLogs: this.inventoryLogs || [],
-            lastSaved: this.lastSaved,
-          });
-          localStorage.setItem(STORAGE_KEY, payloadStr);
-          localStorage.setItem(VAULT_KEY, payloadStr);
-          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
-          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
-        } catch {}
-
-        this.initialized = true;
-        this.notifySubscribers();
       } catch (err) {
-        console.warn('Initial cloud sync error:', err);
+        console.warn('Initial background cloud sync error:', err);
       }
 
-      // Connect SSE Listener
+      // Connect SSE Listener (real-time stream without polling flooding)
       this.unsubscribeCloud = firebaseRealtime.listenToChanges((cloudState) => {
         if (cloudState && cloudState.lastDeviceId !== this.deviceId) {
           this.applyCloudState(cloudState);
@@ -435,6 +427,7 @@ class ClientDatabaseStore {
       });
     }
 
+    this.initialized = true;
     return true;
   }
 

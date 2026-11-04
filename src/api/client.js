@@ -33,15 +33,11 @@ async function safeFetchJson(url, options = {}) {
 export const api = {
   // Database hydration readiness check
   ready: async () => {
-    if (dbStore && dbStore.readyPromise) {
-      await dbStore.readyPromise;
-    }
     return true;
   },
 
   // 1. Factory overview
   getOverview: async () => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/overview`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getFactoryOverview() };
@@ -49,7 +45,6 @@ export const api = {
 
   // 2. Categories summary
   getCategories: async () => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/categories`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getCategoriesSummary() };
@@ -432,14 +427,12 @@ export const api = {
 
   // 23. Order Workspace Management APIs (Global Workspace State)
   getActiveWorkspace: async () => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/workspaces/active`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getActiveWorkspace() };
   },
 
   getWorkspaces: async () => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/workspaces`);
     if (remote && remote.success) return remote;
     return { success: true, ...dbStore.getWorkspaces() };
@@ -474,7 +467,6 @@ export const api = {
 
   // 24. Production Inventory & QR Material Request Workflow APIs
   getInventoryItems: async (filters = {}) => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') params.append(key, val);
@@ -485,7 +477,6 @@ export const api = {
   },
 
   getInventoryItemById: async (id) => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`);
     if (remote && remote.success) return remote;
     const item = dbStore.getInventoryItemById(id);
@@ -532,7 +523,6 @@ export const api = {
   },
 
   getMaterialRequests: async (filters = {}) => {
-    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') params.append(key, val);
