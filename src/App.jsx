@@ -211,6 +211,7 @@ export default function App() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
+      await api.ready();
       const [overviewRes, categoriesRes, chartRes, metaRes, wsRes] = await Promise.all([
         api.getOverview(),
         api.getCategories(),

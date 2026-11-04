@@ -47,7 +47,8 @@ class ClientDatabaseStore {
     this.subscribers = [];
     this.lastSaved = null;
     this.deviceId = 'srv';
-    this.init();
+    this.initialized = false;
+    this.readyPromise = this.init();
   }
 
   // Subscribe to live database updates from any device (laptop, phone, tablet)
@@ -75,6 +76,7 @@ class ClientDatabaseStore {
   applyCloudState(cloudState) {
     if (!cloudState) return;
     if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastSaved) return;
+    if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) return;
 
     // 1. GLOBAL WORKSPACE SWITCH DETECTION:
     // If the cloud state has an activeWorkspaceId different from local, this is an intentional
@@ -90,7 +92,7 @@ class ClientDatabaseStore {
         buyerName: cloudState.buyerName || 'Active Order',
         status: 'Active',
       };
-      if (Array.isArray(cloudState.workspaces) && cloudState.workspaces.length) {
+      if (Array.isArray(cloudState.workspaces)) {
         this.workspaces = cloudState.workspaces;
       }
       this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
@@ -98,7 +100,7 @@ class ClientDatabaseStore {
       this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
       this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
       this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
-      if (Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length) this.inventoryItems = cloudState.inventoryItems;
+      if (Array.isArray(cloudState.inventoryItems)) this.inventoryItems = cloudState.inventoryItems;
       if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
       if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
       if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
@@ -143,52 +145,12 @@ class ClientDatabaseStore {
     if (cloudState.activeWorkspace) {
       this.activeWorkspace = cloudState.activeWorkspace;
     }
-    if (Array.isArray(cloudState.workspaces) && cloudState.workspaces.length) {
+    if (Array.isArray(cloudState.workspaces)) {
       this.workspaces = cloudState.workspaces;
     }
-
-    // Multi-Device Data Protection & Anti-Downgrade Guard:
-    // Ensures no older device, reset script, or transient sync ever regresses factory production progress
-    const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
-    const cloudTotProd = Array.isArray(cloudState.orders)
-      ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
-      : 0;
-
-    if (Array.isArray(cloudState.orders) && cloudState.orders.length > 0) {
-      if (cloudTotProd >= localTotProd) {
-        // Cloud state has equal or greater verified production -> accept cloud orders
-        this.orders = cloudState.orders;
-      } else {
-        // DANGER GUARD ACTIVATED: Cloud payload has LESS production than local state!
-        // Never clobber or wipe factory floor progress! Safe-merge orders preserving maximum progress.
-        const mergedOrders = this.orders.map((localOrd) => {
-          const cloudOrd = cloudState.orders.find((co) => co.id === localOrd.id);
-          if (!cloudOrd) return localOrd;
-          return {
-            ...cloudOrd,
-            ...localOrd,
-            productionQty: Math.max(Number(localOrd.productionQty) || 0, Number(cloudOrd.productionQty) || 0),
-            deliveryQty: Math.max(Number(localOrd.deliveryQty) || 0, Number(cloudOrd.deliveryQty) || 0),
-            floorProductionQty: Math.max(Number(localOrd.floorProductionQty) || 0, Number(cloudOrd.floorProductionQty) || 0),
-            dailyLogs: (localOrd.dailyLogs && localOrd.dailyLogs.length >= (cloudOrd.dailyLogs?.length || 0))
-              ? localOrd.dailyLogs
-              : (cloudOrd.dailyLogs || []),
-          };
-        });
-        cloudState.orders.forEach((co) => {
-          if (!mergedOrders.some((mo) => mo.id === co.id)) {
-            mergedOrders.push(co);
-          }
-        });
-        this.orders = mergedOrders;
-
-        // Auto-heal cloud database by re-broadcasting higher ground truth
-        setTimeout(() => {
-          this.save(true);
-        }, 600);
-      }
+    if (Array.isArray(cloudState.orders)) {
+      this.orders = cloudState.orders;
     }
-
     if (Array.isArray(cloudState.categories) && cloudState.categories.length) {
       this.categories = cloudState.categories;
     }
@@ -200,15 +162,11 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.workers)) {
       this.workers = cloudState.workers;
     }
-    if (Array.isArray(cloudState.productionLogs) && cloudState.productionLogs.length > 0) {
-      const existingLogIds = new Set((this.productionLogs || []).map((l) => l.id));
-      const newLogs = cloudState.productionLogs.filter((l) => !existingLogIds.has(l.id));
-      this.productionLogs = [...(this.productionLogs || []), ...newLogs];
+    if (Array.isArray(cloudState.productionLogs)) {
+      this.productionLogs = cloudState.productionLogs;
     }
-    if (Array.isArray(cloudState.deliveryReceivedLogs) && cloudState.deliveryReceivedLogs.length > 0) {
-      const existingDelIds = new Set((this.deliveryReceivedLogs || []).map((l) => l.id));
-      const newLogs = cloudState.deliveryReceivedLogs.filter((l) => !existingDelIds.has(l.id));
-      this.deliveryReceivedLogs = [...(this.deliveryReceivedLogs || []), ...newLogs];
+    if (Array.isArray(cloudState.deliveryReceivedLogs)) {
+      this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs;
     }
     if (Array.isArray(cloudState.outsourceConsignments)) {
       this.outsourceConsignments = cloudState.outsourceConsignments;
@@ -216,7 +174,7 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.productionPlans)) {
       this.productionPlans = cloudState.productionPlans;
     }
-    if (Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length) {
+    if (Array.isArray(cloudState.inventoryItems)) {
       this.inventoryItems = cloudState.inventoryItems;
     }
     if (Array.isArray(cloudState.materialRequests)) {
@@ -261,7 +219,7 @@ class ClientDatabaseStore {
     this.notifySubscribers();
   }
 
-  init() {
+  async init() {
     this.subscribers = [];
     this.deviceId =
       typeof window !== 'undefined'
@@ -275,6 +233,7 @@ class ClientDatabaseStore {
           })()
         : 'srv';
 
+    // Fast synchronous read of local cache as baseline
     try {
       let parsed = null;
       if (typeof window !== 'undefined') {
@@ -282,50 +241,29 @@ class ClientDatabaseStore {
         if (rawPrimary) {
           try { parsed = JSON.parse(rawPrimary); } catch {}
         }
-        if (!parsed || !Array.isArray(parsed.orders) || parsed.orders.length === 0) {
+        if (!parsed) {
           const rawVault = localStorage.getItem(VAULT_KEY);
           if (rawVault) {
             try { parsed = JSON.parse(rawVault); } catch {}
           }
         }
-        if (!parsed || !Array.isArray(parsed.orders) || parsed.orders.length === 0) {
-          for (const key of OLD_STORAGE_KEYS) {
-            try {
-              const rawOld = localStorage.getItem(key);
-              if (rawOld) {
-                const oldObj = JSON.parse(rawOld);
-                if (Array.isArray(oldObj.orders) && oldObj.orders.length > 0) {
-                  parsed = oldObj;
-                  break;
-                }
-              }
-            } catch {}
-          }
-        }
       }
 
-      if (parsed && Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+      if (parsed && Array.isArray(parsed.orders)) {
         this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : JSON.parse(JSON.stringify(initialCategories));
         this.orders = parsed.orders;
         this.machines = (Array.isArray(parsed.machines) ? parsed.machines : JSON.parse(JSON.stringify(initialMachines)))
           .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : JSON.parse(JSON.stringify(initialWorkers));
-        this.productionLogs = Array.isArray(parsed.productionLogs) && parsed.productionLogs.length ? parsed.productionLogs : JSON.parse(JSON.stringify(initialProductionLogs));
-        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) && parsed.deliveryReceivedLogs.length ? parsed.deliveryReceivedLogs : JSON.parse(JSON.stringify(initialDeliveryReceivedLogs));
+        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
+        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
-        this.inventoryItems = Array.isArray(parsed.inventoryItems)
-          ? parsed.inventoryItems
-          : JSON.parse(JSON.stringify(initialInventoryItems));
-        this.materialRequests = Array.isArray(parsed.materialRequests)
-          ? parsed.materialRequests
-          : JSON.parse(JSON.stringify(initialMaterialRequests));
-        this.inventoryLogs = Array.isArray(parsed.inventoryLogs)
-          ? parsed.inventoryLogs
-          : JSON.parse(JSON.stringify(initialInventoryLogs));
+        this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : [];
+        this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
+        this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
         this.lastSaved = parsed.lastSaved || null;
 
-        // Restore Workspace
         if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
           this.activeWorkspace = parsed.activeWorkspace;
         } else if (typeof window !== 'undefined') {
@@ -334,126 +272,170 @@ class ClientDatabaseStore {
             try { this.activeWorkspace = JSON.parse(rawActive); } catch {}
           }
         }
-        if (!this.activeWorkspace || !this.activeWorkspace.id) {
-          this.activeWorkspace = { ...DEFAULT_WORKSPACE };
-        }
 
         if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
           this.workspaces = parsed.workspaces;
-        } else if (typeof window !== 'undefined') {
-          const rawWs = localStorage.getItem(WORKSPACES_STORAGE_KEY);
-          if (rawWs) {
-            try { this.workspaces = JSON.parse(rawWs); } catch {}
-          }
         }
-        if (!Array.isArray(this.workspaces) || this.workspaces.length === 0) {
-          this.workspaces = [
-            {
-              ...DEFAULT_WORKSPACE,
-              orderCount: this.orders.length,
-              totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
-              totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
-              totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
-              totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
-              totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
-              orders: JSON.parse(JSON.stringify(this.orders)),
-              productionLogs: JSON.parse(JSON.stringify(this.productionLogs)),
-              deliveryReceivedLogs: JSON.parse(JSON.stringify(this.deliveryReceivedLogs)),
-              outsourceConsignments: JSON.parse(JSON.stringify(this.outsourceConsignments || [])),
-              productionPlans: JSON.parse(JSON.stringify(this.productionPlans || [])),
-            },
-          ];
-        }
-      } else {
-        this.reset(false);
       }
-    } catch {
-      this.reset(false);
-    }
+    } catch {}
+
     this.ensureSpecialMachines();
     this.ensureOrderCalculations();
 
-    // Connect to Firebase Realtime Database for live cross-device sync (Laptop <-> Phone)
-    if (typeof window !== 'undefined') {
-      // 1. Initial Cloud Pull (survives page refreshes & syncs global active workspace pointer and inventory)
-      Promise.allSettled([
-        firebaseRealtime.getActiveWorkspacePointer(),
-        firebaseRealtime.pullState(),
-        firebaseRealtime.pullAllWorkspaces(),
-        firebaseRealtime.pullInventory(),
-      ])
-        .then(async ([ptrRes, stateRes, allWsRes, invRes]) => {
-          const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
-          const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
-          const allWorkspaces = allWsRes.status === 'fulfilled' && Array.isArray(allWsRes.value) ? allWsRes.value : null;
-          const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
+    // STRICT CLOUD HYDRATION (authoritative ground truth from Firebase RTDB)
+    if (typeof fetch !== 'undefined') {
+      try {
+        const [ptrRes, stateRes, allWsRes, invRes] = await Promise.allSettled([
+          firebaseRealtime.getActiveWorkspacePointer(),
+          firebaseRealtime.pullState(),
+          firebaseRealtime.pullAllWorkspaces(),
+          firebaseRealtime.pullInventory(),
+        ]);
 
-          if (allWorkspaces && allWorkspaces.length > 0) {
-            const existingIds = new Set(this.workspaces.map((w) => w.id));
-            allWorkspaces.forEach((ws) => {
-              if (ws && ws.id && !existingIds.has(ws.id)) {
-                this.workspaces.push(ws);
-              }
-            });
+        const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
+        const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
+        const allWorkspaces = allWsRes.status === 'fulfilled' && Array.isArray(allWsRes.value) ? allWsRes.value : [];
+        const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
+
+        // 1. Strict Inventory Hydration from Cloud Ground Truth
+        if (cloudInventory && Array.isArray(cloudInventory.inventoryItems)) {
+          this.inventoryItems = cloudInventory.inventoryItems;
+          if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
+          if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
+        } else if (cloudState && Array.isArray(cloudState.inventoryItems)) {
+          this.inventoryItems = cloudState.inventoryItems;
+          if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
+          if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
+        } else if (!this.inventoryItems || this.inventoryItems.length === 0) {
+          // First time seeding Firebase cloud inventory! Only seed if cloud literally has null/empty store
+          this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
+          this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
+          this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
+          await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+        }
+
+        // 2. Strict Workspaces List Hydration from Cloud
+        if (allWorkspaces && allWorkspaces.length > 0) {
+          this.workspaces = allWorkspaces;
+        } else if (cloudState && Array.isArray(cloudState.workspaces) && cloudState.workspaces.length > 0) {
+          this.workspaces = cloudState.workspaces;
+        }
+
+        // 3. Strict Active Workspace Hydration from Cloud Active Pointer
+        const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+
+        if (targetActiveId) {
+          if (cloudState && !cloudState.activeWorkspaceId && cloudActivePointer?.id === targetActiveId) {
+            cloudState.activeWorkspaceId = targetActiveId;
+            cloudState.activeWorkspace = cloudActivePointer;
           }
-
-          // Strict Inventory Cloud Ground-Truth Synchronization
-          if (cloudInventory && Array.isArray(cloudInventory.inventoryItems) && cloudInventory.inventoryItems.length > 0) {
-            this.inventoryItems = cloudInventory.inventoryItems;
-            if (Array.isArray(cloudInventory.materialRequests)) this.materialRequests = cloudInventory.materialRequests;
-            if (Array.isArray(cloudInventory.inventoryLogs)) this.inventoryLogs = cloudInventory.inventoryLogs;
-          } else if (cloudState && Array.isArray(cloudState.inventoryItems) && cloudState.inventoryItems.length > 0) {
-            this.inventoryItems = cloudState.inventoryItems;
-            if (Array.isArray(cloudState.materialRequests)) this.materialRequests = cloudState.materialRequests;
-            if (Array.isArray(cloudState.inventoryLogs)) this.inventoryLogs = cloudState.inventoryLogs;
+          if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+            // Cloud state matches the active workspace pointer exactly
+            this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
+              id: targetActiveId,
+              buyerName: cloudState.buyerName || 'Active Order',
+              status: 'Active',
+            };
+            this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
+            this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
+            this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
+            this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
+            this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
+            if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
+            if (Array.isArray(cloudState.machines)) this.machines = cloudState.machines;
+            if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
           } else {
-            // First time seeding Firebase cloud inventory!
-            if (!this.inventoryItems || this.inventoryItems.length === 0) {
-              this.inventoryItems = JSON.parse(JSON.stringify(initialInventoryItems));
-              this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
-              this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
+            // Target active workspace is in archives
+            let targetWs = (this.workspaces || []).find((w) => w.id === targetActiveId);
+            if (!targetWs) {
+              targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
             }
-            firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
-          }
-
-          if (cloudState) {
-            cloudState.inventoryItems = this.inventoryItems;
-            cloudState.materialRequests = this.materialRequests;
-            cloudState.inventoryLogs = this.inventoryLogs;
-          }
-
-          const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
-
-          if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
-            // Cloud indicates a different active workspace
-            if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+            if (targetWs) {
+              this.activeWorkspace = {
+                id: targetWs.id,
+                buyerName: targetWs.buyerName || 'Active Order',
+                name: targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`,
+                notes: targetWs.notes || '',
+                status: 'Active',
+                createdAt: targetWs.createdAt || new Date().toISOString(),
+              };
+              this.orders = Array.isArray(targetWs.orders) ? targetWs.orders : [];
+              this.productionLogs = Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [];
+              this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
+              this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
+              this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
+            } else if (cloudState) {
               this.applyCloudState(cloudState);
-            } else {
-              let targetWs = this.workspaces.find((w) => w.id === targetActiveId);
-              if (!targetWs) {
-                targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
-              }
-              if (targetWs) {
-                this.switchOrderWorkspace(targetActiveId);
-              } else if (cloudState) {
-                this.applyCloudState(cloudState);
-              }
             }
-          } else if (cloudState) {
-            this.applyCloudState(cloudState);
           }
-        })
-        .catch((err) => {
-          console.warn('Initial cloud sync note:', err);
-        });
+        } else if (cloudState) {
+          this.applyCloudState(cloudState);
+        }
 
-      // 2. Realtime SSE Listener (when laptop saves, phone updates immediately in real-time)
+        // Ensure active workspace is in workspaces list
+        if (this.activeWorkspace && this.activeWorkspace.id) {
+          const actIdx = (this.workspaces || []).findIndex((w) => w.id === this.activeWorkspace.id);
+          const actObj = {
+            ...this.activeWorkspace,
+            status: 'Active',
+            orderCount: this.orders.length,
+            totalOrderQty: this.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0),
+            totalProductionQty: this.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0),
+            totalFloorQty: this.orders.reduce((sum, o) => sum + (Number(o.floorProductionQty) || Number(o.productionQty) || 0), 0),
+            totalDeliveryQty: this.orders.reduce((sum, o) => sum + (Number(o.deliveryQty) || 0), 0),
+            totalBalanceQty: this.orders.reduce((sum, o) => sum + (Number(o.balanceQty) || 0), 0),
+          };
+          if (actIdx >= 0) {
+            this.workspaces[actIdx] = { ...this.workspaces[actIdx], ...actObj };
+          } else {
+            this.workspaces.unshift(actObj);
+          }
+        }
+
+        this.ensureSpecialMachines();
+        this.ensureOrderCalculations();
+        this.lastSaved = new Date().toISOString();
+
+        // Write fresh cloud hydration to local storage
+        try {
+          const payloadStr = JSON.stringify({
+            activeWorkspace: this.activeWorkspace,
+            activeWorkspaceId: this.activeWorkspace?.id,
+            workspaces: this.workspaces || [],
+            categories: this.categories,
+            orders: this.orders,
+            machines: this.machines,
+            workers: this.workers,
+            productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
+            productionPlans: this.productionPlans || [],
+            inventoryItems: this.inventoryItems || [],
+            materialRequests: this.materialRequests || [],
+            inventoryLogs: this.inventoryLogs || [],
+            lastSaved: this.lastSaved,
+          });
+          localStorage.setItem(STORAGE_KEY, payloadStr);
+          localStorage.setItem(VAULT_KEY, payloadStr);
+          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+        } catch {}
+
+        this.initialized = true;
+        this.notifySubscribers();
+      } catch (err) {
+        console.warn('Initial cloud sync error:', err);
+      }
+
+      // Connect SSE Listener
       this.unsubscribeCloud = firebaseRealtime.listenToChanges((cloudState) => {
         if (cloudState && cloudState.lastDeviceId !== this.deviceId) {
           this.applyCloudState(cloudState);
         }
       });
     }
+
+    return true;
   }
 
   async pullCloudState() {
@@ -529,7 +511,7 @@ class ClientDatabaseStore {
     });
   }
 
-  save(broadcastToCloud = true) {
+  async save(broadcastToCloud = true) {
     try {
       this.ensureOrderCalculations();
       const nowIso = new Date().toISOString();
@@ -564,23 +546,36 @@ class ClientDatabaseStore {
           const payloadStr = JSON.stringify(payload);
           localStorage.setItem(STORAGE_KEY, payloadStr);
           localStorage.setItem(VAULT_KEY, payloadStr);
-          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces));
+          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
           localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
         } catch {
           // ignore quota
         }
       }
 
-      // Automatically broadcast state to Firebase Realtime Database
-      if (broadcastToCloud && typeof window !== 'undefined') {
-        firebaseRealtime.setActiveWorkspacePointer(this.activeWorkspace);
-        firebaseRealtime.pushState(payload);
-        firebaseRealtime.pushSnapshot(payload);
+      // Automatically broadcast state to Firebase Realtime Database and AWAIT confirmation
+      if (broadcastToCloud && typeof fetch !== 'undefined') {
+        const promises = [
+          firebaseRealtime.setActiveWorkspacePointer(this.activeWorkspace),
+          firebaseRealtime.pushState(payload),
+          firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs),
+          firebaseRealtime.saveWorkspaceArchive({
+            ...this.activeWorkspace,
+            orders: this.orders,
+            productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
+            productionPlans: this.productionPlans || [],
+          }),
+        ];
+        await Promise.allSettled(promises);
       }
 
       this.notifySubscribers();
+      return true;
     } catch (e) {
-      console.warn('Failed to save state to localStorage:', e);
+      console.warn('Failed to save state:', e);
+      return false;
     }
   }
 
@@ -642,7 +637,7 @@ class ClientDatabaseStore {
     };
   }
 
-  createOrderWorkspace({ buyerName, workspaceName, notes = '', resetMode = 'zero_counts' }) {
+  async createOrderWorkspace({ buyerName, workspaceName, notes = '', resetMode = 'zero_counts' }) {
     if (!buyerName || !buyerName.trim()) {
       throw new Error('Buyer Name is required to start a new order workspace.');
     }
@@ -681,11 +676,6 @@ class ClientDatabaseStore {
     } else {
       this.workspaces.unshift(currentSnapshot);
     }
-
-    // Persist archive to Firebase Realtime
-    try {
-      firebaseRealtime.saveWorkspaceArchive(currentSnapshot);
-    } catch {}
 
     // 2. Create the new workspace
     const newWsId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -737,8 +727,8 @@ class ClientDatabaseStore {
     // Set active workspace
     this.activeWorkspace = newWorkspace;
 
-    // Add new workspace to workspaces list
-    this.workspaces.unshift({
+    // Add new workspace snapshot to workspaces list
+    const newWorkspaceSnapshot = {
       ...newWorkspace,
       orderCount: this.orders.length,
       totalOrderQty: 0,
@@ -751,23 +741,20 @@ class ClientDatabaseStore {
       deliveryReceivedLogs: [],
       outsourceConsignments: [],
       productionPlans: [],
-    });
+    };
+    this.workspaces.unshift(newWorkspaceSnapshot);
 
-    // 4. Update the singular active workspace pointer in Firebase & LocalStorage immediately
-    try {
-      firebaseRealtime.setActiveWorkspacePointer(newWorkspace);
-      firebaseRealtime.saveWorkspaceArchive({
-        ...newWorkspace,
-        orders: this.orders,
-        productionLogs: [],
-        deliveryReceivedLogs: [],
-        outsourceConsignments: [],
-        productionPlans: [],
-      });
-    } catch {}
+    // 4. Update the singular active workspace pointer and archives in Firebase immediately and await
+    if (typeof fetch !== 'undefined') {
+      await Promise.allSettled([
+        firebaseRealtime.setActiveWorkspacePointer(newWorkspace),
+        firebaseRealtime.saveWorkspaceArchive(currentSnapshot),
+        firebaseRealtime.saveWorkspaceArchive(newWorkspaceSnapshot),
+      ]);
+    }
 
     // 5. Save and broadcast to all devices globally
-    this.save(true);
+    await this.save(true);
 
     return {
       success: true,
@@ -777,7 +764,7 @@ class ClientDatabaseStore {
     };
   }
 
-  switchOrderWorkspace(targetWorkspaceId) {
+  async switchOrderWorkspace(targetWorkspaceId) {
     if (!targetWorkspaceId) throw new Error('Workspace ID is required to switch.');
 
     if (this.activeWorkspace?.id === targetWorkspaceId) {
@@ -787,9 +774,10 @@ class ClientDatabaseStore {
     const nowIso = new Date().toISOString();
 
     // 1. Snapshot current active workspace before leaving it
+    let currentSnapshot = null;
     if (this.activeWorkspace) {
       const currentWsId = this.activeWorkspace.id;
-      const currentSnapshot = {
+      currentSnapshot = {
         ...this.activeWorkspace,
         archivedAt: nowIso,
         status: 'Archived',
@@ -812,14 +800,13 @@ class ClientDatabaseStore {
       } else {
         this.workspaces.unshift(currentSnapshot);
       }
-
-      try {
-        firebaseRealtime.saveWorkspaceArchive(currentSnapshot);
-      } catch {}
     }
 
-    // 2. Find target workspace in archives (or fallback to local workspaces)
+    // 2. Find target workspace in archives, or pull from Firebase RTDB
     let targetWs = this.workspaces.find((w) => w.id === targetWorkspaceId);
+    if (!targetWs && typeof fetch !== 'undefined') {
+      targetWs = await firebaseRealtime.getWorkspaceArchive(targetWorkspaceId);
+    }
     if (!targetWs && typeof window !== 'undefined') {
       try {
         const rawArchives = localStorage.getItem(WORKSPACES_STORAGE_KEY);
@@ -868,21 +855,29 @@ class ClientDatabaseStore {
 
     this.ensureOrderCalculations();
 
-    // 4. Update the singular active workspace pointer in Firebase & LocalStorage immediately
-    try {
-      firebaseRealtime.setActiveWorkspacePointer(activeWsObj);
-      firebaseRealtime.saveWorkspaceArchive({
-        ...activeWsObj,
-        orders: this.orders,
-        productionLogs: this.productionLogs,
-        deliveryReceivedLogs: this.deliveryReceivedLogs,
-        outsourceConsignments: this.outsourceConsignments,
-        productionPlans: this.productionPlans,
-      });
-    } catch {}
+    // 4. Update the singular active workspace pointer in Firebase & LocalStorage immediately and await
+    if (typeof fetch !== 'undefined') {
+      const promises = [
+        firebaseRealtime.setActiveWorkspacePointer(activeWsObj),
+      ];
+      if (currentSnapshot) {
+        promises.push(firebaseRealtime.saveWorkspaceArchive(currentSnapshot));
+      }
+      promises.push(
+        firebaseRealtime.saveWorkspaceArchive({
+          ...activeWsObj,
+          orders: this.orders,
+          productionLogs: this.productionLogs,
+          deliveryReceivedLogs: this.deliveryReceivedLogs,
+          outsourceConsignments: this.outsourceConsignments,
+          productionPlans: this.productionPlans,
+        })
+      );
+      await Promise.allSettled(promises);
+    }
 
     // 5. Save and broadcast globally
-    this.save(true);
+    await this.save(true);
 
     return {
       success: true,
@@ -891,16 +886,19 @@ class ClientDatabaseStore {
     };
   }
 
-  deleteOrderWorkspace(workspaceId) {
+  async deleteOrderWorkspace(workspaceId) {
     if (this.activeWorkspace?.id === workspaceId) {
       throw new Error('Cannot delete the currently active order workspace. Switch to another order first.');
     }
     this.workspaces = this.workspaces.filter((w) => w.id !== workspaceId);
-    this.save(true);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.deleteWorkspaceArchive(workspaceId);
+    }
+    await this.save(true);
     return { success: true };
   }
 
-  reset(broadcastToCloud = true) {
+  async reset(broadcastToCloud = true) {
     this.categories = JSON.parse(JSON.stringify(initialCategories));
     this.orders = JSON.parse(JSON.stringify(initialOrders));
     this.machines = JSON.parse(JSON.stringify(initialMachines));
@@ -913,7 +911,7 @@ class ClientDatabaseStore {
     this.materialRequests = JSON.parse(JSON.stringify(initialMaterialRequests));
     this.inventoryLogs = JSON.parse(JSON.stringify(initialInventoryLogs));
     this.ensureSpecialMachines();
-    this.save(broadcastToCloud);
+    await this.save(broadcastToCloud);
     return { success: true, count: this.orders.length };
   }
 
@@ -1235,12 +1233,12 @@ class ClientDatabaseStore {
       createdAt: new Date().toISOString(),
     };
     this.orders.unshift(newOrder);
-    this.save();
+    this.save(true);
     firestoreSync.saveDocument('orders', newOrder.id, newOrder);
     return newOrder;
   }
 
-  updateOrder(id, updates = {}) {
+  async updateOrder(id, updates = {}) {
     const order = this.getOrderById(id);
     if (!order) return null;
 
@@ -1279,12 +1277,12 @@ class ClientDatabaseStore {
     order.barcode = `BTX-${order.poNumber}-${order.size}`;
     order.updatedAt = new Date().toISOString();
 
-    this.save();
+    await this.save(true);
     firestoreSync.saveDocument('orders', order.id, order);
     return order;
   }
 
-  bulkCreateOrUpdateOrders(ordersList = []) {
+  async bulkCreateOrUpdateOrders(ordersList = []) {
     if (!Array.isArray(ordersList) || ordersList.length === 0) {
       return { success: false, message: 'No orders provided', count: 0 };
     }
@@ -1379,7 +1377,7 @@ class ClientDatabaseStore {
     });
 
     this.ensureOrderCalculations();
-    this.save();
+    await this.save(true);
     return {
       success: true,
       totalProcessed: processedOrders.length,
@@ -1389,7 +1387,7 @@ class ClientDatabaseStore {
     };
   }
 
-  addDailyLog(orderId, logData) {
+  async addDailyLog(orderId, logData) {
     const order = this.getOrderById(orderId);
     if (!order) return null;
     const actual = Number(logData.actualQty) || 0;
@@ -1411,7 +1409,7 @@ class ClientDatabaseStore {
       deliveryQty: delivery,
       notes: logData.notes || 'Daily log entry',
     });
-    this.save();
+    await this.save(true);
     firestoreSync.saveDocument('orders', order.id, order);
     return order;
   }
@@ -1529,7 +1527,7 @@ class ClientDatabaseStore {
       };
       this.machines.push(machine);
     }
-    this.save();
+    this.save(true);
     firestoreSync.saveDocument('machines', machine.id, machine);
     return machine;
   }
@@ -1542,11 +1540,11 @@ class ClientDatabaseStore {
     );
     if (idx === -1) return false;
     this.machines.splice(idx, 1);
-    this.save();
+    this.save(true);
     return true;
   }
 
-  submitWorkerProduction(data) {
+  async submitWorkerProduction(data) {
     const { machineId, style, size, colour, producedQty, poNumber, shift, operatorName, timeSlot, notes } = data;
     const qty = Number(producedQty) || 0;
     if (qty <= 0) throw new Error('Produced quantity must be greater than 0');
@@ -1692,7 +1690,7 @@ class ClientDatabaseStore {
       }
     }
 
-    this.save();
+    await this.save(true);
     // Background sync to Firestore
     firestoreSync.saveDocument('production_logs', logEntry.id, globalLogEntry);
     if (matchedOrder) firestoreSync.saveDocument('orders', matchedOrder.id, matchedOrder);
@@ -1739,7 +1737,7 @@ class ClientDatabaseStore {
       batchesLogged: 0,
     };
     this.workers.push(newWorker);
-    this.save();
+    this.save(true);
     firestoreSync.saveDocument('workers', newWorker.id, newWorker);
     return newWorker;
   }
@@ -1748,7 +1746,7 @@ class ClientDatabaseStore {
     const index = this.workers.findIndex((w) => w.id === id || w.empId === id);
     if (index === -1) return null;
     this.workers[index] = { ...this.workers[index], ...workerData };
-    this.save();
+    this.save(true);
     firestoreSync.saveDocument('workers', this.workers[index].id, this.workers[index]);
     return this.workers[index];
   }
@@ -1757,7 +1755,7 @@ class ClientDatabaseStore {
     const index = this.workers.findIndex((w) => w.id === id || w.empId === id);
     if (index === -1) return false;
     this.workers.splice(index, 1);
-    this.save();
+    this.save(true);
     return true;
   }
 
@@ -1911,7 +1909,7 @@ class ClientDatabaseStore {
       }
     }
 
-    this.save();
+    this.save(true);
     return updatedLog;
   }
 
@@ -1964,7 +1962,7 @@ class ClientDatabaseStore {
       }
     }
 
-    this.save();
+    this.save(true);
     return true;
   }
 
@@ -2538,7 +2536,7 @@ class ClientDatabaseStore {
       createdLogs.push(logEntry);
     }
 
-    this.save();
+    this.save(true);
 
     return {
       success: true,
@@ -2628,7 +2626,7 @@ class ClientDatabaseStore {
     if (!this.deliveryReceivedLogs) this.deliveryReceivedLogs = [];
     this.deliveryReceivedLogs.unshift(rcvLog);
 
-    this.save();
+    this.save(true);
 
     return {
       success: true,
@@ -2761,7 +2759,7 @@ class ClientDatabaseStore {
     }
 
     this.deliveryReceivedLogs.splice(index, 1);
-    this.save();
+    this.save(true);
 
     return {
       success: true,
@@ -2841,7 +2839,7 @@ class ClientDatabaseStore {
     log.productQtyAfter = order ? order.productionQty : null;
     log.orderStatusAfter = order ? order.status : null;
 
-    this.save();
+    this.save(true);
 
     return {
       success: true,
@@ -2863,7 +2861,7 @@ class ClientDatabaseStore {
     } else {
       this.productionPlans.unshift(plan);
     }
-    this.save();
+    this.save(true);
     return { success: true, plan };
   }
 
@@ -2990,7 +2988,7 @@ class ClientDatabaseStore {
     return (this.inventoryItems || []).find((i) => i.id === id || i.code === id) || null;
   }
 
-  addInventoryItem(itemData) {
+  async addInventoryItem(itemData) {
     if (!itemData || !itemData.name) {
       throw new Error('Material name is required');
     }
@@ -3038,14 +3036,14 @@ class ClientDatabaseStore {
       });
     }
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
     return { success: true, item: newItem };
   }
 
-  updateInventoryItem(id, updates) {
+  async updateInventoryItem(id, updates) {
     const item = (this.inventoryItems || []).find((i) => i.id === id || i.code === id);
     if (!item) throw new Error(`Inventory item ${id} not found`);
 
@@ -3077,14 +3075,14 @@ class ClientDatabaseStore {
       notes: `Updated item details for ${item.name}`,
     });
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
     return { success: true, item };
   }
 
-  deleteInventoryItem(id) {
+  async deleteInventoryItem(id) {
     const idx = (this.inventoryItems || []).findIndex((i) => i.id === id || i.code === id);
     if (idx === -1) throw new Error(`Inventory item ${id} not found`);
     const removed = this.inventoryItems[idx];
@@ -3108,15 +3106,17 @@ class ClientDatabaseStore {
       notes: `Deleted raw material ${removed.name} (${removed.code}) from store inventory`,
     });
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.deleteInventoryItem(removed.id);
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await Promise.allSettled([
+        firebaseRealtime.deleteInventoryItem(removed.id),
+        firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs),
+      ]);
     }
+    await this.save(true);
     return { success: true, item: removed };
   }
 
-  adjustInventoryStock(id, { adjustmentQty, type = 'Restock', notes = '', performedBy = 'Storekeeper' }) {
+  async adjustInventoryStock(id, { adjustmentQty, type = 'Restock', notes = '', performedBy = 'Storekeeper' }) {
     const item = (this.inventoryItems || []).find((i) => i.id === id || i.code === id);
     if (!item) throw new Error(`Inventory item ${id} not found`);
 
@@ -3150,10 +3150,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
     return { success: true, item, log };
   }
 
@@ -3194,7 +3194,7 @@ class ClientDatabaseStore {
     };
   }
 
-  createMaterialRequest(requestData) {
+  async createMaterialRequest(requestData) {
     if (!this.materialRequests) this.materialRequests = [];
 
     const item = (this.inventoryItems || []).find(
@@ -3234,10 +3234,10 @@ class ClientDatabaseStore {
 
     // STRICT: Do NOT deduct inventory stock here!
     this.materialRequests.unshift(newRequest);
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
 
     return {
       success: true,
@@ -3246,7 +3246,7 @@ class ClientDatabaseStore {
     };
   }
 
-  approveMaterialRequest(requestId, { approvedBy = 'Storekeeper', notes = '' } = {}) {
+  async approveMaterialRequest(requestId, { approvedBy = 'Storekeeper', notes = '' } = {}) {
     const request = (this.materialRequests || []).find((r) => r.id === requestId);
     if (!request) {
       throw new Error(`Material Request #${requestId} not found`);
@@ -3302,10 +3302,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
 
     return {
       success: true,
@@ -3316,7 +3316,7 @@ class ClientDatabaseStore {
     };
   }
 
-  rejectMaterialRequest(requestId, { rejectedBy = 'Storekeeper', reason = 'Declined by storekeeper' } = {}) {
+  async rejectMaterialRequest(requestId, { rejectedBy = 'Storekeeper', reason = 'Declined by storekeeper' } = {}) {
     const request = (this.materialRequests || []).find((r) => r.id === requestId);
     if (!request) {
       throw new Error(`Material Request #${requestId} not found`);
@@ -3351,10 +3351,10 @@ class ClientDatabaseStore {
     };
     this.inventoryLogs.unshift(log);
 
-    this.save(true);
-    if (typeof window !== 'undefined') {
-      firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
+    if (typeof fetch !== 'undefined') {
+      await firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs);
     }
+    await this.save(true);
 
     return {
       success: true,

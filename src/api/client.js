@@ -31,8 +31,17 @@ async function safeFetchJson(url, options = {}) {
 }
 
 export const api = {
+  // Database hydration readiness check
+  ready: async () => {
+    if (dbStore && dbStore.readyPromise) {
+      await dbStore.readyPromise;
+    }
+    return true;
+  },
+
   // 1. Factory overview
   getOverview: async () => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/overview`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getFactoryOverview() };
@@ -40,6 +49,7 @@ export const api = {
 
   // 2. Categories summary
   getCategories: async () => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/categories`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getCategoriesSummary() };
@@ -122,7 +132,7 @@ export const api = {
       body: JSON.stringify(logData),
     });
     if (remote && remote.success) return remote;
-    const updated = dbStore.addDailyLog(orderId, logData);
+    const updated = await dbStore.addDailyLog(orderId, logData);
     if (!updated) throw new Error('Order not found');
     return { success: true, data: updated };
   },
@@ -155,7 +165,7 @@ export const api = {
   resetDb: async () => {
     const remote = await safeFetchJson(`${BASE_URL}/reset`, { method: 'POST' });
     if (remote && remote.success) return remote;
-    const res = dbStore.reset();
+    const res = await dbStore.reset();
     return { success: true, message: 'Database reset to initial clean data', ...res };
   },
 
@@ -203,7 +213,7 @@ export const api = {
       body: JSON.stringify(batchData),
     });
     if (remote && remote.success) return remote;
-    const result = dbStore.submitWorkerProduction(batchData);
+    const result = await dbStore.submitWorkerProduction(batchData);
     return { success: true, ...result };
   },
 
@@ -422,48 +432,49 @@ export const api = {
 
   // 23. Order Workspace Management APIs (Global Workspace State)
   getActiveWorkspace: async () => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/workspaces/active`);
     if (remote && remote.success) return remote;
     return { success: true, data: dbStore.getActiveWorkspace() };
   },
 
   getWorkspaces: async () => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/workspaces`);
     if (remote && remote.success) return remote;
     return { success: true, ...dbStore.getWorkspaces() };
   },
 
   createOrderWorkspace: async (payload) => {
-    const remote = await safeFetchJson(`${BASE_URL}/workspaces`, {
+    const localResult = await dbStore.createOrderWorkspace(payload);
+    // Background ping to local dev server if present
+    safeFetchJson(`${BASE_URL}/workspaces`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
-    const localResult = dbStore.createOrderWorkspace(payload);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   switchOrderWorkspace: async (id) => {
-    const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}/switch`, {
+    const localResult = await dbStore.switchOrderWorkspace(id);
+    safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}/switch`, {
       method: 'POST',
-    });
-    const localResult = dbStore.switchOrderWorkspace(id);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   deleteOrderWorkspace: async (id) => {
-    const remote = await safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}`, {
+    const localResult = await dbStore.deleteOrderWorkspace(id);
+    safeFetchJson(`${BASE_URL}/workspaces/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-    });
-    const localResult = dbStore.deleteOrderWorkspace(id);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   // 24. Production Inventory & QR Material Request Workflow APIs
   getInventoryItems: async (filters = {}) => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') params.append(key, val);
@@ -474,6 +485,7 @@ export const api = {
   },
 
   getInventoryItemById: async (id) => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`);
     if (remote && remote.success) return remote;
     const item = dbStore.getInventoryItemById(id);
@@ -482,48 +494,45 @@ export const api = {
   },
 
   addInventoryItem: async (data) => {
-    const remote = await safeFetchJson(`${BASE_URL}/inventory`, {
+    const localResult = await dbStore.addInventoryItem(data);
+    safeFetchJson(`${BASE_URL}/inventory`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    const localResult = dbStore.addInventoryItem(data);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   updateInventoryItem: async (id, updates) => {
-    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
+    const localResult = await dbStore.updateInventoryItem(id, updates);
+    safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
-    });
-    const localResult = dbStore.updateInventoryItem(id, updates);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   deleteInventoryItem: async (id) => {
-    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
+    const localResult = await dbStore.deleteInventoryItem(id);
+    safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-    });
-    const localResult = dbStore.deleteInventoryItem(id);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   adjustInventoryStock: async (id, data) => {
-    const remote = await safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}/adjust`, {
+    const localResult = await dbStore.adjustInventoryStock(id, data);
+    safeFetchJson(`${BASE_URL}/inventory/${encodeURIComponent(id)}/adjust`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    const localResult = dbStore.adjustInventoryStock(id, data);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   getMaterialRequests: async (filters = {}) => {
+    if (dbStore && dbStore.readyPromise) await dbStore.readyPromise;
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, val]) => {
       if (val !== undefined && val !== null && val !== '') params.append(key, val);
@@ -534,35 +543,32 @@ export const api = {
   },
 
   createMaterialRequest: async (data) => {
-    const remote = await safeFetchJson(`${BASE_URL}/material-requests`, {
+    const localResult = await dbStore.createMaterialRequest(data);
+    safeFetchJson(`${BASE_URL}/material-requests`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    const localResult = dbStore.createMaterialRequest(data);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   approveMaterialRequest: async (id, data = {}) => {
-    const remote = await safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/approve`, {
+    const localResult = await dbStore.approveMaterialRequest(id, data);
+    safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    const localResult = dbStore.approveMaterialRequest(id, data);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 
   rejectMaterialRequest: async (id, data = {}) => {
-    const remote = await safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/reject`, {
+    const localResult = await dbStore.rejectMaterialRequest(id, data);
+    safeFetchJson(`${BASE_URL}/material-requests/${encodeURIComponent(id)}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    const localResult = dbStore.rejectMaterialRequest(id, data);
-    if (remote && remote.success) return remote;
+    }).catch(() => {});
     return localResult;
   },
 

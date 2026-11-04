@@ -195,6 +195,24 @@ export const firebaseRealtime = {
         }),
       ];
 
+      // Mirror active workspace pointer to dedicated endpoints for absolute ground truth
+      const activeWs = state?.activeWorkspace || null;
+      const activeWsId = state?.activeWorkspaceId || activeWs?.id || null;
+      if (activeWs && activeWsId) {
+        promises.push(
+          fetch(`${REALTIME_DB_URL}/activeWorkspace.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(activeWs),
+          }),
+          fetch(`${REALTIME_DB_URL}/activeWorkspaceId.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(activeWsId),
+          })
+        );
+      }
+
       // Mirror inventory to dedicated cloud endpoints for strict ground-truth persistence
       if (Array.isArray(state?.inventoryItems)) {
         promises.push(
@@ -302,9 +320,21 @@ export const firebaseRealtime = {
   async deleteInventoryItem(itemId) {
     try {
       if (!itemId) return false;
+      // Also delete from direct endpoint if present
       await fetch(`${REALTIME_DB_URL}/inventoryItems/${encodeURIComponent(itemId)}.json`, {
         method: 'DELETE',
       });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  async deleteWorkspaceArchive(workspaceId) {
+    try {
+      if (!workspaceId) return false;
+      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`;
+      await fetch(url, { method: 'DELETE' });
       return true;
     } catch {
       return false;
@@ -433,9 +463,9 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
-          if (!Array.isArray(cloudState.inventoryItems) || cloudState.inventoryItems.length === 0) {
+          if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
-            if (inv && Array.isArray(inv.inventoryItems) && inv.inventoryItems.length > 0) {
+            if (inv && Array.isArray(inv.inventoryItems)) {
               cloudState.inventoryItems = inv.inventoryItems;
               cloudState.materialRequests = inv.materialRequests || [];
               cloudState.inventoryLogs = inv.inventoryLogs || [];
@@ -453,9 +483,9 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
-          if (!Array.isArray(cloudState.inventoryItems) || cloudState.inventoryItems.length === 0) {
+          if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
-            if (inv && Array.isArray(inv.inventoryItems) && inv.inventoryItems.length > 0) {
+            if (inv && Array.isArray(inv.inventoryItems)) {
               cloudState.inventoryItems = inv.inventoryItems;
               cloudState.materialRequests = inv.materialRequests || [];
               cloudState.inventoryLogs = inv.inventoryLogs || [];
