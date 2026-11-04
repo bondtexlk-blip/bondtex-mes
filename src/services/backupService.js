@@ -65,22 +65,22 @@ export async function generateFullDatabaseBackup() {
     console.warn('Realtime cloud read for backup skipped:', err?.message);
   }
 
-  // Use the freshest available dataset
-  const activeOrders = (Array.isArray(cloudState?.orders) && cloudState.orders.length > 0)
-    ? cloudState.orders
-    : (Array.isArray(localState?.orders) ? localState.orders : []);
+  // Use current local state as primary, falling back to cloud if local is absent
+  const activeOrders = Array.isArray(localState?.orders)
+    ? localState.orders
+    : (Array.isArray(cloudState?.orders) ? cloudState.orders : []);
 
-  const deliveries = (Array.isArray(cloudState?.deliveryReceivedLogs) && cloudState.deliveryReceivedLogs.length > 0)
-    ? cloudState.deliveryReceivedLogs
-    : (Array.isArray(localState?.deliveryReceivedLogs) ? localState.deliveryReceivedLogs : []);
+  const deliveries = Array.isArray(localState?.deliveryReceivedLogs)
+    ? localState.deliveryReceivedLogs
+    : (Array.isArray(cloudState?.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : []);
 
-  const machines = (Array.isArray(cloudState?.machines) && cloudState.machines.length > 0)
-    ? cloudState.machines
-    : (Array.isArray(localState?.machines) ? localState.machines : []);
+  const machines = Array.isArray(localState?.machines)
+    ? localState.machines
+    : (Array.isArray(cloudState?.machines) ? cloudState.machines : []);
 
-  const hourlyLogs = (Array.isArray(cloudState?.hourlyLogs) && cloudState.hourlyLogs.length > 0)
-    ? cloudState.hourlyLogs
-    : (Array.isArray(localState?.productionLogs) ? localState.productionLogs : (Array.isArray(localState?.hourlyLogs) ? localState.hourlyLogs : []));
+  const hourlyLogs = Array.isArray(localState?.productionLogs)
+    ? localState.productionLogs
+    : (Array.isArray(cloudState?.hourlyLogs) ? cloudState.hourlyLogs : []);
 
   const now = new Date();
   const timestampIso = now.toISOString();

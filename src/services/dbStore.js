@@ -47,6 +47,7 @@ class ClientDatabaseStore {
     this.subscribers = [];
     this.lastSaved = null;
     this.lastAppliedCloudTimestamp = null;
+    this.isIntentionalReset = false;
     this._notifyTimeout = null;
     this.deviceId = 'srv';
     this.initialized = false;
@@ -132,6 +133,14 @@ class ClientDatabaseStore {
     return () => {};
   }
 
+  // Sanitize workspace list for state serialization (strips heavy nested orders arrays from archive summaries)
+  getCleanWorkspacesList() {
+    return (this.workspaces || []).map((w) => {
+      const { orders, productionLogs, deliveryReceivedLogs, outsourceConsignments, productionPlans, ...meta } = w;
+      return meta;
+    });
+  }
+
   // Debounced notification to eliminate high-frequency React re-renders and CPU lockups
   notifySubscribers() {
     if (this._notifyTimeout) clearTimeout(this._notifyTimeout);
@@ -164,13 +173,39 @@ class ClientDatabaseStore {
     if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastAppliedCloudTimestamp) {
       return;
     }
+
+    const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
+    const localWsId = this.activeWorkspace?.id;
+
+    // ANTI-REVERT WORKSPACE CREATION GUARD:
+    // If the local active workspace was created AFTER this cloudState was updated,
+    // this incoming cloudState is obsolete (from a previous workspace) and MUST NOT revert our workspace!
+    if (this.activeWorkspace?.createdAt && cloudState.lastUpdated) {
+      const cloudUpdateTime = new Date(cloudState.lastUpdated).getTime();
+      const localWsCreatedTime = new Date(this.activeWorkspace.createdAt).getTime();
+      if (!isNaN(cloudUpdateTime) && !isNaN(localWsCreatedTime) && cloudWsId !== localWsId) {
+        if (cloudUpdateTime <= localWsCreatedTime) {
+          console.warn(`[Sync Guard] Ignoring stale cloud state from previous workspace (cloud: ${cloudWsId}, local: ${localWsId}). Auto-healing cloud ground truth.`);
+          this.forceSaveToCloud();
+          return;
+        }
+      }
+    }
+
+    // INTENTIONAL RESET ANTI-DOWNGRADE GUARD:
+    // When the user intentionally created a new zeroed workspace, do not allow incoming cloud state
+    // from a different or older workspace to overwrite the zeroed counts!
+    if (this.isIntentionalReset && cloudWsId !== localWsId) {
+      console.warn(`[Sync Guard] Bypassing cloud overwrite: intentional workspace reset is active for ${localWsId}. Re-asserting ground truth.`);
+      this.forceSaveToCloud();
+      return;
+    }
+
     this.lastAppliedCloudTimestamp = cloudState.lastUpdated;
 
     // 1. GLOBAL WORKSPACE SWITCH DETECTION:
     // If the cloud state has an activeWorkspaceId different from local, this is an intentional
     // global workspace switch or new order activation performed by the Admin.
-    const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
-    const localWsId = this.activeWorkspace?.id;
     const isDifferentWorkspace = Boolean(cloudWsId && localWsId && cloudWsId !== localWsId);
 
     if (isDifferentWorkspace) {
@@ -517,7 +552,7 @@ class ClientDatabaseStore {
       const payload = {
         activeWorkspace: this.activeWorkspace,
         activeWorkspaceId: this.activeWorkspace.id,
-        workspaces: this.workspaces || [],
+        workspaces: this.getCleanWorkspacesList(),
         categories: this.categories,
         orders: this.orders,
         machines: this.machines,
@@ -586,7 +621,7 @@ class ClientDatabaseStore {
       const payload = {
         activeWorkspace: this.activeWorkspace,
         activeWorkspaceId: this.activeWorkspace.id,
-        workspaces: this.workspaces || [],
+        workspaces: this.getCleanWorkspacesList(),
         categories: this.categories,
         orders: this.orders,
         machines: this.machines,
@@ -827,8 +862,13 @@ class ClientDatabaseStore {
       ]);
     }
 
-    // 5. Save and broadcast to all devices globally
-    await this.save(true);
+    // 5. Activate intentional reset guard and timestamps
+    this.isIntentionalReset = true;
+    this.lastSaved = nowIso;
+    this.lastAppliedCloudTimestamp = nowIso;
+
+    // 6. FORCE-PUSH the zeroed state directly to Firebase RTDB as the new ground truth
+    await this.forceSaveToCloud();
 
     return {
       success: true,
@@ -950,8 +990,12 @@ class ClientDatabaseStore {
       await Promise.allSettled(promises);
     }
 
-    // 5. Save and broadcast globally
-    await this.save(true);
+    this.isIntentionalReset = false;
+    this.lastSaved = nowIso;
+    this.lastAppliedCloudTimestamp = nowIso;
+
+    // 5. Force-push to overwrite cloud ground truth
+    await this.forceSaveToCloud();
 
     return {
       success: true,
