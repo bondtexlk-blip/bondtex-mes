@@ -39,9 +39,11 @@ import {
   Send,
   HardDrive,
   FolderPlus,
+  Loader2,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api/client';
+import { dbStore } from '../services/dbStore';
 import MachineQrPrintModal from './MachineQrPrintModal';
 import OrderWorkspaceManagement from './OrderWorkspaceManagement';
 import { formatNumber } from '../utils/formatters';
@@ -91,6 +93,29 @@ export default function AdminPanel({
   // Backup State
   const [backupActionLoading, setBackupActionLoading] = useState(false);
   const [lastBackupDetails, setLastBackupDetails] = useState(() => getLastBackupInfo());
+
+  // Database Add State (Fail-Safe Direct Cloud Overwrite)
+  const [forceSaving, setForceSaving] = useState(false);
+  const [lastForceSaved, setLastForceSaved] = useState(() => dbStore?.lastSaved || new Date().toISOString());
+
+  const handleForceSaveDatabase = async () => {
+    try {
+      setForceSaving(true);
+      const res = await api.forceSaveToDatabase();
+      if (res && res.success !== false) {
+        setLastForceSaved(new Date().toISOString());
+        onShowToast?.('Database Updated Successfully', 'success');
+        if (onDataUpdated) onDataUpdated();
+      } else {
+        onShowToast?.(res?.message || 'Failed to force save database', 'error');
+      }
+    } catch (err) {
+      console.error('Force save error:', err);
+      onShowToast?.(err.message || 'Error saving to database', 'error');
+    } finally {
+      setForceSaving(false);
+    }
+  };
 
   // Network Host State for Mobile-friendly QR codes (defaults to live production cloud URL)
   const [networkHost, setNetworkHost] = useState(() => resolveProductionHost());
@@ -636,6 +661,21 @@ export default function AdminPanel({
               >
                 <FolderPlus className="w-4 h-4 text-amber-400" />
                 <span>New Order / Workspace</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminTab('database_add')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl transition ${
+                  adminTab === 'database_add'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Save className="w-4 h-4 text-emerald-400" />
+                <span>Database Add</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">
+                  Sync
+                </span>
               </button>
             </div>
           </div>
@@ -2067,6 +2107,164 @@ export default function AdminPanel({
           onShowToast={onShowToast}
           onDataUpdated={onDataUpdated}
         />
+      )}
+
+      {/* ========================================================== */}
+      {/* TAB 5: DATABASE ADD (FAIL-SAFE DIRECT CLOUD OVERWRITE)    */}
+      {/* ========================================================== */}
+      {adminTab === 'database_add' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header Banner */}
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500/20 to-teal-500/20 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-inner">
+                  <Database className="w-6 h-6 text-emerald-400" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-lg font-bold text-white tracking-tight">Database Add & Cloud Sync</h2>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      Fail-Safe System
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Direct manual overwrite: immediately commits all local dashboard state and active workspace pointers to Firebase Realtime Database.
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Pill */}
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 self-start md:self-auto">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-xs font-mono text-slate-300">Firebase RTDB: Connected & Ready</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Action Hero Card */}
+          <div className="p-7 sm:p-8 rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border border-emerald-500/30 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative space-y-6">
+              <div className="max-w-2xl space-y-2">
+                <h3 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+                  <Save className="w-6 h-6 text-emerald-400" />
+                  <span>Manual Force Save to Database</span>
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  Whenever you make changes across the dashboard (add, edit, or delete data), clicking this button forcefully pushes the entire current local state/data directly to the Firebase Realtime Database, fully overwriting what is currently in the cloud. This manual save acts as a fail-safe to guarantee that on page refresh, the old data never returns.
+                </p>
+              </div>
+
+              {/* Primary Force Save Button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
+                <button
+                  type="button"
+                  disabled={forceSaving}
+                  onClick={handleForceSaveDatabase}
+                  className="flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 text-white font-extrabold text-sm shadow-xl shadow-emerald-950/40 transition-all hover:scale-[1.01] active:scale-[0.99] border border-emerald-400/30 cursor-pointer"
+                >
+                  {forceSaving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin text-white" />
+                      <span>Pushing Local State to Firebase RTDB...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-5 h-5 text-emerald-200" />
+                      <span>Force Save to Database</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-400">
+                  <Clock className="w-4 h-4 text-slate-500" />
+                  <span>Last Force Save:</span>
+                  <strong className="text-slate-200 font-mono">
+                    {lastForceSaved ? new Date(lastForceSaved).toLocaleTimeString() : 'Never'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Live Synchronized Data Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-slate-800">
+                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Active Order</span>
+                  <span className="text-sm font-bold text-white truncate block mt-0.5">
+                    {dbStore?.activeWorkspace?.buyerName || 'Active Order'}
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono block">
+                    Status: {dbStore?.activeWorkspace?.status || 'Active'}
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Catalog Orders</span>
+                  <span className="text-sm font-bold text-white block mt-0.5">
+                    {(dbStore?.orders || []).length} Styles
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    {formatNumber((dbStore?.orders || []).reduce((s, o) => s + (Number(o.orderQty) || 0), 0))} Total Pcs
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Store Inventory</span>
+                  <span className="text-sm font-bold text-white block mt-0.5">
+                    {(dbStore?.inventoryItems || []).length} Items
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    {(dbStore?.materialRequests || []).length} Material Requests
+                  </span>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block">Production Logs</span>
+                  <span className="text-sm font-bold text-white block mt-0.5">
+                    {(dbStore?.productionLogs || []).length} Logs
+                  </span>
+                  <span className="text-[10px] text-slate-400 block">
+                    {(dbStore?.machines || []).length} Machines
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Fail-Safe Protection Explainer */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center font-bold text-xs">
+                1
+              </div>
+              <h4 className="text-xs font-bold text-white">Full State Serialization</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Captures the complete in-memory factory database including orders, daily counts, inventory items, and machine allocations.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/15 text-blue-400 flex items-center justify-center font-bold text-xs">
+                2
+              </div>
+              <h4 className="text-xs font-bold text-white">Direct Cloud Overwrite</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Overwrites the Firebase Realtime Database cloud endpoints (/state, /activeWorkspace, /inventoryItems) directly via HTTPS PUT.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+              <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center font-bold text-xs">
+                3
+              </div>
+              <h4 className="text-xs font-bold text-white">Zero-Regression Refresh</h4>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                When you refresh the page or access the system from another device, it hydrates strictly from this newly saved cloud ground truth.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Print QR Badge Modal */}

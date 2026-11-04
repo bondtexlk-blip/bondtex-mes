@@ -581,6 +581,11 @@ export const api = {
     if (remote && remote.success) return remote;
     return { success: true, ...dbStore.getInventoryLogs(filters) };
   },
+
+  // 25. Direct Cloud Database Synchronization (Fail-Safe Overwrite)
+  forceSaveToDatabase: async () => {
+    return await dbStore.forceSaveToCloud();
+  },
 };
 
 export default api;

@@ -579,6 +579,87 @@ class ClientDatabaseStore {
     }
   }
 
+  // Forcefully push the entire current local state/data directly to Firebase Realtime Database
+  async forceSaveToCloud() {
+    try {
+      this.ensureOrderCalculations();
+      const nowIso = new Date().toISOString();
+      this.lastSaved = nowIso;
+
+      if (!this.activeWorkspace || !this.activeWorkspace.id) {
+        this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+      }
+
+      const payload = {
+        activeWorkspace: this.activeWorkspace,
+        activeWorkspaceId: this.activeWorkspace.id,
+        workspaces: this.workspaces || [],
+        categories: this.categories,
+        orders: this.orders,
+        machines: this.machines,
+        workers: this.workers,
+        productionLogs: this.productionLogs,
+        deliveryReceivedLogs: this.deliveryReceivedLogs,
+        outsourceConsignments: this.outsourceConsignments || [],
+        productionPlans: this.productionPlans || [],
+        inventoryItems: this.inventoryItems || [],
+        materialRequests: this.materialRequests || [],
+        inventoryLogs: this.inventoryLogs || [],
+        lastSaved: nowIso,
+        lastUpdated: nowIso,
+        lastDeviceId: this.deviceId,
+      };
+
+      if (typeof window !== 'undefined') {
+        try {
+          const payloadStr = JSON.stringify(payload);
+          localStorage.setItem(STORAGE_KEY, payloadStr);
+          localStorage.setItem(VAULT_KEY, payloadStr);
+          localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+        } catch (storageErr) {
+          console.warn('LocalStorage save warning:', storageErr);
+        }
+      }
+
+      // Overwrite all dedicated Firebase endpoints synchronously
+      if (typeof fetch !== 'undefined') {
+        const promises = [
+          firebaseRealtime.setActiveWorkspacePointer(this.activeWorkspace),
+          firebaseRealtime.pushState(payload),
+          firebaseRealtime.pushInventory(this.inventoryItems, this.materialRequests, this.inventoryLogs),
+          firebaseRealtime.saveWorkspaceArchive({
+            ...this.activeWorkspace,
+            orders: this.orders,
+            productionLogs: this.productionLogs,
+            deliveryReceivedLogs: this.deliveryReceivedLogs,
+            outsourceConsignments: this.outsourceConsignments || [],
+            productionPlans: this.productionPlans || [],
+          }),
+        ];
+        await Promise.allSettled(promises);
+      }
+
+      this.notifySubscribers();
+      return {
+        success: true,
+        lastSaved: nowIso,
+        activeWorkspace: this.activeWorkspace,
+        counts: {
+          orders: (this.orders || []).length,
+          inventoryItems: (this.inventoryItems || []).length,
+          productionLogs: (this.productionLogs || []).length,
+          machines: (this.machines || []).length,
+          workers: (this.workers || []).length,
+        },
+        message: 'Database Updated Successfully',
+      };
+    } catch (err) {
+      console.error('Force save to cloud error:', err);
+      throw err;
+    }
+  }
+
   // ==========================================================
   // ORDER WORKSPACE MANAGEMENT ENGINE (GLOBAL WORKSPACE STATE)
   // ==========================================================

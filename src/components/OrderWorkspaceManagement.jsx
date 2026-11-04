@@ -42,6 +42,7 @@ export default function OrderWorkspaceManagement({
   // Form State for "Option 2: Select Previous Order"
   const [selectedPreviousId, setSelectedPreviousId] = useState('');
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Confirmation Modal State
@@ -77,26 +78,28 @@ export default function OrderWorkspaceManagement({
 
   // Action: Create New Order Workspace
   const handleCreateOrderWorkspace = async () => {
-    if (!buyerName.trim()) {
+    const finalBuyer = (buyerName || confirmDialog?.targetName || '').trim();
+    if (!finalBuyer) {
       onShowToast?.('Please enter a Buyer Name to create a new order workspace', 'error');
+      setConfirmDialog(null);
       return;
     }
 
     try {
       setIsSubmitting(true);
       const res = await api.createOrderWorkspace({
-        buyerName: buyerName.trim(),
-        workspaceName: workspaceTitle.trim(),
-        notes: workspaceNotes.trim(),
+        buyerName: finalBuyer,
+        workspaceName: (workspaceTitle || '').trim(),
+        notes: (workspaceNotes || '').trim(),
         resetMode,
       });
 
       if (res && res.success !== false) {
         onShowToast?.(
-          `New Order Workspace activated for "${buyerName.trim()}"! All counts reset to 0.`,
+          `New Order Workspace activated for "${finalBuyer}"! All counts reset to 0.`,
           'success'
         );
-        // Reset form
+        // Reset form & close modal
         setBuyerName('');
         setWorkspaceTitle('');
         setWorkspaceNotes('');
@@ -105,10 +108,12 @@ export default function OrderWorkspaceManagement({
         if (onDataUpdated) onDataUpdated();
       } else {
         onShowToast?.(res?.message || 'Failed to create workspace', 'error');
+        setConfirmDialog(null);
       }
     } catch (err) {
       console.error('Create workspace error:', err);
       onShowToast?.(err.message || 'Error creating workspace', 'error');
+      setConfirmDialog(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -116,9 +121,10 @@ export default function OrderWorkspaceManagement({
 
   // Action: Switch to Previous Order Workspace
   const handleSwitchWorkspace = async (targetId) => {
-    const wsId = targetId || selectedPreviousId;
+    const wsId = targetId || confirmDialog?.targetId || selectedPreviousId;
     if (!wsId) {
       onShowToast?.('Please select a previous order to load', 'error');
+      setConfirmDialog(null);
       return;
     }
 
@@ -141,10 +147,12 @@ export default function OrderWorkspaceManagement({
         if (onDataUpdated) onDataUpdated();
       } else {
         onShowToast?.(res?.message || 'Failed to load order workspace', 'error');
+        setConfirmDialog(null);
       }
     } catch (err) {
       console.error('Switch workspace error:', err);
       onShowToast?.(err.message || 'Error switching workspace', 'error');
+      setConfirmDialog(null);
     } finally {
       setIsSwitching(false);
     }
@@ -152,18 +160,31 @@ export default function OrderWorkspaceManagement({
 
   // Action: Delete Archived Workspace
   const handleDeleteWorkspace = async (targetId) => {
-    if (!targetId) return;
+    const idToDelete = targetId || confirmDialog?.targetId;
+    if (!idToDelete) {
+      onShowToast?.('No workspace selected for deletion.', 'error');
+      setConfirmDialog(null);
+      return;
+    }
+
     try {
-      const res = await api.deleteOrderWorkspace(targetId);
+      setIsDeleting(true);
+      const res = await api.deleteOrderWorkspace(idToDelete);
       if (res && res.success !== false) {
         onShowToast?.('Archived workspace deleted.', 'success');
         setConfirmDialog(null);
         await loadWorkspaces();
+        if (onDataUpdated) onDataUpdated();
       } else {
         onShowToast?.(res?.message || 'Failed to delete workspace', 'error');
+        setConfirmDialog(null);
       }
     } catch (err) {
+      console.error('Delete workspace error:', err);
       onShowToast?.(err.message || 'Error deleting workspace', 'error');
+      setConfirmDialog(null);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -699,8 +720,9 @@ export default function OrderWorkspaceManagement({
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
               <button
                 type="button"
+                disabled={isSubmitting || isDeleting || isSwitching}
                 onClick={() => setConfirmDialog(null)}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-semibold transition"
               >
                 Cancel
               </button>
@@ -708,26 +730,59 @@ export default function OrderWorkspaceManagement({
               {confirmDialog.type === 'delete' ? (
                 <button
                   type="button"
+                  disabled={isDeleting}
                   onClick={() => handleDeleteWorkspace(confirmDialog.targetId)}
-                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-md shadow-rose-900/30"
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-bold transition shadow-md shadow-rose-900/30 flex items-center gap-1.5"
                 >
-                  Delete Archive
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Deleting Archive...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Archive</span>
+                    </>
+                  )}
                 </button>
               ) : confirmDialog.type === 'create' ? (
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={handleCreateOrderWorkspace}
-                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-bold transition shadow-md shadow-amber-900/30"
+                  className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 text-xs font-bold transition shadow-md shadow-amber-900/30 flex items-center gap-1.5"
                 >
-                  Confirm & Reset to 0
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                      <span>Resetting & Starting Order...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Confirm & Reset to 0</span>
+                    </>
+                  )}
                 </button>
               ) : (
                 <button
                   type="button"
+                  disabled={isSwitching}
                   onClick={() => handleSwitchWorkspace(confirmDialog.targetId)}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition shadow-md shadow-blue-900/30"
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold transition shadow-md shadow-blue-900/30 flex items-center gap-1.5"
                 >
-                  Load Order Workspace
+                  {isSwitching ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>Loading Workspace...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Load Order Workspace</span>
+                    </>
+                  )}
                 </button>
               )}
             </div>
