@@ -106,17 +106,11 @@ class ClientDatabaseStore {
 
         if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
           this.activeWorkspace = parsed.activeWorkspace;
-          if (this.activeWorkspace.isZeroReset) {
-            this.isIntentionalReset = true;
-          }
         } else if (typeof window !== 'undefined') {
           const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
           if (rawActive) {
             try {
               this.activeWorkspace = JSON.parse(rawActive);
-              if (this.activeWorkspace?.isZeroReset) {
-                this.isIntentionalReset = true;
-              }
             } catch {}
           }
         }
@@ -160,22 +154,13 @@ class ClientDatabaseStore {
           console.error('Subscriber callback notification error:', err);
         }
       });
-    }, 50);
+    }, 10);
   }
 
   // Apply real-time cloud state pushed from Firebase Realtime Database
   applyCloudState(cloudState) {
     if (!cloudState) return;
     if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) return;
-
-    // Strict timestamp comparison: only apply if cloud is ACTUALLY NEWER than local
-    if (cloudState.lastUpdated && this.lastSaved) {
-      const cloudTime = new Date(cloudState.lastUpdated).getTime();
-      const localTime = new Date(this.lastSaved).getTime();
-      if (!isNaN(cloudTime) && !isNaN(localTime) && cloudTime <= localTime) {
-        return;
-      }
-    }
 
     // Guard against re-applying the exact same cloud snapshot repeatedly
     if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastAppliedCloudTimestamp) {
@@ -185,11 +170,8 @@ class ClientDatabaseStore {
     const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
     const localWsId = this.activeWorkspace?.id;
 
-    // REJECT UNSCOPED LEGACY CLOUD STATE (missing activeWorkspaceId):
-    // Old tabs or legacy clients pushing schema without activeWorkspaceId must NEVER overwrite modern workspace state.
-    if (!cloudWsId) {
-      console.warn('[Sync Guard] Dropping unscoped legacy cloud state missing activeWorkspaceId. Healing cloud with local ground truth.');
-      this.forceSaveToCloud();
+    // Discard unscoped legacy payloads that lack any active workspace pointer
+    if (!cloudWsId && !cloudState.activeWorkspace) {
       return;
     }
 
@@ -201,27 +183,16 @@ class ClientDatabaseStore {
       const localWsCreatedTime = new Date(this.activeWorkspace.createdAt).getTime();
       if (!isNaN(cloudUpdateTime) && !isNaN(localWsCreatedTime) && cloudWsId !== localWsId) {
         if (cloudUpdateTime <= localWsCreatedTime) {
-          console.warn(`[Sync Guard] Ignoring stale cloud state from previous workspace (cloud: ${cloudWsId}, local: ${localWsId}). Auto-healing cloud ground truth.`);
-          this.forceSaveToCloud();
           return;
         }
       }
     }
 
-    // INTENTIONAL RESET & ZERO-COUNT ANTI-DOWNGRADE GUARD:
-    // When the user intentionally created a new zeroed workspace, do not allow incoming cloud state
-    // from a different or older workspace to overwrite the zeroed counts!
-    if ((this.isIntentionalReset || this.activeWorkspace?.isZeroReset) && cloudWsId !== localWsId) {
-      console.warn(`[Sync Guard] Bypassing cloud switch: intentional workspace reset is active for ${localWsId}. Re-asserting ground truth.`);
-      this.forceSaveToCloud();
-      return;
-    }
-
     this.lastAppliedCloudTimestamp = cloudState.lastUpdated;
 
     // 1. GLOBAL WORKSPACE SWITCH DETECTION:
-    // If the cloud state has an activeWorkspaceId different from local, this is an intentional
-    // global workspace switch or new order activation performed by the Admin.
+    // If the cloud state has an activeWorkspaceId different from local, an admin or user
+    // switched or created a workspace on another device (Phone <-> Web). Follow the switch!
     const isDifferentWorkspace = Boolean(cloudWsId && localWsId && cloudWsId !== localWsId);
 
     if (isDifferentWorkspace) {
@@ -280,41 +251,26 @@ class ClientDatabaseStore {
       return;
     }
 
-    // Inside the SAME workspace:
-    // STRICT ZERO-COUNT GROUND TRUTH PROTECTION:
-    // If the active workspace is zero-initialized, do NOT let incoming cloud orders with historical counts revert 0!
-    const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
+    // 2. LIVE CROSS-DEVICE MERGE (SAME WORKSPACE):
+    // Real-time updates from other devices (Phone <-> Web) for the active workspace.
     const cloudTotProd = Array.isArray(cloudState.orders)
       ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
       : 0;
 
-    const isZeroWorkspace = Boolean(this.activeWorkspace?.isZeroReset || this.isIntentionalReset || localTotProd === 0);
-
-    if (isZeroWorkspace && cloudTotProd > 0) {
-      console.warn(`[Sync Guard] Rejected cloud state (${cloudTotProd} pcs) attempting to revert zeroed workspace (${localWsId}). Re-asserting local 0 ground truth.`);
-      this.forceSaveToCloud();
+    // Only block if a legacy October baseline seed snapshot (271,489 pcs) is attempting to resurrect
+    if (localWsId !== DEFAULT_WORKSPACE.id && cloudTotProd >= 250000 && (cloudState.lastUpdated || '').startsWith('2026-10')) {
+      console.warn(`[Sync Guard] Blocked October baseline seed snapshot regression (${cloudTotProd} pcs).`);
       return;
     }
 
     if (cloudState.activeWorkspace) {
-      this.activeWorkspace = cloudState.activeWorkspace;
+      this.activeWorkspace = { ...this.activeWorkspace, ...cloudState.activeWorkspace };
     }
     if (Array.isArray(cloudState.workspaces)) {
       this.workspaces = cloudState.workspaces;
     }
     if (Array.isArray(cloudState.orders)) {
       this.orders = cloudState.orders;
-    }
-    if (Array.isArray(cloudState.categories) && cloudState.categories.length) {
-      this.categories = cloudState.categories;
-    }
-    if (Array.isArray(cloudState.machines)) {
-      this.machines = cloudState.machines.filter(
-        (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
-      );
-    }
-    if (Array.isArray(cloudState.workers)) {
-      this.workers = cloudState.workers;
     }
     if (Array.isArray(cloudState.productionLogs)) {
       this.productionLogs = cloudState.productionLogs;
@@ -336,6 +292,23 @@ class ClientDatabaseStore {
     }
     if (Array.isArray(cloudState.inventoryLogs)) {
       this.inventoryLogs = cloudState.inventoryLogs;
+    }
+    if (Array.isArray(cloudState.categories) && cloudState.categories.length) {
+      this.categories = cloudState.categories;
+    }
+    if (Array.isArray(cloudState.machines)) {
+      this.machines = cloudState.machines.filter(
+        (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
+      );
+    }
+    if (Array.isArray(cloudState.workers)) {
+      this.workers = cloudState.workers;
+    }
+
+    // Clear zero-reset flags once live production data exists
+    if (cloudTotProd > 0 || (this.productionLogs && this.productionLogs.length > 0)) {
+      if (this.activeWorkspace) this.activeWorkspace.isZeroReset = false;
+      this.isIntentionalReset = false;
     }
 
     this.ensureSpecialMachines();
@@ -374,8 +347,6 @@ class ClientDatabaseStore {
   }
 
   async init() {
-    this.subscribers = [];
-
     // Background cloud hydration with 3.5s timeout (never blocks instant UI rendering)
     if (typeof fetch !== 'undefined') {
       try {
@@ -413,22 +384,11 @@ class ClientDatabaseStore {
           const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
 
           if (targetActiveId) {
-            const isLocalAlreadyTarget = this.activeWorkspace?.id === targetActiveId;
-            const isLocalZeroReset = Boolean(this.activeWorkspace?.isZeroReset || this.isIntentionalReset);
-            const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
-
             const isCloudMatching = Boolean(
               cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)
             );
 
-            const cloudTotProd = isCloudMatching && Array.isArray(cloudState.orders)
-              ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
-              : 0;
-
-            if (isLocalAlreadyTarget && (isLocalZeroReset || localTotProd === 0) && cloudTotProd > 0) {
-              console.warn(`[Init Sync Guard] Preserving local zeroed workspace ${targetActiveId} against stale cloud count (${cloudTotProd} pcs). Overwriting cloud.`);
-              this.forceSaveToCloud();
-            } else if (isCloudMatching) {
+            if (isCloudMatching) {
               this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
                 id: targetActiveId,
                 buyerName: cloudState.buyerName || 'Active Order',
@@ -462,9 +422,6 @@ class ClientDatabaseStore {
                 this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
                 this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
                 this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
-                this.forceSaveToCloud();
-              } else if (isLocalAlreadyTarget) {
-                this.forceSaveToCloud();
               } else if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
                 this.applyCloudState(cloudState);
               }

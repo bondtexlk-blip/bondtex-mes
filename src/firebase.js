@@ -430,23 +430,33 @@ export const firebaseRealtime = {
       try {
         if (window.EventSource) {
           eventSource = new EventSource(`${REALTIME_DB_URL}/state.json`);
-          eventSource.addEventListener('put', (e) => {
+          eventSource.addEventListener('put', async (e) => {
             try {
               const payload = JSON.parse(e.data);
-              if (payload && payload.data) {
+              if (payload) {
                 if (payload.path === '/' || !payload.path) {
                   const state = payload.data;
-                  // Guard against legacy unscoped payloads missing activeWorkspaceId
-                  if (state && !state.activeWorkspaceId && !state.activeWorkspace) {
-                    return;
+                  if (state && (state.activeWorkspaceId || state.activeWorkspace)) {
+                    if (state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
+                      return;
+                    }
+                    if (state.lastUpdated) {
+                      lastHandledTimestamp = state.lastUpdated;
+                    }
+                    onUpdate(state);
                   }
-                  if (state && state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
-                    return;
+                } else if (payload.path) {
+                  // Subpath modification detected (e.g. orders, productionLogs, inventory)
+                  const freshState = await firebaseRealtime.pullState();
+                  if (freshState && (freshState.activeWorkspaceId || freshState.activeWorkspace)) {
+                    if (freshState.lastUpdated && freshState.lastUpdated === lastHandledTimestamp) {
+                      return;
+                    }
+                    if (freshState.lastUpdated) {
+                      lastHandledTimestamp = freshState.lastUpdated;
+                    }
+                    onUpdate(freshState);
                   }
-                  if (state && state.lastUpdated) {
-                    lastHandledTimestamp = state.lastUpdated;
-                  }
-                  onUpdate(state);
                 }
               }
             } catch (err) {
@@ -459,7 +469,7 @@ export const firebaseRealtime = {
               eventSource.close();
               eventSource = null;
             }
-            if (!stopped) setTimeout(connectStream, 15000);
+            if (!stopped) setTimeout(connectStream, 4000);
           };
         }
       } catch (err) {
@@ -469,18 +479,14 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Gentle fallback poll (every 30 seconds, only when tab is visible and has active focus)
+    // Fast, gentle fallback poll (every 6 seconds when tab is active and visible)
     pollInterval = setInterval(async () => {
       if (stopped) return;
       if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const cloudState = await firebaseRealtime.pullState();
-        if (cloudState && cloudState.lastUpdated) {
-          // Reject legacy unscoped snapshots missing active workspace pointers
-          if (!cloudState.activeWorkspaceId && !cloudState.activeWorkspace) {
-            return;
-          }
-          if (cloudState.lastUpdated === lastHandledTimestamp) return;
+        if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
+          if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
@@ -496,18 +502,14 @@ export const firebaseRealtime = {
       } catch {
         // ignore
       }
-    }, 30000);
+    }, 6000);
 
     // Sync immediately on window focus / tab visibility change (e.g. user opens phone or switches back to tab)
     const handleFocus = async () => {
       try {
         const cloudState = await firebaseRealtime.pullState();
-        if (cloudState && cloudState.lastUpdated) {
-          // Reject legacy unscoped snapshots missing active workspace pointers
-          if (!cloudState.activeWorkspaceId && !cloudState.activeWorkspace) {
-            return;
-          }
-          if (cloudState.lastUpdated === lastHandledTimestamp) return;
+        if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
+          if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
