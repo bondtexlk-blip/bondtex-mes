@@ -106,10 +106,18 @@ class ClientDatabaseStore {
 
         if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
           this.activeWorkspace = parsed.activeWorkspace;
+          if (this.activeWorkspace.isZeroReset) {
+            this.isIntentionalReset = true;
+          }
         } else if (typeof window !== 'undefined') {
           const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
           if (rawActive) {
-            try { this.activeWorkspace = JSON.parse(rawActive); } catch {}
+            try {
+              this.activeWorkspace = JSON.parse(rawActive);
+              if (this.activeWorkspace?.isZeroReset) {
+                this.isIntentionalReset = true;
+              }
+            } catch {}
           }
         }
 
@@ -177,6 +185,14 @@ class ClientDatabaseStore {
     const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
     const localWsId = this.activeWorkspace?.id;
 
+    // REJECT UNSCOPED LEGACY CLOUD STATE (missing activeWorkspaceId):
+    // Old tabs or legacy clients pushing schema without activeWorkspaceId must NEVER overwrite modern workspace state.
+    if (!cloudWsId) {
+      console.warn('[Sync Guard] Dropping unscoped legacy cloud state missing activeWorkspaceId. Healing cloud with local ground truth.');
+      this.forceSaveToCloud();
+      return;
+    }
+
     // ANTI-REVERT WORKSPACE CREATION GUARD:
     // If the local active workspace was created AFTER this cloudState was updated,
     // this incoming cloudState is obsolete (from a previous workspace) and MUST NOT revert our workspace!
@@ -192,11 +208,11 @@ class ClientDatabaseStore {
       }
     }
 
-    // INTENTIONAL RESET ANTI-DOWNGRADE GUARD:
+    // INTENTIONAL RESET & ZERO-COUNT ANTI-DOWNGRADE GUARD:
     // When the user intentionally created a new zeroed workspace, do not allow incoming cloud state
     // from a different or older workspace to overwrite the zeroed counts!
-    if (this.isIntentionalReset && cloudWsId !== localWsId) {
-      console.warn(`[Sync Guard] Bypassing cloud overwrite: intentional workspace reset is active for ${localWsId}. Re-asserting ground truth.`);
+    if ((this.isIntentionalReset || this.activeWorkspace?.isZeroReset) && cloudWsId !== localWsId) {
+      console.warn(`[Sync Guard] Bypassing cloud switch: intentional workspace reset is active for ${localWsId}. Re-asserting ground truth.`);
       this.forceSaveToCloud();
       return;
     }
@@ -265,6 +281,21 @@ class ClientDatabaseStore {
     }
 
     // Inside the SAME workspace:
+    // STRICT ZERO-COUNT GROUND TRUTH PROTECTION:
+    // If the active workspace is zero-initialized, do NOT let incoming cloud orders with historical counts revert 0!
+    const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
+    const cloudTotProd = Array.isArray(cloudState.orders)
+      ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
+      : 0;
+
+    const isZeroWorkspace = Boolean(this.activeWorkspace?.isZeroReset || this.isIntentionalReset || localTotProd === 0);
+
+    if (isZeroWorkspace && cloudTotProd > 0) {
+      console.warn(`[Sync Guard] Rejected cloud state (${cloudTotProd} pcs) attempting to revert zeroed workspace (${localWsId}). Re-asserting local 0 ground truth.`);
+      this.forceSaveToCloud();
+      return;
+    }
+
     if (cloudState.activeWorkspace) {
       this.activeWorkspace = cloudState.activeWorkspace;
     }
@@ -382,11 +413,22 @@ class ClientDatabaseStore {
           const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
 
           if (targetActiveId) {
-            if (cloudState && !cloudState.activeWorkspaceId && cloudActivePointer?.id === targetActiveId) {
-              cloudState.activeWorkspaceId = targetActiveId;
-              cloudState.activeWorkspace = cloudActivePointer;
-            }
-            if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
+            const isLocalAlreadyTarget = this.activeWorkspace?.id === targetActiveId;
+            const isLocalZeroReset = Boolean(this.activeWorkspace?.isZeroReset || this.isIntentionalReset);
+            const localTotProd = (this.orders || []).reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0);
+
+            const isCloudMatching = Boolean(
+              cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)
+            );
+
+            const cloudTotProd = isCloudMatching && Array.isArray(cloudState.orders)
+              ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
+              : 0;
+
+            if (isLocalAlreadyTarget && (isLocalZeroReset || localTotProd === 0) && cloudTotProd > 0) {
+              console.warn(`[Init Sync Guard] Preserving local zeroed workspace ${targetActiveId} against stale cloud count (${cloudTotProd} pcs). Overwriting cloud.`);
+              this.forceSaveToCloud();
+            } else if (isCloudMatching) {
               this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
                 id: targetActiveId,
                 buyerName: cloudState.buyerName || 'Active Order',
@@ -402,7 +444,7 @@ class ClientDatabaseStore {
               if (Array.isArray(cloudState.workers)) this.workers = cloudState.workers;
             } else {
               let targetWs = (this.workspaces || []).find((w) => w.id === targetActiveId);
-              if (!targetWs) {
+              if (!targetWs || !Array.isArray(targetWs.orders) || targetWs.orders.length === 0) {
                 targetWs = await firebaseRealtime.getWorkspaceArchive(targetActiveId);
               }
               if (targetWs) {
@@ -413,17 +455,21 @@ class ClientDatabaseStore {
                   notes: targetWs.notes || '',
                   status: 'Active',
                   createdAt: targetWs.createdAt || new Date().toISOString(),
+                  isZeroReset: targetWs.isZeroReset || false,
                 };
                 this.orders = Array.isArray(targetWs.orders) ? targetWs.orders : [];
                 this.productionLogs = Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [];
                 this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
                 this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
                 this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
-              } else if (cloudState) {
+                this.forceSaveToCloud();
+              } else if (isLocalAlreadyTarget) {
+                this.forceSaveToCloud();
+              } else if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
                 this.applyCloudState(cloudState);
               }
             }
-          } else if (cloudState) {
+          } else if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
             this.applyCloudState(cloudState);
           }
 
@@ -788,6 +834,7 @@ class ClientDatabaseStore {
 
     // 2. Create the new workspace
     const newWsId = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const isZero = resetMode === 'zero_counts' || resetMode === 'blank';
     const newWorkspace = {
       id: newWsId,
       buyerName: cleanBuyer,
@@ -795,6 +842,7 @@ class ClientDatabaseStore {
       notes: notes.trim(),
       createdAt: nowIso,
       status: 'Active',
+      isZeroReset: isZero,
     };
 
     // 3. ZERO ALL COUNTS LOGIC:
@@ -845,6 +893,7 @@ class ClientDatabaseStore {
       totalFloorQty: 0,
       totalDeliveryQty: 0,
       totalBalanceQty: 0,
+      isZeroReset: isZero,
       orders: JSON.parse(JSON.stringify(this.orders)),
       productionLogs: [],
       deliveryReceivedLogs: [],
@@ -936,6 +985,11 @@ class ClientDatabaseStore {
     }
 
     // 3. Restore target workspace data
+    const isTargetZero = Boolean(
+      targetWs.isZeroReset ||
+      targetWs.totalProductionQty === 0 ||
+      (Array.isArray(targetWs.orders) && targetWs.orders.reduce((s, o) => s + (Number(o.productionQty) || 0), 0) === 0)
+    );
     const activeWsObj = {
       id: targetWs.id,
       buyerName: targetWs.buyerName || 'Loaded Order',
@@ -943,6 +997,7 @@ class ClientDatabaseStore {
       notes: targetWs.notes || '',
       createdAt: targetWs.createdAt || nowIso,
       status: 'Active',
+      isZeroReset: isTargetZero,
     };
     this.activeWorkspace = activeWsObj;
 
@@ -990,7 +1045,7 @@ class ClientDatabaseStore {
       await Promise.allSettled(promises);
     }
 
-    this.isIntentionalReset = false;
+    this.isIntentionalReset = isTargetZero;
     this.lastSaved = nowIso;
     this.lastAppliedCloudTimestamp = nowIso;
 
@@ -1527,6 +1582,12 @@ class ClientDatabaseStore {
       deliveryQty: delivery,
       notes: logData.notes || 'Daily log entry',
     });
+
+    if (actual > 0) {
+      if (this.activeWorkspace) this.activeWorkspace.isZeroReset = false;
+      this.isIntentionalReset = false;
+    }
+
     await this.save(true);
     firestoreSync.saveDocument('orders', order.id, order);
     return order;
@@ -1806,6 +1867,11 @@ class ClientDatabaseStore {
         worker.todayProduced = (worker.todayProduced || 0) + effectiveQty;
         worker.batchesLogged = (worker.batchesLogged || 0) + 1;
       }
+    }
+
+    if (effectiveQty > 0) {
+      if (this.activeWorkspace) this.activeWorkspace.isZeroReset = false;
+      this.isIntentionalReset = false;
     }
 
     await this.save(true);

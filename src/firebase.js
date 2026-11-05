@@ -436,6 +436,10 @@ export const firebaseRealtime = {
               if (payload && payload.data) {
                 if (payload.path === '/' || !payload.path) {
                   const state = payload.data;
+                  // Guard against legacy unscoped payloads missing activeWorkspaceId
+                  if (state && !state.activeWorkspaceId && !state.activeWorkspace) {
+                    return;
+                  }
                   if (state && state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
                     return;
                   }
@@ -472,6 +476,10 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          // Reject legacy unscoped snapshots missing active workspace pointers
+          if (!cloudState.activeWorkspaceId && !cloudState.activeWorkspace) {
+            return;
+          }
           if (cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 
@@ -495,6 +503,10 @@ export const firebaseRealtime = {
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && cloudState.lastUpdated) {
+          // Reject legacy unscoped snapshots missing active workspace pointers
+          if (!cloudState.activeWorkspaceId && !cloudState.activeWorkspace) {
+            return;
+          }
           if (cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 
