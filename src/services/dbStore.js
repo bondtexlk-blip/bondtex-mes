@@ -121,19 +121,25 @@ class ClientDatabaseStore {
       }
 
       if (parsed && Array.isArray(parsed.orders)) {
-        this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
-        this.orders = parsed.orders;
-        this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
-          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
-        this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
-        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
-        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
-        this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
-        this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
-        this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
-        this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
-        this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
-        this.lastSaved = parsed.lastSaved || null;
+        const parsedWsId = parsed.activeWorkspace?.id || parsed.activeWorkspaceId;
+        const localTotOrder = parsed.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+        const isCorruptBaseline = parsedWsId && parsedWsId !== 'ws_baseline_2026' && localTotOrder >= 250000;
+
+        if (!isCorruptBaseline) {
+          this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
+          this.orders = parsed.orders;
+          this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
+            .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
+          this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
+          this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
+          this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+          this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+          this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
+          this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
+          this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
+          this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
+          this.lastSaved = parsed.lastSaved || null;
+        }
 
         if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
           this.activeWorkspace = parsed.activeWorkspace;
@@ -292,10 +298,14 @@ class ClientDatabaseStore {
     const cloudTotProd = Array.isArray(cloudState.orders)
       ? cloudState.orders.reduce((sum, o) => sum + (Number(o.productionQty) || 0), 0)
       : 0;
+    const cloudTotOrder = Array.isArray(cloudState.orders)
+      ? cloudState.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
+      : 0;
 
-    // Only block if a legacy October baseline seed snapshot (271,489 pcs) is attempting to resurrect
-    if (localWsId !== DEFAULT_WORKSPACE.id && cloudTotProd >= 250000 && (cloudState.lastUpdated || '').startsWith('2026-10')) {
-      console.warn(`[Sync Guard] Blocked October baseline seed snapshot regression (${cloudTotProd} pcs).`);
+    // Strict Anti-Baseline-Resurrection Guard:
+    // If the active workspace is NOT ws_baseline_2026, NEVER allow incoming baseline orders (271,489 pcs) to overwrite it!
+    if (localWsId && localWsId !== DEFAULT_WORKSPACE.id && (cloudTotOrder >= 250000 || (cloudTotProd >= 250000 && (cloudState.lastUpdated || '').startsWith('2026-10')))) {
+      console.warn(`[Sync Guard] Blocked baseline 271,489 order regression (${cloudTotOrder} pcs) from overwriting active workspace ${localWsId}.`);
       return;
     }
 
@@ -420,8 +430,14 @@ class ClientDatabaseStore {
           const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
 
           if (targetActiveId) {
+            const cloudTotOrder = Array.isArray(cloudState?.orders)
+              ? cloudState.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
+              : 0;
+
             const isCloudMatching = Boolean(
-              cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)
+              cloudState &&
+              (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId) &&
+              !(targetActiveId !== 'ws_baseline_2026' && cloudTotOrder >= 250000)
             );
 
             if (isCloudMatching) {
