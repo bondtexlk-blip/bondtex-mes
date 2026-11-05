@@ -187,17 +187,22 @@ export const firebaseRealtime = {
   async pushState(state) {
     try {
       const url = `${REALTIME_DB_URL}/state.json`;
+      const activeWs = state?.activeWorkspace || null;
+      const activeWsId = state?.activeWorkspaceId || activeWs?.id || null;
+      const normalizedState = {
+        ...state,
+        activeWorkspace: activeWs,
+        activeWorkspaceId: activeWsId,
+      };
       const promises = [
         fetch(url, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(state),
+          body: JSON.stringify(normalizedState),
         }),
       ];
 
       // Mirror active workspace pointer to dedicated endpoints for absolute ground truth
-      const activeWs = state?.activeWorkspace || null;
-      const activeWsId = state?.activeWorkspaceId || activeWs?.id || null;
       if (activeWs && activeWsId) {
         promises.push(
           fetch(`${REALTIME_DB_URL}/activeWorkspace.json`, {
@@ -410,7 +415,20 @@ export const firebaseRealtime = {
       const url = `${REALTIME_DB_URL}/state.json`;
       const res = await fetch(url);
       if (!res.ok) return null;
-      return await res.json();
+      const state = await res.json();
+      if (!state) return null;
+
+      // Auto-hydrate active workspace pointer if missing directly from state.json
+      if (!state.activeWorkspaceId && !state.activeWorkspace) {
+        try {
+          const wsPtr = await firebaseRealtime.getActiveWorkspacePointer();
+          if (wsPtr && wsPtr.id) {
+            state.activeWorkspace = wsPtr;
+            state.activeWorkspaceId = wsPtr.id;
+          }
+        } catch {}
+      }
+      return state;
     } catch (err) {
       console.warn('Realtime cloud pull note (offline):', err?.message);
       return null;
@@ -425,42 +443,63 @@ export const firebaseRealtime = {
     let stopped = false;
     let lastHandledTimestamp = null;
 
+    const processPayload = async (payload) => {
+      try {
+        if (!payload) return;
+        let state = null;
+        if (payload.path === '/' || !payload.path) {
+          state = payload.data;
+        } else {
+          // Subpath modification detected (e.g. /productionLogs, /orders, /inventory)
+          state = await firebaseRealtime.pullState();
+        }
+
+        if (!state) return;
+
+        // Auto-hydrate active workspace pointer if missing from state snapshot
+        if (!state.activeWorkspaceId && !state.activeWorkspace) {
+          try {
+            const wsPtr = await firebaseRealtime.getActiveWorkspacePointer();
+            if (wsPtr && wsPtr.id) {
+              state.activeWorkspace = wsPtr;
+              state.activeWorkspaceId = wsPtr.id;
+            }
+          } catch {}
+        }
+
+        // Only fire if updated or has actionable data
+        if (state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
+          return;
+        }
+        if (state.lastUpdated) {
+          lastHandledTimestamp = state.lastUpdated;
+        }
+
+        onUpdate(state);
+      } catch (err) {
+        console.warn('SSE message process note:', err);
+      }
+    };
+
     const connectStream = () => {
       if (stopped) return;
       try {
         if (window.EventSource) {
           eventSource = new EventSource(`${REALTIME_DB_URL}/state.json`);
-          eventSource.addEventListener('put', async (e) => {
+          eventSource.addEventListener('put', (e) => {
             try {
               const payload = JSON.parse(e.data);
-              if (payload) {
-                if (payload.path === '/' || !payload.path) {
-                  const state = payload.data;
-                  if (state && (state.activeWorkspaceId || state.activeWorkspace)) {
-                    if (state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
-                      return;
-                    }
-                    if (state.lastUpdated) {
-                      lastHandledTimestamp = state.lastUpdated;
-                    }
-                    onUpdate(state);
-                  }
-                } else if (payload.path) {
-                  // Subpath modification detected (e.g. orders, productionLogs, inventory)
-                  const freshState = await firebaseRealtime.pullState();
-                  if (freshState && (freshState.activeWorkspaceId || freshState.activeWorkspace)) {
-                    if (freshState.lastUpdated && freshState.lastUpdated === lastHandledTimestamp) {
-                      return;
-                    }
-                    if (freshState.lastUpdated) {
-                      lastHandledTimestamp = freshState.lastUpdated;
-                    }
-                    onUpdate(freshState);
-                  }
-                }
-              }
+              processPayload(payload);
             } catch (err) {
-              console.warn('SSE message parse error:', err);
+              console.warn('SSE put parse error:', err);
+            }
+          });
+          eventSource.addEventListener('patch', (e) => {
+            try {
+              const payload = JSON.parse(e.data);
+              processPayload(payload);
+            } catch (err) {
+              console.warn('SSE patch parse error:', err);
             }
           });
 
@@ -469,7 +508,7 @@ export const firebaseRealtime = {
               eventSource.close();
               eventSource = null;
             }
-            if (!stopped) setTimeout(connectStream, 4000);
+            if (!stopped) setTimeout(connectStream, 3500);
           };
         }
       } catch (err) {
@@ -479,13 +518,12 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Fast, gentle fallback poll (every 6 seconds when tab is active and visible)
+    // Fast, gentle fallback poll (every 4 seconds for seamless multi-device PC sync)
     pollInterval = setInterval(async () => {
       if (stopped) return;
-      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         const cloudState = await firebaseRealtime.pullState();
-        if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
+        if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
           if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 
@@ -502,13 +540,13 @@ export const firebaseRealtime = {
       } catch {
         // ignore
       }
-    }, 6000);
+    }, 4000);
 
-    // Sync immediately on window focus / tab visibility change (e.g. user opens phone or switches back to tab)
+    // Sync immediately on window focus / tab visibility change
     const handleFocus = async () => {
       try {
         const cloudState = await firebaseRealtime.pullState();
-        if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
+        if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
           if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
           lastHandledTimestamp = cloudState.lastUpdated;
 

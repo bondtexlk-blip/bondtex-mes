@@ -181,8 +181,13 @@ export default function HourlyProductionDashboard({
     const unsubscribe = api.subscribe(() => {
       loadHourlyData();
     });
+    // Fast polling fallback (every 4 seconds) to guarantee real-time cross-device sync with phone
+    const pollId = setInterval(() => {
+      loadHourlyData();
+    }, 4000);
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(pollId);
     };
   }, [shift, selectedDate]);
 
@@ -379,34 +384,34 @@ export default function HourlyProductionDashboard({
         </div>
       </div>
 
-      {/* 2. Top Metric Cards Strip (Requirement 5: Real-Time Completed, Remaining, Efficiency) */}
+      {/* 2. Top Metric Cards Strip (Requirement 2 & 5: Real-Time Completed from LOOP INSERT ONLY, Remaining Balance from Total Order Quantity) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Total Amount Completed So Far */}
+        {/* Metric 1: Total Amount Completed So Far (Strictly LOOP INSERT ONLY) */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-cyan-400" />
               <span>Total Completed So Far</span>
             </span>
-            <span className="p-1 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold">
-              LIVE MES
+            <span className="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold">
+              LOOP INSERT ONLY
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-white font-mono">
-              {formatNumber(summary.totalHourlyOutput)}
+              {formatNumber(summary.totalLoopInsertCompleted || summary.totalHourlyOutput)}
             </span>
-            <span className="text-xs text-cyan-400 font-mono font-semibold">pcs / units</span>
+            <span className="text-xs text-cyan-400 font-mono font-semibold">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Shift Target Quota</span>
-            <span className="text-slate-300 font-mono font-bold">
-              {formatNumber(summary.totalTargetQuota)}
+            <span>Today's Shift Output</span>
+            <span className="text-emerald-400 font-mono font-bold">
+              +{formatNumber(summary.totalLoopInsertShiftCompleted || 0)} pcs
             </span>
           </div>
         </div>
 
-        {/* Metric 2: Remaining Balance (Daily Target - Completed) */}
+        {/* Metric 2: Remaining Balance = (Total Order Quantity) - (Total Completed from LOOP INSERT) */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-amber-400 flex items-center gap-1.5">
@@ -414,88 +419,74 @@ export default function HourlyProductionDashboard({
               <span>Remaining Balance</span>
             </span>
             <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
-              (summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0
+              (summary.remainingBalance || 0) === 0
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
             }`}>
-              {(summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0 ? 'ACHIEVED' : 'TO GO'}
+              {(summary.remainingBalance || 0) === 0 ? 'COMPLETED' : 'TO GO'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className={`text-2xl sm:text-3xl font-black font-mono ${
-              (summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0 ? 'text-emerald-400' : 'text-amber-400'
+              (summary.remainingBalance || 0) === 0 ? 'text-emerald-400' : 'text-amber-400'
             }`}>
-              {formatNumber(summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput))}
+              {formatNumber(summary.remainingBalance !== undefined ? summary.remainingBalance : Math.max(0, (summary.totalOrderQty || 271489) - (summary.totalLoopInsertCompleted || 0)))}
             </span>
-            <span className="text-xs text-slate-400 font-mono">pcs / units</span>
+            <span className="text-xs text-slate-400 font-mono">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
             <span>Formula</span>
             <span className="text-slate-300 font-mono text-[10px]">
-              Daily Target - Completed
+              Total Order - Loop Insert
             </span>
           </div>
         </div>
 
-        {/* Metric 3: Current Efficiency Percentage (%) */}
+        {/* Metric 3: Current Efficiency / Completion Percentage (%) */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-400 flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Current Efficiency %</span>
+              <span>Order Completion Rate</span>
             </span>
-            <span className={`p-1 rounded-lg border ${
-              summary.overallNetVariance >= 0
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-            }`}>
-              {summary.overallNetVariance >= 0 ? (
-                <TrendingUp className="w-3 h-3" />
-              ) : (
-                <TrendingDown className="w-3 h-3" />
-              )}
+            <span className="p-1 rounded-lg border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] font-mono font-bold">
+              {((Number(summary.totalLoopInsertCompleted || 0) / (Number(summary.totalOrderQty) || 271489)) * 100).toFixed(1)}%
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className={`text-2xl sm:text-3xl font-black font-mono ${
-              (summary.efficiencyPct ?? overallAchievementRate) >= 100
-                ? 'text-emerald-400'
-                : (summary.efficiencyPct ?? overallAchievementRate) >= 80
-                ? 'text-cyan-400'
-                : 'text-amber-400'
-            }`}>
-              {summary.efficiencyPct !== undefined ? summary.efficiencyPct : overallAchievementRate}%
+            <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-300">
+              {summary.efficiencyPct !== undefined ? summary.efficiencyPct : Math.round((Number(summary.totalLoopInsertCompleted || 0) / (Number(summary.totalOrderQty) || 271489)) * 100)}%
             </span>
-            <span className="text-xs text-slate-400">efficiency</span>
+            <span className="text-xs text-slate-400">progress</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Variance Pace</span>
-            <span className={`font-mono font-bold ${summary.overallNetVariance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {summary.overallNetVariance >= 0 ? '+' : ''}{formatNumber(summary.overallNetVariance)} pcs
+            <span>Intermediate WIP (Preparatory)</span>
+            <span className="text-slate-300 font-mono">
+              +{formatNumber(summary.intermediateShiftOutput || 0)} units
             </span>
           </div>
         </div>
 
-        {/* Metric 4: Plant Floor Fleet & Working Windows */}
+        {/* Metric 4: Total Order Quantity */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Plant Floor Fleet</span>
+              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Total Order Quantity</span>
             </span>
             <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-mono font-bold">
-              ACTIVE
+              CATALOG
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-indigo-400 font-mono">
-              {summary.activeMachinesCount}
+            <span className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono">
+              {formatNumber(summary.totalOrderQty || 271489)}
             </span>
-            <span className="text-xs text-slate-400">Stations Live</span>
+            <span className="text-xs text-slate-400 font-mono">pcs target</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Shift Target Basis</span>
-            <span className="text-slate-300 font-mono">9 Working Hours</span>
+            <span>Plant Fleet</span>
+            <span className="text-slate-300 font-mono">{summary.activeMachinesCount || 5} Stations Active</span>
           </div>
         </div>
       </div>
@@ -602,9 +593,19 @@ export default function HourlyProductionDashboard({
                           <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30">
                             {mCode}
                           </span>
+                          {row.isLoopInsert && (
+                            <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 tracking-wide">
+                              ★ FINAL ASSEMBLY
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-400 font-normal">
                           {row.operatorName || 'Floor Worker'}
+                          {row.isLoopInsert ? (
+                            <span className="ml-1 text-[9px] text-emerald-400 font-bold">• Finished Pieces</span>
+                          ) : (
+                            <span className="ml-1 text-[9px] text-slate-500 font-normal">• Preparatory WIP</span>
+                          )}
                         </div>
                       </td>
 

@@ -30,6 +30,21 @@ export const DEFAULT_WORKSPACE = {
 };
 
 // Dynamic Machine Unit Helpers
+export function isLoopInsertMachine(m) {
+  if (!m) return false;
+  const name = String(m.name || m.machineName || '').toLowerCase().trim();
+  const code = String(m.code || m.machineId || m.id || '').toLowerCase().trim();
+  const type = String(m.type || '').toLowerCase().trim();
+  return (
+    name.includes('loop insert') ||
+    name.includes('insert loop') ||
+    (name.includes('insert') && name.includes('loop')) ||
+    type.includes('loop insert') ||
+    code === 'mch-05' ||
+    code === 'mch-06'
+  );
+}
+
 export function getDefaultMachineUnit(name = '', code = '') {
   const n = (name || '').toLowerCase();
   const c = (code || '').toLowerCase();
@@ -183,12 +198,17 @@ class ClientDatabaseStore {
       return;
     }
 
-    const cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
+    let cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
     const localWsId = this.activeWorkspace?.id;
 
-    // Discard unscoped legacy payloads that lack any active workspace pointer
+    // Discard unscoped legacy payloads that lack any active workspace pointer unless live production data exists
     if (!cloudWsId && !cloudState.activeWorkspace) {
-      return;
+      if (cloudState.orders || cloudState.productionLogs) {
+        cloudWsId = localWsId || DEFAULT_WORKSPACE.id;
+        cloudState.activeWorkspace = this.activeWorkspace || { id: cloudWsId };
+      } else {
+        return;
+      }
     }
 
     // ANTI-REVERT WORKSPACE CREATION GUARD:
@@ -2353,6 +2373,7 @@ class ClientDatabaseStore {
       const isPusing = (m.name || '').toLowerCase().includes('pusing') || (m.code || '').toLowerCase().includes('pus');
       const isIron = (m.name || '').toLowerCase().includes('iron') || (m.code || '').toLowerCase().includes('irn');
       const isDryCut = (m.name || '').toLowerCase().includes('dry cut') || (m.code || '').toLowerCase().includes('dry');
+      const isLoopInsert = isLoopInsertMachine(m);
       const isSyncedStrap = false;
 
       const machineUnit = getMachineUnit(m);
@@ -2547,6 +2568,8 @@ class ClientDatabaseStore {
         isCompress: false,
         isSyncedStrap: false,
         isDryCut,
+        isLoopInsert,
+        isIntermediate: !isLoopInsert,
         specialRule,
         slots: slotRows,
         totals: {
@@ -2560,12 +2583,42 @@ class ClientDatabaseStore {
       };
     });
 
-    const totalHourlyOutput = machineTables.reduce((sum, mt) => sum + mt.totals.totalProduced, 0);
-    const totalTargetQuota = machineTables.reduce((sum, mt) => sum + mt.totals.totalTarget, 0);
-    const overallNetVariance = totalHourlyOutput - totalTargetQuota;
+    // Total Order Quantity across active order catalog
+    const totalOrderQty = (this.orders || []).reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
+
+    // Filter Loop Insert machines and all Loop Insert logs across the order
+    const loopInsertTables = machineTables.filter((mt) => isLoopInsertMachine(mt));
+    const allLoopInsertLogs = (this.productionLogs || []).filter((l) => isLoopInsertMachine(l));
+
+    // Total pieces completed from LOOP INSERT across the entire active order
+    const totalLoopInsertOrderCompleted = allLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    // Total pieces completed from LOOP INSERT for the selected shift and date
+    const shiftLoopInsertLogs = allLoopInsertLogs.filter((l) => {
+      const lDate = (l.date || l.timestamp || '').slice(0, 10);
+      if (targetDate && lDate !== targetDate) return false;
+      if (shift !== 'All' && l.shift && l.shift !== shift) return false;
+      return true;
+    });
+    const totalLoopInsertShiftCompleted = shiftLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+    // Sum of all intermediate machine counts (Cutting, Fusing, Iron, Dry Cut)
+    const intermediateTables = machineTables.filter((mt) => !isLoopInsertMachine(mt));
+    const totalIntermediateShiftOutput = intermediateTables.reduce((sum, mt) => sum + mt.totals.totalProduced, 0);
+    const totalAllMachinesShiftOutput = machineTables.reduce((sum, mt) => sum + mt.totals.totalProduced, 0);
+
+    // CRITICAL REQUIREMENT 2:
+    // "Total Completed So Far" MUST ONLY calculate and display the total pieces from "LOOP INSERT" (or final assembly) process.
+    // Strictly ignore intermediate machine counts (like Cutting, Fusing, Dry Cut, etc.) to prevent double-counting.
+    // The "Remaining Balance" MUST be calculated as: (Total Order Quantity) - (Total Completed from LOOP INSERT).
+    // Ensure that as new data is added, the Remaining Balance correctly and continuously decreases based strictly on the Loop Insert total.
+    const remainingBalance = Math.max(0, totalOrderQty - totalLoopInsertOrderCompleted);
+    const efficiencyPct = totalOrderQty > 0 ? Math.round((totalLoopInsertOrderCompleted / totalOrderQty) * 100) : 0;
+    const overallNetVariance = totalLoopInsertOrderCompleted - totalOrderQty;
 
     // Build Summary Matrix for Summary View table
     const summaryMatrix = machineTables.map((mt) => {
+      const isLoop = isLoopInsertMachine(mt);
       const loggedColours = [...new Set(mt.slots.map((s) => s.colour).filter((c) => c && c !== '-'))];
       const loggedOperators = [...new Set(mt.slots.flatMap((s) => (s.breakdowns || []).map((b) => b.operator)).filter(Boolean))];
       const loggedSizes = [...new Set(mt.slots.flatMap((s) => (s.breakdowns || []).map((b) => b.size)).filter((sz) => sz && sz !== '-'))];
@@ -2600,6 +2653,8 @@ class ClientDatabaseStore {
         code: mt.code,
         name: mt.name,
         category: mt.category,
+        isLoopInsert: isLoop,
+        isIntermediate: !isLoop,
         operatorName,
         colour,
         size,
@@ -2631,20 +2686,22 @@ class ClientDatabaseStore {
       });
     });
 
-    const remainingBalance = Math.max(0, totalTargetQuota - totalHourlyOutput);
-    const efficiencyPct = totalTargetQuota > 0 ? Math.round((totalHourlyOutput / totalTargetQuota) * 100) : 0;
-
     return {
       date: targetDate,
       shift,
       workingHours: 9,
       slots: activeSlots,
       summary: {
-        totalHourlyOutput,
-        totalTargetQuota,
+        totalHourlyOutput: totalLoopInsertOrderCompleted,
+        totalLoopInsertCompleted: totalLoopInsertOrderCompleted,
+        totalLoopInsertShiftCompleted,
+        totalOrderQty,
+        totalTargetQuota: totalOrderQty,
         overallNetVariance,
         remainingBalance,
         efficiencyPct,
+        intermediateShiftOutput: totalIntermediateShiftOutput,
+        allMachinesShiftOutput: totalAllMachinesShiftOutput,
         activeMachinesCount: machineTables.length,
       },
       summaryMatrix,
