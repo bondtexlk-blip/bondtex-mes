@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Printer, QrCode, Check, ShieldCheck, Factory, User, Hash, Globe } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { buildMachinePortalUrl, resolveProductionHost } from '../utils/urlHelper';
+import { getMachineUnit } from '../services/dbStore';
 
 export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
   if (!machine) return null;
@@ -143,7 +144,10 @@ export default function MachineQrPrintModal({ machine, networkHost, onClose }) {
                   Daily Quota Target
                 </span>
                 <span className="font-mono font-black text-blue-700 text-sm">
-                  {machine.dailyTargetQty?.toLocaleString() || '2,500'} pcs/day
+                  {machine.dailyTargetQty?.toLocaleString() || '2,500'} {machine.unit || getMachineUnit(machine)}/day
+                </span>
+                <span className="text-[9px] text-slate-500 font-mono block">
+                  Hourly: ~{Math.round((Number(machine.dailyTargetQty) || 2500) / 9).toLocaleString()} {machine.unit || getMachineUnit(machine)}/hr (9h Shift)
                 </span>
               </div>
             </div>

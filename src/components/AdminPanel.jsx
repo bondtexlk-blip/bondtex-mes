@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '../api/client';
+import { getDefaultMachineUnit, getMachineUnit } from '../services/dbStore';
 import { dbStore } from '../services/dbStore';
 import MachineQrPrintModal from './MachineQrPrintModal';
 import OrderWorkspaceManagement from './OrderWorkspaceManagement';
@@ -148,6 +149,7 @@ export default function AdminPanel({
     shift: 'Shift A',
     status: 'Active',
     dailyTargetQty: 2500,
+    unit: 'Fabric Tape',
     assignedStyles: ['Loop Elastic Band - 54A2'],
     assignedColours: ['Black 093 54A2'],
     assignedSizes: ['10', '12', '14', '16'],
@@ -257,6 +259,7 @@ export default function AdminPanel({
       shift: m.shift || 'Shift A',
       status: m.status || 'Active',
       dailyTargetQty: Number(m.dailyTargetQty) || 2500,
+      unit: m.unit || getDefaultMachineUnit(m.name, m.code),
       assignedStyles: styles,
       assignedColours: colours,
       assignedSizes: sizes,
@@ -269,16 +272,18 @@ export default function AdminPanel({
     if (machineId === 'NEW') {
       const nextNum = (machines || []).length + 1;
       const code = `MCH-${String(nextNum).padStart(2, '0')}`;
+      const name = `Machine ${String(nextNum).padStart(2, '0')}`;
       setFormData({
         id: code,
         code,
-        name: `Machine ${String(nextNum).padStart(2, '0')}`,
+        name,
         type: 'Standard Production Unit',
         category: 'Loop',
         operatorName: workers && workers.length > 0 ? workers[0]?.name || '' : 'Assigned Operator',
         shift: 'Shift A',
         status: 'Active',
         dailyTargetQty: 2500,
+        unit: getDefaultMachineUnit(name, code),
         assignedStyles: ['Loop Elastic Band - 54A2'],
         assignedColours: ['Black 093 54A2', 'Marzipan 39H6'],
         assignedSizes: ['10', '12', '14', '16'],
@@ -414,7 +419,11 @@ export default function AdminPanel({
 
     try {
       setSaving(true);
-      const res = await api.saveMachine(formData);
+      const machinePayload = {
+        ...formData,
+        unit: (formData.unit || getDefaultMachineUnit(formData.name, formData.code)).trim(),
+      };
+      const res = await api.saveMachine(machinePayload);
       if (res && res.success) {
         if (onShowToast) onShowToast(`Static QR & setup saved for ${formData.name}!`);
         await loadData();
@@ -815,24 +824,61 @@ export default function AdminPanel({
                   </div>
                 </div>
 
-                {/* Daily Target Qty */}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                    Daily Manufacturing Target (Pieces / Day)
-                  </label>
-                  <div className="relative">
+                {/* Dynamic Daily Target Qty & Custom Unit */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                      <span>Daily Target Quota</span>
+                      <span className="text-[10px] text-cyan-400 font-mono font-bold">
+                        Hourly: ~{Math.round((Number(formData.dailyTargetQty) || 2500) / 9)} {formData.unit || 'pcs'}/hr (9h)
+                      </span>
+                    </label>
                     <input
                       type="number"
-                      min="100"
+                      min="1"
                       step="50"
                       value={formData.dailyTargetQty || 2500}
                       onChange={(e) => setFormData({ ...formData, dailyTargetQty: e.target.value })}
                       required
-                      className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3.5 pr-14 py-2 text-white font-mono font-bold text-sm focus:outline-none focus:border-blue-500"
+                      placeholder="e.g. 2600"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white font-mono font-bold text-sm focus:outline-none focus:border-blue-500"
                     />
-                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-xs">
-                      pcs
-                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                      Measurement Unit (Dropdown or Custom)
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        value={['Fabric Tape', 'pcs', 'meters', 'rolls', 'yards'].includes(formData.unit) ? formData.unit : 'CUSTOM'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'CUSTOM') {
+                            setFormData({ ...formData, unit: '' });
+                          } else {
+                            setFormData({ ...formData, unit: val });
+                          }
+                        }}
+                        aria-label="Measurement Unit Preset"
+                        className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-white font-semibold text-xs focus:outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value="Fabric Tape">Fabric Tape (Cutting/Fusing/Iron)</option>
+                        <option value="pcs">pcs (Die Cut / Standard)</option>
+                        <option value="meters">meters</option>
+                        <option value="rolls">rolls</option>
+                        <option value="yards">yards</option>
+                        <option value="CUSTOM">Custom Type...</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={formData.unit || ''}
+                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                        placeholder="e.g. Fabric Tape"
+                        className="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono font-bold text-xs focus:outline-none focus:border-blue-500"
+                        title="Measurement unit applied across Worker Portal and Dashboards"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1301,7 +1347,7 @@ export default function AdminPanel({
                   <div className="flex justify-between text-slate-300">
                     <span className="text-slate-500">Daily Target:</span>
                     <span className="font-mono font-bold text-emerald-400">
-                      {formatNumber(formData?.dailyTargetQty || 2500)} pcs/day
+                      {formatNumber(formData?.dailyTargetQty || 2500)} {formData?.unit || 'pcs'}/day (~{Math.round((Number(formData?.dailyTargetQty) || 2500) / 9)} {formData?.unit || 'pcs'}/hr)
                     </span>
                   </div>
                 </div>
@@ -1330,6 +1376,7 @@ export default function AdminPanel({
               {(machines || []).filter(Boolean).map((m) => {
                 const todayProduced = Number(m.todayProduced) || 0;
                 const target = Number(m.dailyTargetQty) || 2500;
+                const mUnit = m.unit || getDefaultMachineUnit(m.name, m.code);
                 const progress = target > 0 ? Math.round((todayProduced / target) * 100) : 0;
                 const remaining = Math.max(0, target - todayProduced);
 
@@ -1347,7 +1394,7 @@ export default function AdminPanel({
                           </span>
                         </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {m.category || 'General'} Division • {m.shift || 'Shift A'}
+                          {m.category || 'General'} Division • {m.shift || 'Shift A'} • <span className="text-cyan-400 font-bold">{mUnit}</span>
                         </p>
                       </div>
 
@@ -1367,7 +1414,7 @@ export default function AdminPanel({
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-400 text-[11px]">Today's Progress</span>
                         <span className="font-mono font-bold text-slate-200 text-[11px]">
-                          {formatNumber(todayProduced)} / {formatNumber(target)} ({progress}%)
+                          {formatNumber(todayProduced)} / {formatNumber(target)} {mUnit} ({progress}%)
                         </span>
                       </div>
                       <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
@@ -1379,9 +1426,9 @@ export default function AdminPanel({
                         ></div>
                       </div>
                       <div className="text-[10px] text-slate-500 flex justify-between pt-0.5">
-                        <span>Quota: {formatNumber(target)} pcs</span>
+                        <span>Quota: {formatNumber(target)} {mUnit} (~{Math.round(target / 9)} {mUnit}/hr)</span>
                         <span className={remaining === 0 ? 'text-emerald-400 font-bold' : 'text-amber-400'}>
-                          {remaining === 0 ? 'Target Reached!' : `${formatNumber(remaining)} pcs left`}
+                          {remaining === 0 ? 'Target Reached!' : `${formatNumber(remaining)} ${mUnit} left`}
                         </span>
                       </div>
                     </div>

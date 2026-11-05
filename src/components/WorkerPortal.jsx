@@ -30,10 +30,24 @@ import {
   Calendar,
   Target,
   Cpu,
+  AlertTriangle,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
 import { analyzeTargetWithGemini } from '../services/geminiService';
+import { getMachineUnit } from '../services/dbStore';
+
+export const DOWNTIME_REASONS = [
+  'Supervisor',
+  'Maintenance',
+  'QA',
+  'Machine Break Down',
+  'No Material',
+  'Electrical Failure',
+  'Lack of trained Labour',
+  'Machine setting',
+  'Change Over',
+];
 import {
   detectCurrentShift,
   detectCurrentTimeSlot,
@@ -124,6 +138,7 @@ export default function WorkerPortal({
   const [selectedColour, setSelectedColour] = useState('');
   const [selectedSize, setSelectedSize] = useState('');
   const [producedQty, setProducedQty] = useState('');
+  const [rejectReason, setRejectReason] = useState('');
   const [notes, setNotes] = useState('');
 
   // Auto-resolve Style and PO Number based on colour in Loop production
@@ -333,8 +348,10 @@ export default function WorkerPortal({
   const currentInputQty = parseInt(producedQty, 10) || 0;
   const effectiveBatchOutput = isDryCut ? currentInputQty * dryCutMultiplier : currentInputQty;
 
-  // Live Target Calculations (Synchronized with AI Active Schedule & Historical Averages)
+  // Live Target Calculations & Dynamic Units (Synchronized with 9-Hour Shift Target)
+  const machineUnit = machine?.unit || getMachineUnit(machine);
   const dailyTarget = dayStats?.dailyTarget || machine?.dailyTargetQty || 2500;
+  const hourlyTarget = Math.round(dailyTarget / 9);
   const todayProducedBefore = dayStats?.todayProduced !== undefined ? dayStats.todayProduced : (machine?.todayProduced || 0);
   const historicalAverage = dayStats?.historicalAverage || 2500;
   const projectedTotal = todayProducedBefore + effectiveBatchOutput;
@@ -368,10 +385,13 @@ export default function WorkerPortal({
         poNumber: effectivePo,
         producedQty: effectiveBatchOutput,
         rawQty: currentInputQty,
+        unit: machineUnit,
         multiplier: dryCutMultiplier,
         shift: currentShift,
         timeSlot: selectedTimeSlot,
         operatorName: selectedOperator || machine.operatorName || 'Floor Worker',
+        rejectReason: rejectReason || '',
+        downtimeReason: rejectReason || '',
         notes: notes.trim(),
         date: selectedDate,
       };
@@ -383,12 +403,14 @@ export default function WorkerPortal({
           qty: effectiveBatchOutput,
           rawQty: currentInputQty,
           multiplier: dryCutMultiplier,
+          unit: machineUnit,
           isDryCut,
           size: selectedSize,
           timeSlot: selectedTimeSlot,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
         setProducedQty('');
+        setRejectReason('');
         setNotes('');
 
         // Refresh machine status & update management dashboard
@@ -397,8 +419,8 @@ export default function WorkerPortal({
         if (onDataUpdated) onDataUpdated();
         if (onShowToast) {
           const msg = isDryCut
-            ? `Logged ${currentInputQty} units × ${dryCutMultiplier} = ${effectiveBatchOutput} pcs (${selectedTimeSlot})!`
-            : `Logged ${effectiveBatchOutput} pcs (${selectedTimeSlot})!`;
+            ? `Logged ${currentInputQty} units × ${dryCutMultiplier} = ${effectiveBatchOutput} ${machineUnit} (${selectedTimeSlot})!`
+            : `Logged ${effectiveBatchOutput} ${machineUnit} (${selectedTimeSlot})!`;
           onShowToast(msg);
         }
 
@@ -574,7 +596,7 @@ export default function WorkerPortal({
                 {machine?.name || (machinesList.length === 0 ? 'No Machines Configured' : 'Select Station')}
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                {machine?.type || 'Manufacturing Station'} • Quota: <strong className="text-slate-200">{formatNumber(dailyTarget)} pcs/day</strong>
+                {machine?.type || 'Manufacturing Station'} • Quota: <strong className="text-slate-200">{formatNumber(dailyTarget)} {machineUnit}/day</strong> • Hourly Target: <strong className="text-cyan-400 font-mono">{formatNumber(hourlyTarget)} {machineUnit}/hr (9h Shift)</strong>
               </p>
             </div>
 
@@ -590,23 +612,45 @@ export default function WorkerPortal({
                 </span>
               </div>
 
-              <select
-                value={selectedOperator}
-                onChange={(e) => setSelectedOperator(e.target.value)}
-                aria-label="Floor Operator Selector"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-bold text-xs focus:outline-none focus:border-blue-500 cursor-pointer shadow-sm"
-              >
-                {workers.map((w) => (
-                  <option key={w.id} value={w.name} className="bg-slate-900 text-white py-1">
-                    {w.name} ({w.empId}) — {w.category} Division ({w.shift})
-                  </option>
-                ))}
-                {machine?.operatorName && !workers.some((w) => w.name === machine.operatorName) && (
-                  <option value={machine.operatorName} className="bg-slate-900 text-white py-1">
-                    {machine.operatorName} (Machine Default)
-                  </option>
+              <div className="space-y-1.5">
+                <select
+                  value={workers.some((w) => w.name === selectedOperator) || (machine?.operatorName && selectedOperator === machine.operatorName) ? selectedOperator : (selectedOperator ? 'CUSTOM' : '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === 'CUSTOM') {
+                      setSelectedOperator('');
+                    } else {
+                      setSelectedOperator(val);
+                    }
+                  }}
+                  aria-label="Floor Operator Selector"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-bold text-xs focus:outline-none focus:border-blue-500 cursor-pointer shadow-sm"
+                >
+                  <option value="">-- Choose Assigned Operator --</option>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.name} className="bg-slate-900 text-white py-1">
+                      {w.name} ({w.empId}) — {w.category} Division ({w.shift})
+                    </option>
+                  ))}
+                  {machine?.operatorName && !workers.some((w) => w.name === machine.operatorName) && (
+                    <option value={machine.operatorName} className="bg-slate-900 text-white py-1">
+                      {machine.operatorName} (Machine Default)
+                    </option>
+                  )}
+                  <option value="CUSTOM">+ Enter Custom Operator Name...</option>
+                </select>
+
+                {(!workers.some((w) => w.name === selectedOperator) && (!machine?.operatorName || selectedOperator !== machine.operatorName)) && (
+                  <input
+                    type="text"
+                    value={selectedOperator}
+                    onChange={(e) => setSelectedOperator(e.target.value)}
+                    placeholder="Type your operator name here"
+                    className="w-full bg-slate-900 border border-cyan-500 rounded-xl px-3.5 py-2 text-white font-bold text-xs focus:outline-none shadow-sm"
+                    autoFocus
+                  />
                 )}
-              </select>
+              </div>
             </div>
 
             {/* Automatic Shift & Time Slot Selection */}
@@ -699,26 +743,40 @@ export default function WorkerPortal({
               </div>
             </div>
 
-            {/* 1. Target Guidance Overview (3-Card Metrics Display) */}
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              {/* Metric 1: Day Target */}
+            {/* 1. Target Guidance Overview (4-Card Metrics Display with 9h Hourly Target) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+              {/* Metric 1: Daily Target */}
               <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
-                  <Target className="w-3 h-3 text-cyan-400" />
-                  <span>Target</span>
+                  <Target className="w-3 h-3 text-blue-400" />
+                  <span>Daily Target</span>
                 </span>
                 <span className="font-mono font-black text-white text-sm sm:text-base block">
                   {formatNumber(dailyTarget)}
                 </span>
-                <span className="text-[9px] text-slate-500 font-mono block">
-                  {dayStats?.dailyTarget ? 'AI Scheduled' : 'Quota Target'}
+                <span className="text-[9px] text-slate-400 font-mono block">
+                  {machineUnit}/day
                 </span>
               </div>
 
-              {/* Metric 2: Remaining Quantity */}
+              {/* Metric 2: Hourly Target (Divided by 9 for 9h Shift) */}
+              <div className="p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/40 space-y-1 ring-1 ring-cyan-500/20">
+                <span className="text-[10px] text-cyan-300 uppercase font-bold flex items-center justify-center gap-1">
+                  <Clock className="w-3 h-3 text-cyan-400" />
+                  <span>Hourly Target</span>
+                </span>
+                <span className="font-mono font-black text-cyan-300 text-sm sm:text-base block">
+                  {formatNumber(hourlyTarget)}
+                </span>
+                <span className="text-[9px] text-cyan-400 font-mono font-bold block">
+                  {machineUnit}/hr (9h Shift)
+                </span>
+              </div>
+
+              {/* Metric 3: Remaining Quantity */}
               <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
-                  <Clock className="w-3 h-3 text-amber-400" />
+                  <Activity className="w-3 h-3 text-amber-400" />
                   <span>Remaining</span>
                 </span>
                 <span
@@ -728,22 +786,22 @@ export default function WorkerPortal({
                 >
                   {targetAchieved ? '0' : formatNumber(projectedRemaining)}
                 </span>
-                <span className="text-[9px] text-slate-500 font-mono block">
-                  {targetAchieved ? 'Quota Reached!' : `${projectedProgress}% Done`}
+                <span className="text-[9px] text-slate-400 font-mono block">
+                  {targetAchieved ? 'Quota Reached!' : `${machineUnit} left`}
                 </span>
               </div>
 
-              {/* Metric 3: Historical Daily Average */}
+              {/* Metric 4: Efficiency % */}
               <div className="p-3 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-1">
                 <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center justify-center gap-1">
-                  <TrendingUp className="w-3 h-3 text-indigo-400" />
-                  <span>Hist. Avg</span>
+                  <TrendingUp className="w-3 h-3 text-emerald-400" />
+                  <span>Efficiency</span>
                 </span>
-                <span className="font-mono font-black text-indigo-300 text-sm sm:text-base block">
-                  {formatNumber(historicalAverage)}
+                <span className="font-mono font-black text-emerald-300 text-sm sm:text-base block">
+                  {projectedProgress}%
                 </span>
-                <span className="text-[9px] text-slate-500 font-mono block">
-                  Past Pace/Day
+                <span className="text-[9px] text-slate-400 font-mono block">
+                  Target Completion
                 </span>
               </div>
             </div>
@@ -755,7 +813,7 @@ export default function WorkerPortal({
                   Output Progress:
                 </span>
                 <span className="font-mono font-bold text-slate-200">
-                  {formatNumber(projectedTotal)} / {formatNumber(dailyTarget)} pcs ({projectedProgress}%)
+                  {formatNumber(projectedTotal)} / {formatNumber(dailyTarget)} {machineUnit} ({projectedProgress}%)
                 </span>
               </div>
               <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden p-0.5">
@@ -987,15 +1045,15 @@ export default function WorkerPortal({
               {/* 4. Produced Quantity Input */}
               <div className="space-y-2 pt-2">
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
-                  <span>{isDryCut ? 'Input Units (Dry Cut Multiplier Applies)' : 'Produced Batch Quantity (Pieces):'}</span>
+                  <span>{isDryCut ? 'Input Units (Dry Cut Multiplier Applies)' : `Produced Batch Quantity (${machineUnit}):`}</span>
                   {currentInputQty > 0 && (
                     <span className="text-emerald-400 font-mono font-bold">
                       {isDryCut ? (
                         <span>
-                          {currentInputQty} × {dryCutMultiplier} = <span className="text-cyan-300 font-black">+{formatNumber(effectiveBatchOutput)} pcs</span>
+                          {currentInputQty} × {dryCutMultiplier} = <span className="text-cyan-300 font-black">+{formatNumber(effectiveBatchOutput)} {machineUnit}</span>
                         </span>
                       ) : (
-                        <span>+{formatNumber(currentInputQty)} pcs</span>
+                        <span>+{formatNumber(currentInputQty)} {machineUnit}</span>
                       )}
                     </span>
                   )}
@@ -1015,12 +1073,12 @@ export default function WorkerPortal({
                   min="1"
                   value={producedQty}
                   onChange={(e) => setProducedQty(e.target.value)}
-                  placeholder={isDryCut ? `Enter units (will be multiplied by ${dryCutMultiplier})` : 'Enter batch pieces (e.g. 500)'}
+                  placeholder={isDryCut ? `Enter units (will be multiplied by ${dryCutMultiplier})` : `Enter batch ${machineUnit} (e.g. 500)`}
                   required
                   className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-500 rounded-2xl px-5 py-4 text-white font-mono font-black text-2xl sm:text-3xl focus:outline-none shadow-inner text-center sm:text-left"
                 />
 
-                {/* Touch Screen Quick Increments (+50, +100, +250, +500, +1000 for pcs, or units for Dry Cut) */}
+                {/* Touch Screen Quick Increments (+50, +100, +250, +500, +1000 for standard, or units for Dry Cut) */}
                 <div className="grid grid-cols-5 gap-2 pt-1">
                   {(isDryCut ? [5, 10, 20, 50, 100] : [50, 100, 250, 500, 1000]).map((amt) => (
                     <button
@@ -1035,7 +1093,47 @@ export default function WorkerPortal({
                 </div>
               </div>
 
-              {/* 5. Floor Notes (Optional) */}
+              {/* 5. Reject / Downtime Reason Dropdown */}
+              <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-1.5">
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Reject / Downtime Reason (If Applicable)</span>
+                  </span>
+                  {rejectReason && (
+                    <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
+                      <span>Reason Active: {rejectReason}</span>
+                      <button
+                        type="button"
+                        onClick={() => setRejectReason('')}
+                        className="text-slate-400 hover:text-white ml-1 font-bold"
+                        title="Clear reason"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  )}
+                </label>
+                <select
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  aria-label="Reject / Downtime Reason Dropdown"
+                  className={`w-full bg-slate-900 border rounded-xl px-3.5 py-2.5 text-white font-semibold text-xs focus:outline-none transition cursor-pointer ${
+                    rejectReason
+                      ? 'border-amber-500 ring-1 ring-amber-500/50 bg-amber-950/20 text-amber-200'
+                      : 'border-slate-700 focus:border-amber-500'
+                  }`}
+                >
+                  <option value="">-- None (Normal Running) --</option>
+                  {DOWNTIME_REASONS.map((reason) => (
+                    <option key={reason} value={reason} className="bg-slate-900 text-white py-1">
+                      {reason}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 6. Floor Notes (Optional) */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
                   Floor Notes / Quality Memo (Optional)
@@ -1049,7 +1147,7 @@ export default function WorkerPortal({
                 />
               </div>
 
-              {/* 6. Big Action Submit Button */}
+              {/* 7. Big Action Submit Button */}
               <button
                 type="submit"
                 disabled={submitting || !currentInputQty || !selectedSize}
@@ -1065,7 +1163,7 @@ export default function WorkerPortal({
                     <Send className="w-5 h-5" />
                     <span>
                       {currentInputQty > 0
-                        ? `Log Batch: +${formatNumber(effectiveBatchOutput)} pcs (Size ${selectedSize})`
+                        ? `Log Batch: +${formatNumber(effectiveBatchOutput)} ${machineUnit} (Size ${selectedSize})`
                         : 'Log Production Batch'}
                     </span>
                   </>
@@ -1096,9 +1194,9 @@ export default function WorkerPortal({
                   <th className="py-2.5 px-3">Time</th>
                   <th className="py-2.5 px-3">Slot</th>
                   <th className="py-2.5 px-3">Size</th>
-                  <th className="py-2.5 px-3 text-right">Qty (pcs)</th>
+                  <th className="py-2.5 px-3 text-right">Qty ({machineUnit})</th>
                   <th className="py-2.5 px-3">Operator</th>
-                  <th className="py-2.5 px-3">Notes</th>
+                  <th className="py-2.5 px-3">Reason / Memo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -1114,13 +1212,18 @@ export default function WorkerPortal({
                       Size {log.size}
                     </td>
                     <td className="py-2.5 px-3 text-right font-black text-emerald-400 whitespace-nowrap">
-                      +{formatNumber(log.qty)}
+                      +{formatNumber(log.qty)} {log.unit || machineUnit}
                     </td>
                     <td className="py-2.5 px-3 text-slate-300 font-sans whitespace-nowrap">
                       {log.operator || log.operatorName || '-'}
                     </td>
                     <td className="py-2.5 px-3 text-slate-400 font-sans truncate max-w-xs">
-                      {log.notes || '-'}
+                      {log.rejectReason || log.downtimeReason ? (
+                        <span className="text-[10px] text-amber-300 font-bold bg-amber-500/15 px-1.5 py-0.5 rounded border border-amber-500/30 inline-block mr-1">
+                          ⚠️ {log.rejectReason || log.downtimeReason}
+                        </span>
+                      ) : null}
+                      <span>{log.notes || '-'}</span>
                     </td>
                   </tr>
                 ))}

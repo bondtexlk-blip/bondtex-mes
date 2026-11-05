@@ -29,6 +29,22 @@ export const DEFAULT_WORKSPACE = {
   status: 'Active',
 };
 
+// Dynamic Machine Unit Helpers
+export function getDefaultMachineUnit(name = '', code = '') {
+  const n = (name || '').toLowerCase();
+  const c = (code || '').toLowerCase();
+  if (n.includes('cutting') || (c.includes('cut') && !n.includes('dry') && !c.includes('dry') && !n.includes('die') && !c.includes('die'))) return 'Fabric Tape';
+  if (n.includes('fusing') || n.includes('pusing') || c.includes('pus')) return 'Fabric Tape';
+  if (n.includes('iron') || c.includes('irn')) return 'Fabric Tape';
+  if (n.includes('die cut') || c.includes('die') || n.includes('dry cut') || c.includes('dry')) return 'pcs';
+  return 'pcs';
+}
+
+export function getMachineUnit(m) {
+  if (m?.unit && typeof m.unit === 'string' && m.unit.trim()) return m.unit.trim();
+  return getDefaultMachineUnit(m?.name || m?.machineName, m?.code || m?.id || m?.machineId);
+}
+
 class ClientDatabaseStore {
   constructor() {
     this.categories = JSON.parse(JSON.stringify(initialCategories));
@@ -1083,6 +1099,7 @@ class ClientDatabaseStore {
         shift: 'Day Shift',
         status: 'Active',
         dailyTargetQty: 2600,
+        unit: 'Fabric Tape',
         assignedStyles: ['Strap Webbing Band - 39H6'],
         assignedColours: ['Marzipan 39H6', 'Black 093 54A2'],
         assignedSizes: ['10', '12', '14', '16', '18'],
@@ -1101,6 +1118,7 @@ class ClientDatabaseStore {
         shift: 'Day Shift',
         status: 'Active',
         dailyTargetQty: 2600,
+        unit: 'Fabric Tape',
         assignedStyles: ['Strap Webbing Band - 39H6'],
         assignedColours: ['Marzipan 39H6'],
         assignedSizes: ['10', '12', '14', '16', '18'],
@@ -1119,6 +1137,7 @@ class ClientDatabaseStore {
         shift: 'Day Shift',
         status: 'Active',
         dailyTargetQty: 2600,
+        unit: 'Fabric Tape',
         assignedStyles: ['Strap Webbing Band - 39H6'],
         assignedColours: ['Marzipan 39H6'],
         assignedSizes: ['10', '12', '14', '16', '18'],
@@ -1137,6 +1156,7 @@ class ClientDatabaseStore {
         shift: 'Day Shift',
         status: 'Active',
         dailyTargetQty: 2600,
+        unit: 'pcs',
         assignedStyles: ['Strap Webbing Band - 39H6'],
         assignedColours: ['Marzipan 39H6', 'Black 093 54A2'],
         assignedSizes: ['10', '12', '14', '16', '18'],
@@ -1148,9 +1168,18 @@ class ClientDatabaseStore {
     ];
 
     for (const spec of specialSpecs) {
-      const idx = this.machines.findIndex((m) => m.id === spec.id || m.code === spec.code);
-      if (idx === -1) {
+      const existing = this.machines.find((m) => m.id === spec.id || m.code === spec.code);
+      if (!existing) {
         this.machines.push(spec);
+      } else if (!existing.unit) {
+        existing.unit = spec.unit;
+      }
+    }
+
+    // Ensure all machines have their default unit assigned if not set
+    for (const m of this.machines) {
+      if (!m.unit) {
+        m.unit = getDefaultMachineUnit(m.name, m.code);
       }
     }
 
@@ -1631,12 +1660,13 @@ class ClientDatabaseStore {
   }
 
   saveMachine(machineData) {
-    const { id, code, name, category, dailyTargetQty, assignedStyles, assignedColours, assignedSizes, assignedPos, operatorName, shift } = machineData;
+    const { id, code, name, category, dailyTargetQty, unit, assignedStyles, assignedColours, assignedSizes, assignedPos, operatorName, shift } = machineData;
     let machine = this.machines.find((m) => m.id === id || m.code === code);
     if (machine) {
       if (name) machine.name = name;
       if (category) machine.category = category;
       if (dailyTargetQty !== undefined) machine.dailyTargetQty = Number(dailyTargetQty) || machine.dailyTargetQty;
+      if (unit !== undefined && unit !== null) machine.unit = String(unit).trim() || getDefaultMachineUnit(machine.name, machine.code);
       if (assignedStyles) machine.assignedStyles = assignedStyles;
       if (assignedColours) machine.assignedColours = assignedColours;
       if (assignedSizes) machine.assignedSizes = assignedSizes;
@@ -1644,21 +1674,24 @@ class ClientDatabaseStore {
       if (operatorName) machine.operatorName = operatorName;
       if (shift) machine.shift = shift;
     } else {
+      const machineName = name || 'New Machine Station';
+      const machineCode = code || id || `MCH-${String(this.machines.length + 1).padStart(2, '0')}`;
       machine = {
-        id: id || `MCH-${String(this.machines.length + 1).padStart(2, '0')}`,
-        code: code || `MCH-${String(this.machines.length + 1).padStart(2, '0')}`,
-        name: name || 'New Machine Station',
+        id: id || machineCode,
+        code: machineCode,
+        name: machineName,
         type: 'Custom Production Unit',
         category: category || 'Loop',
         operatorName: operatorName || 'Assigned Operator',
         shift: shift || 'Shift A',
         status: 'Active',
         dailyTargetQty: Number(dailyTargetQty) || 2500,
+        unit: unit ? String(unit).trim() : getDefaultMachineUnit(machineName, machineCode),
         assignedStyles: assignedStyles || [],
         assignedColours: assignedColours || [],
         assignedSizes: assignedSizes || [],
         assignedPos: assignedPos || [],
-        qrPayload: id || code,
+        qrPayload: id || machineCode,
         todayLogs: [],
       };
       this.machines.push(machine);
@@ -1681,12 +1714,15 @@ class ClientDatabaseStore {
   }
 
   async submitWorkerProduction(data) {
-    const { machineId, style, size, colour, producedQty, poNumber, shift, operatorName, timeSlot, notes } = data;
+    const { machineId, style, size, colour, producedQty, poNumber, shift, operatorName, timeSlot, notes, rejectReason, downtimeReason } = data;
     const qty = Number(producedQty) || 0;
     if (qty <= 0) throw new Error('Produced quantity must be greater than 0');
 
     const machine = this.getMachineById(machineId);
     if (!machine) throw new Error(`Machine '${machineId}' not found`);
+
+    const effectiveRejectReason = (rejectReason || downtimeReason || '').trim();
+    const machineUnit = machine.unit || getDefaultMachineUnit(machine.name, machine.code);
 
     const isDryCut = (machine.name || '').toLowerCase().includes('dry cut') || (machine.code || '').toLowerCase().includes('dry');
     let multiplier = 1;
@@ -1793,13 +1829,16 @@ class ClientDatabaseStore {
       qty: effectiveQty,
       rawQty,
       multiplier,
+      unit: machineUnit,
       style: style || matchedOrder?.style || 'Standard',
       size: String(size),
       colour: colour || matchedOrder?.colour || 'Standard',
       poNumber: matchedOrder?.poNumber || poNumber || 'PO-PROD-BATCH',
       operator: operatorName || machine.operatorName,
       shift: shift || machine.shift,
-      notes: notes || (isDryCut ? `Input ${rawQty} × ${multiplier} = ${effectiveQty} pcs` : 'Floor QR scan entry'),
+      rejectReason: effectiveRejectReason,
+      downtimeReason: effectiveRejectReason,
+      notes: notes || (isDryCut ? `Input ${rawQty} × ${multiplier} = ${effectiveQty} ${machineUnit}` : (effectiveRejectReason ? `Reason: ${effectiveRejectReason}` : 'Floor QR scan entry')),
     };
 
     if (!machine.todayLogs) machine.todayLogs = [];
@@ -1812,6 +1851,9 @@ class ClientDatabaseStore {
       machineId: machine.code || machine.id,
       machineName: machine.name,
       operatorName: operatorName || machine.operatorName,
+      unit: machineUnit,
+      rejectReason: effectiveRejectReason,
+      downtimeReason: effectiveRejectReason,
     };
     if (!this.productionLogs) this.productionLogs = [];
     this.productionLogs.unshift(globalLogEntry);
@@ -2288,7 +2330,7 @@ class ClientDatabaseStore {
 
     const isNight = shift === 'Night Shift';
     const activeSlots = isNight ? nightShiftSlots : dayShiftSlots;
-    const workingHours = isNight ? 10 : 13;
+    const workingHours = 9; // Shift target basis: 9 hours per spec
 
     const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-DRY'];
     let targetMachines = this.machines.filter((m) => {
@@ -2313,8 +2355,9 @@ class ClientDatabaseStore {
       const isDryCut = (m.name || '').toLowerCase().includes('dry cut') || (m.code || '').toLowerCase().includes('dry');
       const isSyncedStrap = false;
 
+      const machineUnit = getMachineUnit(m);
       const dailyTarget = Number(m.dailyTargetQty) || 2600;
-      const expectedHourlyTarget = Math.round(dailyTarget / workingHours);
+      const expectedHourlyTarget = Math.round(dailyTarget / 9);
 
       // Find all logs for this machine on targetDate from global productionLogs (authoritative)
       const machineGlobalLogs = (this.productionLogs || []).filter((l) => {
@@ -2343,6 +2386,7 @@ class ClientDatabaseStore {
         if (!l.machineId) l.machineId = m.code || m.id;
         if (!l.machineName) l.machineName = m.name;
         if (!l.date) l.date = targetDate;
+        if (!l.unit) l.unit = machineUnit;
       });
 
       const shiftLogs = sourceLogs.filter((l) => {
@@ -2365,6 +2409,12 @@ class ClientDatabaseStore {
         let size = '-';
         let notes = '-';
 
+        // Segregate slot logs distinctly by [Operator, Size]
+        const segregationMap = {};
+        const uniqueOperators = new Set();
+        const uniqueSizes = new Set();
+        const uniqueColours = new Set();
+
         if (slotLogs.length > 0) {
           const primary = slotLogs[0];
           style = primary.style || (m.assignedStyles && m.assignedStyles[0]) || '-';
@@ -2372,34 +2422,63 @@ class ClientDatabaseStore {
           size = String(primary.size || (m.assignedSizes && m.assignedSizes[0]) || '-');
           notes = primary.notes || '';
 
-          // Group by worker name to support multi-worker stations (e.g. Insert Loop with ~20 operators)
-          const workerMap = {};
           slotLogs.forEach((l) => {
-            const wName = l.operator || l.operatorName || workerName;
-            const lSize = String(l.size || size).trim();
-            let lMult = 1;
+            const op = (l.operator || l.operatorName || m.operatorName || 'Floor Worker').trim();
+            const sz = String(l.size || size).trim();
+            const col = (l.colour || colour).trim();
+            uniqueOperators.add(op);
+            uniqueSizes.add(sz);
+            if (col && col !== '-') uniqueColours.add(col);
+
+            const segKey = `${op}__${sz}`;
+            if (!segregationMap[segKey]) {
+              segregationMap[segKey] = {
+                key: segKey,
+                operator: op,
+                size: sz,
+                colour: col,
+                qty: 0,
+                rawQty: 0,
+                unit: l.unit || machineUnit,
+                rejectReason: l.rejectReason || l.downtimeReason || '',
+                rejectReasons: [],
+                notes: [],
+                logs: [],
+              };
+            }
+
             let logActual = 0;
             if (isDryCut) {
-              lMult = lSize === '16' ? 45 : 50;
+              const lMult = sz === '16' ? 45 : 50;
               multiplier = lMult;
               const input = l.rawQty || (l.qty ? Math.round(l.qty / lMult) : 0);
               rawQty += input;
               logActual = l.qty || input * lMult;
               actualOutput += logActual;
+              segregationMap[segKey].rawQty += input;
             } else {
               rawQty += Number(l.qty) || 0;
               logActual = Number(l.qty) || 0;
               actualOutput += logActual;
+              segregationMap[segKey].rawQty += Number(l.qty) || 0;
             }
-            workerMap[wName] = (workerMap[wName] || 0) + logActual;
+            segregationMap[segKey].qty += logActual;
+            segregationMap[segKey].logs.push(l);
+            if (l.rejectReason || l.downtimeReason) {
+              const r = l.rejectReason || l.downtimeReason;
+              segregationMap[segKey].rejectReasons.push(r);
+              segregationMap[segKey].rejectReason = r;
+            }
+            if (l.notes) segregationMap[segKey].notes.push(l.notes);
           });
+        }
 
-          const workersList = Object.entries(workerMap).map(([name, qty]) => ({ name, qty }));
-          if (workersList.length > 1) {
-            workerName = workersList.map((w) => `${w.name}: ${w.qty.toLocaleString()}`).join(' | ');
-          } else if (workersList.length === 1) {
-            workerName = workersList[0].name;
-          }
+        const breakdowns = Object.values(segregationMap);
+        workerName = m.operatorName || '-';
+        if (breakdowns.length > 1) {
+          workerName = breakdowns.map((b) => `${b.operator} (Sz ${b.size}): ${b.qty.toLocaleString()}`).join(' | ');
+        } else if (breakdowns.length === 1) {
+          workerName = `${breakdowns[0].operator} (Sz ${breakdowns[0].size})`;
         }
 
         const variance = actualOutput - expectedHourlyTarget;
@@ -2418,10 +2497,11 @@ class ClientDatabaseStore {
           display: slot.display,
           workerName,
           style,
-          colour,
-          size,
+          colour: uniqueColours.size > 0 ? Array.from(uniqueColours).join(', ') : colour,
+          size: uniqueSizes.size > 0 ? Array.from(uniqueSizes).join(', ') : size,
           isDryCut,
           rawQty,
+          unit: machineUnit,
           multiplier: isDryCut ? multiplier : 1,
           hourlyTarget: expectedHourlyTarget,
           actualOutput,
@@ -2431,6 +2511,7 @@ class ClientDatabaseStore {
           notes,
           entriesCount: slotLogs.length,
           logs: slotLogs,
+          breakdowns,
         };
       });
 
@@ -2445,6 +2526,9 @@ class ClientDatabaseStore {
       else if (isIron) specialRule = 'Strap Division Steam Ironing & Thermal Curing Bed';
       else if (isDryCut) specialRule = '⚡ Dry Cut Multiplier: Sz 10/12/14/18 (×50), Sz 16 (×45)';
 
+      const remainingBalance = Math.max(0, totalTarget - totalProduced);
+      const efficiencyPct = totalTarget > 0 ? Math.round((totalProduced / totalTarget) * 100) : 0;
+
       return {
         id: m.id || m.code,
         code: m.code || m.id,
@@ -2453,8 +2537,9 @@ class ClientDatabaseStore {
         category: m.category,
         operatorName: m.operatorName,
         shift: m.shift || shift,
+        unit: machineUnit,
         dailyTargetQty: dailyTarget,
-        workingHours,
+        workingHours: 9,
         expectedHourlyTarget,
         isCutting,
         isPusing,
@@ -2467,8 +2552,10 @@ class ClientDatabaseStore {
         totals: {
           totalTarget,
           totalProduced,
+          remainingBalance,
           netVariance,
           achievementRate,
+          efficiencyPct,
         },
       };
     });
@@ -2480,7 +2567,8 @@ class ClientDatabaseStore {
     // Build Summary Matrix for Summary View table
     const summaryMatrix = machineTables.map((mt) => {
       const loggedColours = [...new Set(mt.slots.map((s) => s.colour).filter((c) => c && c !== '-'))];
-      const loggedSizes = [...new Set(mt.slots.map((s) => s.size).filter((sz) => sz && sz !== '-'))];
+      const loggedOperators = [...new Set(mt.slots.flatMap((s) => (s.breakdowns || []).map((b) => b.operator)).filter(Boolean))];
+      const loggedSizes = [...new Set(mt.slots.flatMap((s) => (s.breakdowns || []).map((b) => b.size)).filter((sz) => sz && sz !== '-'))];
 
       const machineRaw = targetMachines.find((m) => m.code === mt.code || m.id === mt.id) || mt;
       const colour = loggedColours.length > 0
@@ -2491,6 +2579,10 @@ class ClientDatabaseStore {
         ? loggedSizes.join(', ')
         : (machineRaw.assignedSizes && machineRaw.assignedSizes.join(', ')) || '-';
 
+      const operatorName = loggedOperators.length > 0
+        ? loggedOperators.join(', ')
+        : (machineRaw.operatorName || 'Floor Worker');
+
       const slotOutputs = {};
       mt.slots.forEach((s) => {
         slotOutputs[s.id] = {
@@ -2499,6 +2591,7 @@ class ClientDatabaseStore {
           status: s.status,
           logs: s.logs || [],
           slotLabel: s.timeSlot,
+          breakdowns: s.breakdowns || [],
         };
       });
 
@@ -2507,14 +2600,17 @@ class ClientDatabaseStore {
         code: mt.code,
         name: mt.name,
         category: mt.category,
-        operatorName: mt.operatorName,
+        operatorName,
         colour,
         size,
+        unit: mt.unit,
         slotOutputs,
         totalProduced: mt.totals.totalProduced,
         dailyTarget: mt.totals.totalTarget,
+        remainingBalance: mt.totals.remainingBalance,
         variance: mt.totals.netVariance,
         achievementRate: mt.totals.achievementRate,
+        efficiencyPct: mt.totals.efficiencyPct,
       };
     });
 
@@ -2528,21 +2624,27 @@ class ClientDatabaseStore {
             machineId: mt.code || mt.id,
             machineName: mt.name,
             operatorName: l.operator || l.operatorName || mt.operatorName || 'Floor Worker',
-            unit: (mt.name || '').toLowerCase().includes('cutting') || (mt.name || '').toLowerCase().includes('fusing') || (mt.name || '').toLowerCase().includes('iron') ? 'Straps' : 'pcs',
+            unit: l.unit || mt.unit || getMachineUnit(mt),
+            rejectReason: l.rejectReason || l.downtimeReason || '',
           });
         });
       });
     });
 
+    const remainingBalance = Math.max(0, totalTargetQuota - totalHourlyOutput);
+    const efficiencyPct = totalTargetQuota > 0 ? Math.round((totalHourlyOutput / totalTargetQuota) * 100) : 0;
+
     return {
       date: targetDate,
       shift,
-      workingHours,
+      workingHours: 9,
       slots: activeSlots,
       summary: {
         totalHourlyOutput,
         totalTargetQuota,
         overallNetVariance,
+        remainingBalance,
+        efficiencyPct,
         activeMachinesCount: machineTables.length,
       },
       summaryMatrix,

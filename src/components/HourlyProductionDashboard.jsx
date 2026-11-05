@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Clock,
   Activity,
+  Scale,
   Layers,
   Calendar,
   Filter,
@@ -33,11 +34,13 @@ import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
 
 export function getMachineUnit(m) {
+  if (m?.unit && typeof m.unit === 'string' && m.unit.trim()) return m.unit.trim();
   const name = (m?.name || m?.machineName || '').toLowerCase();
   const code = (m?.code || m?.id || m?.machineId || '').toLowerCase();
-  if (name.includes('cutting') || (code.includes('cut') && !name.includes('dry'))) return 'Straps';
-  if (name.includes('fusing') || name.includes('pusing') || code.includes('pus')) return 'Straps';
-  if (name.includes('iron') || code.includes('irn')) return 'Straps';
+  if (name.includes('cutting') || (code.includes('cut') && !name.includes('dry') && !code.includes('dry') && !name.includes('die') && !code.includes('die'))) return 'Fabric Tape';
+  if (name.includes('fusing') || name.includes('pusing') || code.includes('pus')) return 'Fabric Tape';
+  if (name.includes('iron') || code.includes('irn')) return 'Fabric Tape';
+  if (name.includes('die cut') || code.includes('die') || name.includes('dry cut') || code.includes('dry')) return 'pcs';
   return 'pcs';
 }
 
@@ -376,105 +379,112 @@ export default function HourlyProductionDashboard({
         </div>
       </div>
 
-      {/* 2. Top Metric Cards Strip */}
+      {/* 2. Top Metric Cards Strip (Requirement 5: Real-Time Completed, Remaining, Efficiency) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Cumulative Output */}
+        {/* Metric 1: Total Amount Completed So Far */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400">
-              {selectedDate === todayIso ? "Today's Shift Output" : `${selectedDate} Shift Output`}
+            <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Total Completed So Far</span>
             </span>
-            <span className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-              <Activity className="w-3.5 h-3.5" />
+            <span className="p-1 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-mono font-bold">
+              LIVE MES
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-white font-mono">
               {formatNumber(summary.totalHourlyOutput)}
             </span>
-            <span className="text-xs text-slate-400">pcs</span>
+            <span className="text-xs text-cyan-400 font-mono font-semibold">pcs / units</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Quota Completion</span>
-            <span className="text-cyan-400 font-bold font-mono">
-              {overallAchievementRate}% of shift
+            <span>Shift Target Quota</span>
+            <span className="text-slate-300 font-mono font-bold">
+              {formatNumber(summary.totalTargetQuota)}
             </span>
           </div>
         </div>
 
-        {/* Expected Target Quota */}
+        {/* Metric 2: Remaining Balance (Daily Target - Completed) */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-blue-400">
-              Shift Target Quota
+            <span className="font-bold uppercase tracking-wider text-[11px] text-amber-400 flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 text-amber-400" />
+              <span>Remaining Balance</span>
             </span>
-            <span className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/30">
-              <TrendingUp className="w-3.5 h-3.5" />
+            <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
+              (summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            }`}>
+              {(summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0 ? 'ACHIEVED' : 'TO GO'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-blue-400 font-mono">
-              {formatNumber(summary.totalTargetQuota)}
+            <span className={`text-2xl sm:text-3xl font-black font-mono ${
+              (summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput)) === 0 ? 'text-emerald-400' : 'text-amber-400'
+            }`}>
+              {formatNumber(summary.remainingBalance ?? Math.max(0, summary.totalTargetQuota - summary.totalHourlyOutput))}
             </span>
-            <span className="text-xs text-slate-400">pcs</span>
+            <span className="text-xs text-slate-400 font-mono">pcs / units</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Working Windows</span>
-            <span className="text-slate-300 font-mono">{workingHours} Production Hours</span>
+            <span>Formula</span>
+            <span className="text-slate-300 font-mono text-[10px]">
+              Daily Target - Completed
+            </span>
           </div>
         </div>
 
-        {/* Target vs Actual Net Variance */}
+        {/* Metric 3: Current Efficiency Percentage (%) */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-amber-400">
-              Net Output Variance
+            <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-400 flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Current Efficiency %</span>
             </span>
-            <span
-              className={`p-1.5 rounded-lg border ${
-                summary.overallNetVariance >= 0
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}
-            >
+            <span className={`p-1 rounded-lg border ${
+              summary.overallNetVariance >= 0
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            }`}>
               {summary.overallNetVariance >= 0 ? (
-                <TrendingUp className="w-3.5 h-3.5" />
+                <TrendingUp className="w-3 h-3" />
               ) : (
-                <TrendingDown className="w-3.5 h-3.5" />
+                <TrendingDown className="w-3 h-3" />
               )}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
-            <span
-              className={`text-2xl sm:text-3xl font-black font-mono ${
-                summary.overallNetVariance >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              {summary.overallNetVariance >= 0 ? '+' : ''}
-              {formatNumber(summary.overallNetVariance)}
+            <span className={`text-2xl sm:text-3xl font-black font-mono ${
+              (summary.efficiencyPct ?? overallAchievementRate) >= 100
+                ? 'text-emerald-400'
+                : (summary.efficiencyPct ?? overallAchievementRate) >= 80
+                ? 'text-cyan-400'
+                : 'text-amber-400'
+            }`}>
+              {summary.efficiencyPct !== undefined ? summary.efficiencyPct : overallAchievementRate}%
             </span>
-            <span className="text-xs text-slate-400">pcs</span>
+            <span className="text-xs text-slate-400">efficiency</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Status</span>
-            <span
-              className={`font-bold font-mono ${
-                summary.overallNetVariance >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              {summary.overallNetVariance >= 0 ? 'Ahead of Target' : 'Behind Target Plan'}
+            <span>Variance Pace</span>
+            <span className={`font-mono font-bold ${summary.overallNetVariance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {summary.overallNetVariance >= 0 ? '+' : ''}{formatNumber(summary.overallNetVariance)} pcs
             </span>
           </div>
         </div>
 
-        {/* Active Machines in Workflow */}
+        {/* Metric 4: Plant Floor Fleet & Working Windows */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-400">
-              Plant Floor Fleet
+            <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Plant Floor Fleet</span>
             </span>
-            <span className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
-              <Users className="w-3.5 h-3.5" />
+            <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-mono font-bold">
+              ACTIVE
             </span>
           </div>
           <div className="flex items-baseline gap-2">
@@ -484,8 +494,8 @@ export default function HourlyProductionDashboard({
             <span className="text-xs text-slate-400">Stations Live</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Shift Mode</span>
-            <span className="text-slate-300 font-mono">{shift}</span>
+            <span>Shift Target Basis</span>
+            <span className="text-slate-300 font-mono">9 Working Hours</span>
           </div>
         </div>
       </div>
@@ -635,6 +645,7 @@ export default function HourlyProductionDashboard({
                         const qty = typeof cellData === 'object' ? (cellData?.qty || cellData?.actualOutput || 0) : (Number(cellData) || 0);
                         const workerLabel = cellData?.workerName || '';
                         const slotLogs = cellData?.logs || [];
+                        const breakdowns = cellData?.breakdowns || [];
                         const targetUnit = getMachineUnit(row);
 
                         return (
@@ -658,21 +669,67 @@ export default function HourlyProductionDashboard({
                                 handleOpenEdit(logToEdit, row, slot, slotLogs);
                               }
                             }}
-                            className={`py-3 px-2 text-center whitespace-nowrap border-r border-slate-800/40 font-mono text-xs ${
+                            className={`py-2.5 px-2 text-center whitespace-nowrap border-r border-slate-800/40 font-mono text-xs ${
                               qty > 0 ? 'bg-cyan-950/30 hover:bg-cyan-900/50 cursor-pointer transition-colors group/cell' : ''
                             }`}
                             title={qty > 0 ? `Click to edit ${qty} ${targetUnit} (${workerLabel})` : undefined}
                           >
                             {qty > 0 ? (
-                              <div className="flex flex-col items-center">
-                                <div className="flex items-center gap-1 font-black text-cyan-300">
-                                  <span>{formatNumber(qty)}</span>
-                                  <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-100 text-cyan-400 transition" />
-                                </div>
-                                {workerLabel && (
-                                  <span className="text-[9px] text-slate-400 font-sans max-w-[85px] truncate">
-                                    {workerLabel}
-                                  </span>
+                              <div className="flex flex-col items-center gap-1 min-w-[90px]">
+                                {breakdowns.length > 1 ? (
+                                  <div className="space-y-1 w-full text-left">
+                                    {breakdowns.map((b, bIdx) => (
+                                      <div
+                                        key={b.key || bIdx}
+                                        className="px-1.5 py-0.5 rounded bg-slate-900/90 border border-slate-700/80 text-[10px] flex items-center justify-between gap-1 shadow-xs"
+                                        title={`Operator: ${b.operator} | Size: ${b.size} | Qty: ${b.qty} ${targetUnit}`}
+                                      >
+                                        <span className="font-sans font-bold text-slate-200 truncate max-w-[55px]">
+                                          {b.operator}
+                                        </span>
+                                        <span className="font-mono text-amber-300 font-bold whitespace-nowrap">
+                                          Sz {b.size}: <span className="text-white font-black">{formatNumber(b.qty)}</span>
+                                        </span>
+                                        {b.rejectReason && (
+                                          <span className="text-[9px] text-rose-400 font-bold" title={`Downtime: ${b.rejectReason}`}>
+                                            ⚠️
+                                          </span>
+                                        )}
+                                      </div>
+                                    ))}
+                                    <div className="pt-0.5 border-t border-slate-700/50 flex items-center justify-between text-[10px] font-black text-cyan-300 font-mono px-1">
+                                      <span className="text-slate-400 font-normal">Tot:</span>
+                                      <span>{formatNumber(qty)} {targetUnit}</span>
+                                    </div>
+                                  </div>
+                                ) : breakdowns.length === 1 ? (
+                                  <div className="flex flex-col items-center">
+                                    <div className="flex items-center gap-1 font-black text-cyan-300">
+                                      <span>{formatNumber(qty)}</span>
+                                      <span className="text-[10px] font-normal text-slate-400">{targetUnit}</span>
+                                      <Pencil className="w-2.5 h-2.5 opacity-0 group-hover/cell:opacity-100 text-cyan-400 transition" />
+                                    </div>
+                                    <div className="text-[9px] text-amber-300 font-mono font-bold">
+                                      {breakdowns[0].operator} • Sz {breakdowns[0].size}
+                                    </div>
+                                    {breakdowns[0].rejectReason && (
+                                      <span className="text-[8px] px-1 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 mt-0.5 truncate max-w-[85px]">
+                                        ⚠️ {breakdowns[0].rejectReason}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center">
+                                    <div className="flex items-center gap-1 font-black text-cyan-300">
+                                      <span>{formatNumber(qty)}</span>
+                                      <span className="text-[10px] font-normal text-slate-400">{targetUnit}</span>
+                                    </div>
+                                    {workerLabel && (
+                                      <span className="text-[9px] text-slate-400 font-sans max-w-[85px] truncate">
+                                        {workerLabel}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             ) : (
@@ -682,7 +739,7 @@ export default function HourlyProductionDashboard({
                         );
                       })}
 
-                      {/* Last Col: Total Output / Quota */}
+                      {/* Last Col: Total Output / Quota & Real-Time Metrics */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap sticky right-0 bg-slate-900 group-hover:bg-slate-850 z-10 border-l border-slate-800 shadow-sm">
                         <div className="font-mono font-black text-emerald-400 text-sm">
                           {formatNumber(mProduced)}{' '}
@@ -690,8 +747,11 @@ export default function HourlyProductionDashboard({
                             {getMachineUnit(row)}
                           </span>
                         </div>
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          Target: {formatNumber(mTarget)} {getMachineUnit(row)} ({mAchieve}%)
+                        <div className="text-[10px] text-amber-400 font-mono">
+                          Remaining: {formatNumber(Math.max(0, mTarget - mProduced))} {getMachineUnit(row)}
+                        </div>
+                        <div className="text-[10px] text-cyan-400 font-mono font-bold">
+                          Efficiency: {mAchieve}% (Target: {formatNumber(mTarget)})
                         </div>
                       </td>
                     </tr>
@@ -764,7 +824,7 @@ export default function HourlyProductionDashboard({
                     </div>
 
                     <p className="text-xs text-slate-400">
-                      Operator: <span className="text-white font-semibold">{machine.operatorName || 'Floor Worker'}</span> • Shift: <span className="text-slate-300 font-mono">{machine.shift}</span> • Daily Target: <span className="font-mono text-emerald-400 font-bold">{formatNumber(machine.dailyTargetQty)} {unit}</span>
+                      Operator: <span className="text-white font-semibold">{machine.operatorName || 'Floor Worker'}</span> • Shift: <span className="text-slate-300 font-mono">{machine.shift}</span> • Daily Target: <span className="font-mono text-emerald-400 font-bold">{formatNumber(machine.dailyTargetQty)} {unit}</span> • Completed: <span className="font-mono text-cyan-400 font-bold">{formatNumber(totals.totalProduced)} {unit}</span> • Remaining: <span className="font-mono text-amber-400 font-bold">{formatNumber(Math.max(0, totals.totalTarget - totals.totalProduced))} {unit}</span> • Efficiency: <span className="font-mono text-emerald-300 font-bold">{totals.totalTarget > 0 ? Math.round((totals.totalProduced / totals.totalTarget) * 100) : 0}%</span>
                     </p>
                   </div>
 
@@ -933,33 +993,52 @@ export default function HourlyProductionDashboard({
                               {formatNumber(slot.hourlyTarget)} {unit}
                             </td>
 
-                            {/* 8. Actual Produced Output (Clickable to Edit) */}
+                            {/* 8. Actual Produced Output (Segregated by Operator & Size) */}
                             <td className="py-3.5 px-3.5 text-right whitespace-nowrap font-mono font-black text-sm">
                               {slot.actualOutput > 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const logToEdit = slot.logs && slot.logs.length > 0
-                                      ? slot.logs[0]
-                                      : {
-                                          id: `LOG-SLOT-${machine.code || machine.id}-${slot.id}`,
-                                          machineId: machine.code || machine.id,
-                                          machineName: machine.name,
-                                          timeSlot: slot.timeSlot,
-                                          qty: slot.actualOutput,
-                                          operator: slot.workerName || machine.operatorName,
-                                          size: slot.size,
-                                          colour: slot.colour,
-                                          notes: slot.notes || '',
-                                        };
-                                    handleOpenEdit(logToEdit, machine, slot, slot.logs || []);
-                                  }}
-                                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-500/30 transition group/btn"
-                                  title={`Click to edit ${slot.actualOutput} ${unit}`}
-                                >
-                                  <span>{formatNumber(slot.actualOutput)} {unit}</span>
-                                  <Pencil className="w-3 h-3 text-cyan-400 opacity-60 group-hover/btn:opacity-100" />
-                                </button>
+                                <div className="flex flex-col items-end gap-1">
+                                  {slot.breakdowns && slot.breakdowns.length > 1 && (
+                                    <div className="flex flex-wrap gap-1 justify-end max-w-xs">
+                                      {slot.breakdowns.map((b, bIdx) => (
+                                        <span
+                                          key={b.key || bIdx}
+                                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] font-mono text-slate-300"
+                                        >
+                                          <span className="font-sans font-bold text-slate-200">{b.operator}</span>
+                                          <span className="text-amber-400 font-bold">• Sz {b.size}:</span>
+                                          <span className="text-cyan-300 font-black">{formatNumber(b.qty)}</span>
+                                          {b.rejectReason && (
+                                            <span className="text-rose-400 text-[9px] font-bold" title={`Reason: ${b.rejectReason}`}>⚠️</span>
+                                          )}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const logToEdit = slot.logs && slot.logs.length > 0
+                                        ? slot.logs[0]
+                                        : {
+                                            id: `LOG-SLOT-${machine.code || machine.id}-${slot.id}`,
+                                            machineId: machine.code || machine.id,
+                                            machineName: machine.name,
+                                            timeSlot: slot.timeSlot,
+                                            qty: slot.actualOutput,
+                                            operator: slot.workerName || machine.operatorName,
+                                            size: slot.size,
+                                            colour: slot.colour,
+                                            notes: slot.notes || '',
+                                          };
+                                      handleOpenEdit(logToEdit, machine, slot, slot.logs || []);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-cyan-950/30 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-500/30 transition group/btn"
+                                    title={`Click to view/edit ${slot.actualOutput} ${unit}`}
+                                  >
+                                    <span>{formatNumber(slot.actualOutput)} {unit}</span>
+                                    <Pencil className="w-3 h-3 text-cyan-400 opacity-60 group-hover/btn:opacity-100" />
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-slate-600 font-normal">0 {unit}</span>
                               )}
