@@ -518,6 +518,10 @@ export const firebaseRealtime = {
         let state = null;
         if (payload.path === '/' || !payload.path) {
           state = payload.data;
+          // If state payload is partial (e.g. from an atomic patch lacking logs or orders), pull the full state
+          if (!state || (!state.productionLogs && !state.orders)) {
+            state = await firebaseRealtime.pullState();
+          }
         } else {
           // Subpath modification detected (e.g. /productionLogs, /orders, /inventory)
           state = await firebaseRealtime.pullState();

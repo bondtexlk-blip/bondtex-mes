@@ -2037,9 +2037,35 @@ class ClientDatabaseStore {
     // 2. Notify Local UI Subscribers Immediately (0ms delay)
     this.notifySubscribers();
 
-    // 3. Lightweight Non-blocking Atomic Writes to Firebase Realtime Database
+    // 3. Instant Non-blocking Broadcast to Firebase Realtime Database
     if (typeof fetch !== 'undefined') {
+      const fullSyncPayload = {
+        activeWorkspace: this.activeWorkspace,
+        activeWorkspaceId: this.activeWorkspace?.id,
+        workspaces: this.getCleanWorkspacesList(),
+        categories: this.categories,
+        orders: this.orders,
+        machines: this.machines,
+        workers: this.workers,
+        productionLogs: this.productionLogs,
+        deliveryReceivedLogs: this.deliveryReceivedLogs || [],
+        outsourceConsignments: this.outsourceConsignments || [],
+        productionPlans: this.productionPlans || [],
+        inventoryItems: this.inventoryItems || [],
+        materialRequests: this.materialRequests || [],
+        inventoryLogs: this.inventoryLogs || [],
+        lastSaved: nowIso,
+        lastUpdated: nowIso,
+        lastDeviceId: this.deviceId,
+      };
+
       Promise.allSettled([
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`), {
+          method: 'PUT',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          body: JSON.stringify(fullSyncPayload),
+        }),
         fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
           method: 'PUT',
           cache: 'no-store',
@@ -2060,16 +2086,6 @@ class ClientDatabaseStore {
               body: JSON.stringify(this.orders),
             })
           : Promise.resolve(),
-        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`), {
-          method: 'PATCH',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          body: JSON.stringify({
-            lastUpdated: nowIso,
-            lastDeviceId: this.deviceId,
-            productionLogsCount: this.productionLogs.length,
-          }),
-        }),
       ]).catch((err) => console.warn('Atomic batch write note:', err));
 
       // Non-blocking Firestore audit write
@@ -2638,9 +2654,13 @@ class ClientDatabaseStore {
       { id: '06:30-07:30', label: '06:30 - 07:30', display: '6.30 - 7.30 AM' },
     ];
 
-    const isNight = shift === 'Night Shift';
-    const activeSlots = isNight ? nightShiftSlots : dayShiftSlots;
-    const workingHours = 9; // Shift target basis: 9 hours per spec
+    let activeSlots = dayShiftSlots;
+    if (shift === 'Night Shift') {
+      activeSlots = nightShiftSlots;
+    } else if (shift === 'All') {
+      activeSlots = [...dayShiftSlots, ...nightShiftSlots];
+    }
+    const workingHours = shift === 'All' ? 18 : 9; // Shift target basis: 9 hours per shift
 
     const priorityCodes = ['MCH-CUT', 'MCH-PUS', 'MCH-IRN', 'MCH-DRY'];
     let targetMachines = this.machines.filter((m) => {
@@ -2724,7 +2744,12 @@ class ClientDatabaseStore {
       });
 
       const shiftLogs = sourceLogs.filter((l) => {
-        if (shift !== 'All' && l.shift && l.shift !== shift) return false;
+        if (shift === 'All') return true;
+        if (l.shift && l.shift !== shift) {
+          const lSlot = (l.timeSlot || '').replace(/\s+/g, '');
+          const matchesActiveSlot = activeSlots.some((s) => s.id === lSlot || s.label.replace(/\s+/g, '') === lSlot);
+          if (!matchesActiveSlot) return false;
+        }
         return true;
       });
 
@@ -2910,7 +2935,11 @@ class ClientDatabaseStore {
     const shiftLoopInsertLogs = allLoopInsertLogs.filter((l) => {
       const lDate = (l.date || l.timestamp || '').slice(0, 10);
       if (targetDate && lDate !== targetDate) return false;
-      if (shift !== 'All' && l.shift && l.shift !== shift) return false;
+      if (shift !== 'All' && l.shift && l.shift !== shift) {
+        const lSlot = (l.timeSlot || '').replace(/\s+/g, '');
+        const matchesActiveSlot = activeSlots.some((s) => s.id === lSlot || s.label.replace(/\s+/g, '') === lSlot);
+        if (!matchesActiveSlot) return false;
+      }
       return true;
     });
     const totalLoopInsertShiftCompleted = shiftLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);

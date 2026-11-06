@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
+import { detectCurrentShift } from '../utils/timeSlots';
 
 export function getMachineUnit(m) {
   if (m?.unit && typeof m.unit === 'string' && m.unit.trim()) return m.unit.trim();
@@ -50,7 +51,13 @@ export default function HourlyProductionDashboard({
   theme = 'dark',
   onToggleTheme,
 }) {
-  const [shift, setShift] = useState('Day Shift');
+  const [shift, setShift] = useState(() => {
+    try {
+      return detectCurrentShift();
+    } catch {
+      return 'Day Shift';
+    }
+  });
   const todayIso = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [selectedMachineFilter, setSelectedMachineFilter] = useState('All');
@@ -271,9 +278,9 @@ export default function HourlyProductionDashboard({
   };
 
   // Fetch machine-wise hourly production data
-  const loadHourlyData = async () => {
+  const loadHourlyData = async (showSpinner = false) => {
     try {
-      setLoading(true);
+      if (showSpinner || !data) setLoading(true);
       const res = await api.getHourlyProduction({ shift, date: selectedDate });
       if (res.success && res.data) {
         setData(res.data);
@@ -288,17 +295,17 @@ export default function HourlyProductionDashboard({
   };
 
   useEffect(() => {
-    loadHourlyData();
+    loadHourlyData(true);
     const unsubscribe = api.subscribe(() => {
-      loadHourlyData();
+      loadHourlyData(false);
     });
-    // Fast polling fallback (every 3.5 seconds) with cloud sync pull to guarantee real-time cross-device sync with mobile phone
+    // Fast polling fallback (every 2.5 seconds) with cloud sync pull to guarantee real-time cross-device sync with mobile phone
     const pollId = setInterval(async () => {
       try {
         await api.syncCloud();
       } catch {}
-      await loadHourlyData();
-    }, 3500);
+      await loadHourlyData(false);
+    }, 2500);
     return () => {
       if (unsubscribe) unsubscribe();
       clearInterval(pollId);
@@ -333,7 +340,8 @@ export default function HourlyProductionDashboard({
     { id: '06:30-07:30', label: '06:30 - 07:30', display: '6.30 - 7.30' },
   ];
 
-  const timeSlots = data?.slots || (shift === 'Night Shift' ? defaultNightSlots : defaultDaySlots);
+  const defaultAllSlots = [...defaultDaySlots, ...defaultNightSlots];
+  const timeSlots = data?.slots || (shift === 'Night Shift' ? defaultNightSlots : shift === 'All' ? defaultAllSlots : defaultDaySlots);
   const summaryMatrix = data?.summaryMatrix || [];
   const machines = data?.machines || [];
   const allLogsForDate = data?.allLogs || [];
@@ -343,7 +351,7 @@ export default function HourlyProductionDashboard({
     overallNetVariance: 0,
     activeMachinesCount: 0,
   };
-  const workingHours = data?.workingHours || (shift === 'Night Shift' ? 10 : 13);
+  const workingHours = data?.workingHours || (shift === 'Night Shift' ? 10 : shift === 'All' ? 23 : 13);
 
   const isLoopInsertMachine = (m) => {
     if (!m) return false;
@@ -598,11 +606,35 @@ export default function HourlyProductionDashboard({
   // "Today's Shift Output" MUST STRICTLY represent ONLY completed Loop Insert pieces for today's shift
   // (matching the Loop Insert row total shown in the summary matrix, e.g. 11,080 pcs).
   // Cutting, Fusing, Iron, and Dry Cut are COMPLETELY EXCLUDED from this metric.
+  const isNightSlot = (slotLabel) => {
+    const s = (slotLabel || '').replace(/\s+/g, '');
+    return defaultNightSlots.some((ns) => ns.id === s || ns.label.replace(/\s+/g, '') === s);
+  };
+  const isDaySlot = (slotLabel) => {
+    const s = (slotLabel || '').replace(/\s+/g, '');
+    return defaultDaySlots.some((ds) => ds.id === s || ds.label.replace(/\s+/g, '') === s);
+  };
+
+  const dayLogs = allLogsForDate.filter((l) => l.shift === 'Day Shift' || (!l.shift && isDaySlot(l.timeSlot)));
+  const nightLogs = allLogsForDate.filter((l) => l.shift === 'Night Shift' || (!l.shift && isNightSlot(l.timeSlot)));
+  const dayLogsCount = dayLogs.length;
+  const nightLogsCount = nightLogs.length;
+
+  const dayShiftLoopTotal = dayLogs
+    .filter((l) => isLoopInsertMachine(l))
+    .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+  const nightShiftLoopTotal = nightLogs
+    .filter((l) => isLoopInsertMachine(l))
+    .reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
   const shiftLoopInsertLogs = (data?.allLogs || []).filter((l) => {
     if (!isLoopInsertMachine(l)) return false;
     const lDate = (l.date || l.timestamp || '').slice(0, 10);
     if (selectedDate && lDate !== selectedDate) return false;
-    if (shift !== 'All' && l.shift && l.shift !== shift) return false;
+    if (shift !== 'All' && l.shift && l.shift !== shift) {
+      if (shift === 'Day Shift' && !isDaySlot(l.timeSlot)) return false;
+      if (shift === 'Night Shift' && !isNightSlot(l.timeSlot)) return false;
+    }
     return matchesLogFilter(l);
   });
   const todayShiftLoopCompleted = shiftLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
@@ -610,7 +642,13 @@ export default function HourlyProductionDashboard({
   const displayShiftOutput =
     selectedMachineFilter !== 'All' && !isLoopSelected
       ? filteredLogsForDate.reduce((sum, l) => sum + (Number(l.qty) || 0), 0)
-      : (summary.totalLoopInsertShiftCompleted !== undefined && !isFilterActive
+      : isFilterActive
+      ? todayShiftLoopCompleted
+      : shift === 'Night Shift'
+      ? nightShiftLoopTotal
+      : shift === 'All'
+      ? (dayShiftLoopTotal + nightShiftLoopTotal)
+      : (summary.totalLoopInsertShiftCompleted !== undefined
           ? summary.totalLoopInsertShiftCompleted
           : todayShiftLoopCompleted);
 
@@ -619,7 +657,11 @@ export default function HourlyProductionDashboard({
       ? `${selMachineObj?.name || 'Machine'} Shift Output`
       : isFilterActive
       ? "Today's Shift Output (Filtered)"
-      : "Today's Shift Output";
+      : shift === 'Night Shift'
+      ? "Tonight's Shift Output (Night)"
+      : shift === 'All'
+      ? "Today's Total Output (All Shifts)"
+      : "Today's Shift Output (Day)";
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-16">
@@ -733,6 +775,19 @@ export default function HourlyProductionDashboard({
                 <Moon className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Night Shift (10h)</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setShift('All')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
+                  shift === 'All'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                <span>All Shifts (23h)</span>
+              </button>
             </div>
 
             {/* Refresh */}
@@ -745,6 +800,47 @@ export default function HourlyProductionDashboard({
             </button>
           </div>
         </div>
+
+        {/* Cross-Shift Activity Notification Banner */}
+        {shift === 'Day Shift' && nightLogsCount > 0 && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-indigo-950/80 border border-indigo-500/50 text-xs shadow-lg animate-fade-in">
+            <div className="flex items-center gap-2.5 text-indigo-200">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-500"></span>
+              </span>
+              <Moon className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span>
+                <strong>Night Shift Entries Available:</strong> There {nightLogsCount === 1 ? 'is' : 'are'} <strong>{nightLogsCount}</strong> {nightLogsCount === 1 ? 'record' : 'records'} ({formatNumber(nightShiftLoopTotal)} Loop pcs) logged under <strong>Night Shift</strong> for {selectedDate}.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShift('Night Shift')}
+              className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow text-xs shrink-0 cursor-pointer"
+            >
+              Switch to Night Shift →
+            </button>
+          </div>
+        )}
+
+        {shift === 'Night Shift' && dayLogsCount > 0 && (
+          <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-xs shadow-lg animate-fade-in">
+            <div className="flex items-center gap-2.5 text-amber-200">
+              <Sun className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                <strong>Day Shift Logs:</strong> {dayLogsCount} records ({formatNumber(dayShiftLoopTotal)} Loop pcs) logged under <strong>Day Shift</strong> for {selectedDate}.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShift('Day Shift')}
+              className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition shadow text-xs shrink-0 cursor-pointer"
+            >
+              View Day Shift →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 1.5. Dynamic Production Data Filter Controls */}
