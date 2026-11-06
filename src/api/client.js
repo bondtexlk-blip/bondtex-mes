@@ -200,14 +200,8 @@ export const api = {
     return { success: true, message: `Machine '${id}' deleted successfully` };
   },
 
-  // 13. Worker Production Batch Submission (from Mobile Floor QR Scan)
+  // 13. Worker Production Batch Submission (Direct Reactive Submission with Zero Latency)
   submitWorkerBatch: async (batchData) => {
-    const remote = await safeFetchJson(`${BASE_URL}/worker/submit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(batchData),
-    });
-    if (remote && remote.success) return remote;
     const result = await dbStore.submitWorkerProduction(batchData);
     return { success: true, ...result };
   },

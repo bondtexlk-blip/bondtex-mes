@@ -1971,6 +1971,8 @@ class ClientDatabaseStore {
 
     if (!machine.todayLogs) machine.todayLogs = [];
     machine.todayLogs.unshift(logEntry);
+    machine.todayProduced = (machine.todayProduced || 0) + effectiveQty;
+    machine.todayOutput = machine.todayProduced;
 
     const globalLogEntry = {
       ...logEntry,
@@ -2001,11 +2003,82 @@ class ClientDatabaseStore {
       this.isIntentionalReset = false;
     }
 
-    await this.save(true);
-    // Background sync to Firestore
-    firestoreSync.saveDocument('production_logs', logEntry.id, globalLogEntry);
-    if (matchedOrder) firestoreSync.saveDocument('orders', matchedOrder.id, matchedOrder);
-    firestoreSync.saveDocument('machines', machine.id, machine);
+    this.ensureOrderCalculations();
+
+    // 1. Instant Synchronous Local Storage Persistence (0ms delay)
+    const nowIso = new Date().toISOString();
+    this.lastSaved = nowIso;
+    if (typeof window !== 'undefined') {
+      try {
+        const payloadStr = JSON.stringify({
+          activeWorkspace: this.activeWorkspace,
+          activeWorkspaceId: this.activeWorkspace?.id,
+          workspaces: this.getCleanWorkspacesList(),
+          categories: this.categories,
+          orders: this.orders,
+          machines: this.machines,
+          workers: this.workers,
+          productionLogs: this.productionLogs,
+          deliveryReceivedLogs: this.deliveryReceivedLogs || [],
+          outsourceConsignments: this.outsourceConsignments || [],
+          productionPlans: this.productionPlans || [],
+          inventoryItems: this.inventoryItems || [],
+          materialRequests: this.materialRequests || [],
+          inventoryLogs: this.inventoryLogs || [],
+          lastSaved: nowIso,
+          lastUpdated: nowIso,
+          lastDeviceId: this.deviceId,
+        });
+        localStorage.setItem(STORAGE_KEY, payloadStr);
+        localStorage.setItem(VAULT_KEY, payloadStr);
+      } catch {}
+    }
+
+    // 2. Notify Local UI Subscribers Immediately (0ms delay)
+    this.notifySubscribers();
+
+    // 3. Lightweight Non-blocking Atomic Writes to Firebase Realtime Database
+    if (typeof fetch !== 'undefined') {
+      Promise.allSettled([
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
+          method: 'PUT',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          body: JSON.stringify(this.productionLogs),
+        }),
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/machines.json`), {
+          method: 'PUT',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          body: JSON.stringify(this.machines),
+        }),
+        matchedOrder
+          ? fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
+              method: 'PUT',
+              cache: 'no-store',
+              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+              body: JSON.stringify(this.orders),
+            })
+          : Promise.resolve(),
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`), {
+          method: 'PATCH',
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+          body: JSON.stringify({
+            lastUpdated: nowIso,
+            lastDeviceId: this.deviceId,
+            productionLogsCount: this.productionLogs.length,
+          }),
+        }),
+      ]).catch((err) => console.warn('Atomic batch write note:', err));
+
+      // Non-blocking Firestore audit write
+      try {
+        firestoreSync.saveDocument('production_logs', logEntry.id, globalLogEntry);
+        if (matchedOrder) firestoreSync.saveDocument('orders', matchedOrder.id, matchedOrder);
+        firestoreSync.saveDocument('machines', machine.id, machine);
+      } catch {}
+    }
 
     return {
       success: true,

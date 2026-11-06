@@ -359,7 +359,7 @@ export default function WorkerPortal({
   const targetAchieved = projectedTotal >= dailyTarget;
   const projectedProgress = dailyTarget > 0 ? Math.min(100, Math.round((projectedTotal / dailyTarget) * 100)) : 0;
 
-  // Submit Handler
+  // Submit Handler with Instant Optimistic UI and Non-blocking Background Sync
   const handleSubmitBatch = async (e) => {
     e.preventDefault();
     if (!currentInputQty || currentInputQty <= 0) {
@@ -371,62 +371,101 @@ export default function WorkerPortal({
       return;
     }
 
+    const resolved = resolveStyleAndPoForColour(selectedColour);
+    const effectivePo = resolved?.poNumber || '';
+    const effectiveStyle = resolved?.style || selectedStyle;
+    const loggedRawQty = currentInputQty;
+    const loggedOutputQty = effectiveBatchOutput;
+    const loggedSlot = selectedTimeSlot;
+    const loggedSize = selectedSize;
+    const loggedColour = selectedColour;
+    const loggedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const payload = {
+      machineId: machine.code || machine.id,
+      style: effectiveStyle,
+      size: loggedSize,
+      colour: loggedColour,
+      poNumber: effectivePo,
+      producedQty: loggedOutputQty,
+      rawQty: loggedRawQty,
+      unit: machineUnit,
+      multiplier: dryCutMultiplier,
+      shift: currentShift,
+      timeSlot: loggedSlot,
+      operatorName: selectedOperator || machine.operatorName || 'Floor Worker',
+      rejectReason: rejectReason || '',
+      downtimeReason: rejectReason || '',
+      notes: notes.trim(),
+      date: selectedDate,
+    };
+
+    // 1. OPTIMISTIC UI: Immediate feedback in 0 milliseconds!
+    playBeep();
+    setSuccessBanner({
+      qty: loggedOutputQty,
+      rawQty: loggedRawQty,
+      multiplier: dryCutMultiplier,
+      unit: machineUnit,
+      isDryCut,
+      size: loggedSize,
+      timeSlot: loggedSlot,
+      time: loggedTime,
+    });
+
+    // Clear form inputs immediately so operator is ready for the next batch
+    setProducedQty('');
+    setRejectReason('');
+    setNotes('');
+
+    // Optimistically update local dayStats and machine
+    const optimisticLog = {
+      id: `LOG-OPT-${Date.now()}`,
+      timeSlot: loggedSlot,
+      qty: loggedOutputQty,
+      rawQty: loggedRawQty,
+      multiplier: dryCutMultiplier,
+      unit: machineUnit,
+      size: loggedSize,
+      colour: loggedColour,
+      operator: selectedOperator || machine.operatorName || 'Floor Worker',
+      rejectReason: rejectReason || '',
+      time: loggedTime,
+      notes: notes.trim(),
+    };
+
+    setDayStats((prev) => {
+      const prevLogs = prev?.logs || [];
+      const newTotal = (prev?.totalProduced || 0) + loggedOutputQty;
+      return {
+        ...prev,
+        totalProduced: newTotal,
+        logs: [optimisticLog, ...prevLogs],
+      };
+    });
+
+    if (machine) {
+      machine.todayProduced = (machine.todayProduced || 0) + loggedOutputQty;
+      if (!machine.todayLogs) machine.todayLogs = [];
+      machine.todayLogs = [optimisticLog, ...machine.todayLogs];
+    }
+
+    if (onShowToast) {
+      const msg = isDryCut
+        ? `Logged ${loggedRawQty} units × ${dryCutMultiplier} = ${loggedOutputQty} ${machineUnit} (${loggedSlot})!`
+        : `Logged ${loggedOutputQty} ${machineUnit} (${loggedSlot})!`;
+      onShowToast(msg);
+    }
+
+    setTimeout(() => setSuccessBanner(null), 4000);
+
+    // 2. NON-BLOCKING ASYNC SYNC: Submit lightweight atomic write without freezing UI
     try {
       setSubmitting(true);
-      const resolved = resolveStyleAndPoForColour(selectedColour);
-      const effectivePo = resolved?.poNumber || '';
-      const effectiveStyle = resolved?.style || selectedStyle;
-
-      const payload = {
-        machineId: machine.code || machine.id,
-        style: effectiveStyle,
-        size: selectedSize,
-        colour: selectedColour,
-        poNumber: effectivePo,
-        producedQty: effectiveBatchOutput,
-        rawQty: currentInputQty,
-        unit: machineUnit,
-        multiplier: dryCutMultiplier,
-        shift: currentShift,
-        timeSlot: selectedTimeSlot,
-        operatorName: selectedOperator || machine.operatorName || 'Floor Worker',
-        rejectReason: rejectReason || '',
-        downtimeReason: rejectReason || '',
-        notes: notes.trim(),
-        date: selectedDate,
-      };
-
-      const res = await api.submitWorkerBatch(payload);
-      if (res.success) {
-        playBeep();
-        setSuccessBanner({
-          qty: effectiveBatchOutput,
-          rawQty: currentInputQty,
-          multiplier: dryCutMultiplier,
-          unit: machineUnit,
-          isDryCut,
-          size: selectedSize,
-          timeSlot: selectedTimeSlot,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        });
-        setProducedQty('');
-        setRejectReason('');
-        setNotes('');
-
-        // Refresh machine status & update management dashboard
-        await fetchMachineDetails(machine.id);
-        await loadDayStats(machine.id, selectedDate);
-        if (onDataUpdated) onDataUpdated();
-        if (onShowToast) {
-          const msg = isDryCut
-            ? `Logged ${currentInputQty} units × ${dryCutMultiplier} = ${effectiveBatchOutput} ${machineUnit} (${selectedTimeSlot})!`
-            : `Logged ${effectiveBatchOutput} ${machineUnit} (${selectedTimeSlot})!`;
-          onShowToast(msg);
-        }
-
-        setTimeout(() => setSuccessBanner(null), 4000);
-      }
+      await api.submitWorkerBatch(payload);
+      if (onDataUpdated) onDataUpdated();
     } catch (err) {
+      console.warn('Background sync note:', err);
       if (onShowToast) onShowToast(err.message, 'error');
     } finally {
       setSubmitting(false);

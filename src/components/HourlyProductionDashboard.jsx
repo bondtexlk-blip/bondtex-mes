@@ -593,7 +593,33 @@ export default function HourlyProductionDashboard({
 
   const displayRemainingBalance = Math.max(0, displayOrderQuota - displayTotalOutput);
   const displayEfficiencyPct = displayOrderQuota > 0 ? Math.round((displayTotalOutput / displayOrderQuota) * 100) : 0;
-  const filteredShiftOutput = filteredLogsForDate.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+  // CRITICAL REQUIREMENT 2:
+  // "Today's Shift Output" MUST STRICTLY represent ONLY completed Loop Insert pieces for today's shift
+  // (matching the Loop Insert row total shown in the summary matrix, e.g. 11,080 pcs).
+  // Cutting, Fusing, Iron, and Dry Cut are COMPLETELY EXCLUDED from this metric.
+  const shiftLoopInsertLogs = (data?.allLogs || []).filter((l) => {
+    if (!isLoopInsertMachine(l)) return false;
+    const lDate = (l.date || l.timestamp || '').slice(0, 10);
+    if (selectedDate && lDate !== selectedDate) return false;
+    if (shift !== 'All' && l.shift && l.shift !== shift) return false;
+    return matchesLogFilter(l);
+  });
+  const todayShiftLoopCompleted = shiftLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+  const displayShiftOutput =
+    selectedMachineFilter !== 'All' && !isLoopSelected
+      ? filteredLogsForDate.reduce((sum, l) => sum + (Number(l.qty) || 0), 0)
+      : (summary.totalLoopInsertShiftCompleted !== undefined && !isFilterActive
+          ? summary.totalLoopInsertShiftCompleted
+          : todayShiftLoopCompleted);
+
+  const displayShiftOutputLabel =
+    selectedMachineFilter !== 'All' && !isLoopSelected
+      ? `${selMachineObj?.name || 'Machine'} Shift Output`
+      : isFilterActive
+      ? "Today's Shift Output (Filtered)"
+      : "Today's Shift Output";
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-16">
@@ -831,9 +857,9 @@ export default function HourlyProductionDashboard({
             <span className="text-xs text-cyan-400 font-mono font-semibold">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>{isFilterActive ? 'Shift Matching Logs' : "Today's Shift Output"}</span>
+            <span>{displayShiftOutputLabel}</span>
             <span className="text-emerald-400 font-mono font-bold">
-              +{formatNumber(filteredShiftOutput)} pcs
+              +{formatNumber(displayShiftOutput)} pcs
             </span>
           </div>
         </div>
