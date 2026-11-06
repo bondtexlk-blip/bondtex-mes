@@ -351,6 +351,36 @@ export const firebaseRealtime = {
     }
   },
 
+  async pullDeletedLogIds() {
+    try {
+      const res = await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/deletedLogIds.json`), {
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data) return [];
+      return Array.isArray(data) ? data : Object.values(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async pushDeletedLogIds(deletedIds) {
+    try {
+      if (!Array.isArray(deletedIds)) return false;
+      await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/deletedLogIds.json`), {
+        method: 'PUT',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        body: JSON.stringify(deletedIds),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   async deleteInventoryItem(itemId) {
     try {
       if (!itemId) return false;
@@ -478,7 +508,7 @@ export const firebaseRealtime = {
     let pollInterval = null;
     let heartbeatInterval = null;
     let stopped = false;
-    let lastHandledTimestamp = null;
+    let lastHandledSnapshotKey = null;
     let lastEventReceived = Date.now();
 
     const processPayload = async (payload) => {
@@ -506,13 +536,15 @@ export const firebaseRealtime = {
           } catch {}
         }
 
-        // Only fire if updated or has actionable data
-        if (state.lastUpdated && state.lastUpdated === lastHandledTimestamp) {
+        // Actionable snapshot change detection: triggers on ANY change in log count, orders, or timestamp
+        const stateLogsCount = Array.isArray(state.productionLogs) ? state.productionLogs.length : 0;
+        const stateOrdersCount = Array.isArray(state.orders) ? state.orders.length : 0;
+        const snapshotKey = `${state.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
+
+        if (snapshotKey === lastHandledSnapshotKey) {
           return;
         }
-        if (state.lastUpdated) {
-          lastHandledTimestamp = state.lastUpdated;
-        }
+        lastHandledSnapshotKey = snapshotKey;
 
         onUpdate(state);
       } catch (err) {
@@ -528,8 +560,7 @@ export const firebaseRealtime = {
           eventSource = null;
         }
         if (window.EventSource) {
-          // EventSource with cache-busting timestamp URL for iOS WebKit stability
-          eventSource = new EventSource(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`));
+          eventSource = new EventSource(`${REALTIME_DB_URL}/state.json`);
           lastEventReceived = Date.now();
 
           eventSource.addEventListener('put', (e) => {
@@ -564,14 +595,18 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Fast, gentle fallback poll (every 3.5 seconds with full cache-busting for seamless multi-device PC & iOS sync)
+    // Fast, reliable fallback poll (every 3 seconds with full cache-busting for multi-device cross-sync)
     pollInterval = setInterval(async () => {
       if (stopped) return;
       try {
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
-          if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
-          lastHandledTimestamp = cloudState.lastUpdated;
+          const stateLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
+          const stateOrdersCount = Array.isArray(cloudState.orders) ? cloudState.orders.length : 0;
+          const snapshotKey = `${cloudState.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
+
+          if (snapshotKey === lastHandledSnapshotKey) return;
+          lastHandledSnapshotKey = snapshotKey;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
@@ -586,10 +621,9 @@ export const firebaseRealtime = {
       } catch {
         // ignore
       }
-    }, 3500);
+    }, 3000);
 
     // Watchdog heartbeat for iOS Safari / Mobile WebKit
-    // Detects silent socket drops when mobile screen turns off or sleeps
     heartbeatInterval = setInterval(() => {
       if (stopped) return;
       const isStale = Date.now() - lastEventReceived > 25000;
@@ -601,11 +635,15 @@ export const firebaseRealtime = {
     // Sync immediately on window focus, iOS bfcache restoration (pageshow), or tab visibility change
     const handleFocus = async () => {
       try {
-        connectStream(); // Reconnect EventSource on tab wakeup
+        connectStream();
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
-          if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
-          lastHandledTimestamp = cloudState.lastUpdated;
+          const stateLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
+          const stateOrdersCount = Array.isArray(cloudState.orders) ? cloudState.orders.length : 0;
+          const snapshotKey = `${cloudState.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
+
+          if (snapshotKey === lastHandledSnapshotKey) return;
+          lastHandledSnapshotKey = snapshotKey;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
@@ -623,7 +661,7 @@ export const firebaseRealtime = {
     };
 
     window.addEventListener('focus', handleFocus);
-    window.addEventListener('pageshow', handleFocus); // Critical for iOS Safari back-forward cache wakeup
+    window.addEventListener('pageshow', handleFocus);
     window.addEventListener('online', handleFocus);
     window.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') handleFocus();

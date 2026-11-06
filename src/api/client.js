@@ -576,6 +576,11 @@ export const api = {
   forceSaveToDatabase: async () => {
     return await dbStore.forceSaveToCloud();
   },
+
+  // 26. Cloud sync pull for immediate real-time cross-device updates
+  syncCloud: async () => {
+    return await dbStore.pullCloudState();
+  },
 };
 
 export default api;

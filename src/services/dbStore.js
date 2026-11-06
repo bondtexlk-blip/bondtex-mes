@@ -12,7 +12,7 @@ import {
   initialMaterialRequests,
   initialInventoryLogs,
 } from '../data/seedData.js';
-import { firestoreSync, firebaseRealtime } from '../firebase.js';
+import { firestoreSync, firebaseRealtime, REALTIME_DB_URL, getNoCacheUrl, NO_CACHE_HEADERS } from '../firebase.js';
 
 const STORAGE_KEY = 'bondtex_loop_real_v9';
 const VAULT_KEY = 'bondtex_permanent_vault_backup';
@@ -79,7 +79,12 @@ class ClientDatabaseStore {
     this.lastSaved = null;
     this.lastAppliedCloudTimestamp = null;
     this.isIntentionalReset = false;
-    this.deletedLogIds = new Set();
+    try {
+      const storedDeleted = typeof window !== 'undefined' ? localStorage.getItem('bondtex_deleted_logs') : null;
+      this.deletedLogIds = storedDeleted ? new Set(JSON.parse(storedDeleted)) : new Set();
+    } catch {
+      this.deletedLogIds = new Set();
+    }
     this._notifyTimeout = null;
     this.deviceId = 'srv';
     this.initialized = false;
@@ -198,12 +203,22 @@ class ClientDatabaseStore {
   // Apply real-time cloud state pushed from Firebase Realtime Database
   applyCloudState(cloudState) {
     if (!cloudState) return;
-    if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) return;
+
+    // Guard against echo loops: only ignore if the incoming state originated from this device AND the log count and lastUpdated match local
+    const cloudLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
+    const localLogsCount = Array.isArray(this.productionLogs) ? this.productionLogs.length : 0;
+    if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) {
+      if (cloudLogsCount === localLogsCount && cloudState.lastUpdated === this.lastSaved) {
+        return;
+      }
+    }
 
     // Guard against re-applying the exact same cloud snapshot repeatedly
-    if (cloudState.lastUpdated && cloudState.lastUpdated === this.lastAppliedCloudTimestamp) {
+    const snapshotKey = `${cloudState.lastUpdated || ''}_${cloudLogsCount}_${Array.isArray(cloudState.orders) ? cloudState.orders.length : 0}`;
+    if (snapshotKey === this.lastAppliedSnapshotKey) {
       return;
     }
+    this.lastAppliedSnapshotKey = snapshotKey;
 
     let cloudWsId = cloudState.activeWorkspace?.id || cloudState.activeWorkspaceId;
     const localWsId = this.activeWorkspace?.id;
@@ -328,13 +343,17 @@ class ClientDatabaseStore {
           mergedMap.set(id, l);
         }
       });
-      // Preserve any local logs that were created recently and not yet in this incoming cloud packet
+      // Only preserve un-synced optimistic local logs created in the last 30 seconds
+      const nowTime = Date.now();
       (this.productionLogs || []).forEach((l) => {
         if (!l) return;
         const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
         if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
           if (!mergedMap.has(id)) {
-            mergedMap.set(id, l);
+            const createdTime = new Date(l.timestamp || l.createdAt || 0).getTime();
+            if (nowTime - createdTime < 30000) {
+              mergedMap.set(id, l);
+            }
           }
         }
       });
@@ -424,14 +443,24 @@ class ClientDatabaseStore {
           firebaseRealtime.getActiveWorkspacePointer(),
           firebaseRealtime.pullState(),
           firebaseRealtime.pullInventory(),
+          firebaseRealtime.pullDeletedLogIds(),
         ]);
 
         const raceResult = await Promise.race([syncPromise, timeoutPromise]);
         if (raceResult !== 'timeout' && Array.isArray(raceResult)) {
-          const [ptrRes, stateRes, invRes] = raceResult;
+          const [ptrRes, stateRes, invRes, delRes] = raceResult;
           const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
           const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
           const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
+          const cloudDeletedLogs = delRes.status === 'fulfilled' && Array.isArray(delRes.value) ? delRes.value : [];
+
+          if (cloudDeletedLogs.length > 0) {
+            if (!this.deletedLogIds) this.deletedLogIds = new Set();
+            cloudDeletedLogs.forEach((id) => this.deletedLogIds.add(id));
+            try {
+              localStorage.setItem('bondtex_deleted_logs', JSON.stringify(Array.from(this.deletedLogIds)));
+            } catch {}
+          }
 
           // 1. Strict Inventory Hydration from Cloud Ground Truth
           if (cloudInventory && Array.isArray(cloudInventory.inventoryItems)) {
@@ -534,7 +563,7 @@ class ClientDatabaseStore {
 
       // Connect SSE Listener (real-time stream without polling flooding)
       this.unsubscribeCloud = firebaseRealtime.listenToChanges((cloudState) => {
-        if (cloudState && cloudState.lastDeviceId !== this.deviceId) {
+        if (cloudState) {
           this.applyCloudState(cloudState);
         }
       });
@@ -547,11 +576,17 @@ class ClientDatabaseStore {
   async pullCloudState() {
     if (typeof window === 'undefined') return null;
     try {
-      const [cloudActivePointer, cloudState, cloudInventory] = await Promise.all([
+      const [cloudActivePointer, cloudState, cloudInventory, cloudDeletedLogs] = await Promise.all([
         firebaseRealtime.getActiveWorkspacePointer(),
         firebaseRealtime.pullState(),
         firebaseRealtime.pullInventory(),
+        firebaseRealtime.pullDeletedLogIds(),
       ]);
+
+      if (Array.isArray(cloudDeletedLogs) && cloudDeletedLogs.length > 0) {
+        if (!this.deletedLogIds) this.deletedLogIds = new Set();
+        cloudDeletedLogs.forEach((id) => this.deletedLogIds.add(id));
+      }
 
       if (cloudInventory && Array.isArray(cloudInventory.inventoryItems) && cloudInventory.inventoryItems.length > 0) {
         this.inventoryItems = cloudInventory.inventoryItems;
@@ -2192,16 +2227,15 @@ class ClientDatabaseStore {
   async deleteProductionLog(logId, query = {}) {
     if (!logId && !query.machineId) return false;
 
-    // Track tombstone so incoming syncs don't resurrect this log
     if (!this.deletedLogIds) this.deletedLogIds = new Set();
-    if (logId) this.deletedLogIds.add(logId);
 
-    const targetMachine = query.machineId || query.machineCode;
-    const targetSlot = (query.timeSlot || query.slotId || query.slotLabel || '').replace(/\s+/g, '');
+    const targetMachine = (query.machineId || query.machineCode || '').toLowerCase().trim();
+    const targetSlot = (query.timeSlot || query.slotId || query.slotLabel || '').replace(/\s+/g, '').toLowerCase();
     const targetDate = query.date ? String(query.date).slice(0, 10) : '';
     const targetSize = query.size !== undefined && query.size !== null && query.size !== '-' ? String(query.size).trim() : null;
     const targetQty = query.qty !== undefined && query.qty !== null ? Number(query.qty) : null;
 
+    if (logId) this.deletedLogIds.add(logId);
     if (targetMachine && targetSlot && targetDate) {
       const compositeKey = `${targetDate}_${targetMachine}_${query.timeSlot}_${targetSize || ''}_${targetQty || ''}`;
       this.deletedLogIds.add(compositeKey);
@@ -2210,41 +2244,55 @@ class ClientDatabaseStore {
     const matchesLog = (l) => {
       if (!l) return false;
       if (logId && l.id && l.id === logId) return true;
+      const machId = (l.machineId || l.machineCode || '').toLowerCase();
+      const machName = (l.machineName || '').toLowerCase();
       const machMatch =
         !targetMachine ||
-        l.machineId === targetMachine ||
-        l.machineCode === targetMachine ||
-        (l.machineName && l.machineName.toLowerCase() === targetMachine.toLowerCase()) ||
-        (l.machineId && targetMachine && (l.machineId.toLowerCase().includes(targetMachine.toLowerCase()) || targetMachine.toLowerCase().includes(l.machineId.toLowerCase())));
-      const slotMatch = !targetSlot || (l.timeSlot && l.timeSlot.replace(/\s+/g, '') === targetSlot);
+        machId === targetMachine ||
+        machName === targetMachine ||
+        machId.includes(targetMachine) ||
+        targetMachine.includes(machId) ||
+        machName.includes(targetMachine) ||
+        targetMachine.includes(machName);
+      const slotMatch = !targetSlot || (l.timeSlot && l.timeSlot.replace(/\s+/g, '').toLowerCase() === targetSlot);
       const dateMatch = !targetDate || (l.date || l.timestamp || '').slice(0, 10) === targetDate;
       const szMatch = !targetSize || String(l.size).trim() === targetSize;
       const qtyMatch = targetQty === null || Number(l.qty) === targetQty || Number(l.rawQty) === targetQty;
       return machMatch && slotMatch && dateMatch && szMatch && qtyMatch;
     };
 
-    // Find all matching logs to deduct from floorProductionQty if Loop Insert
+    // Find all matching logs across productionLogs and machine todayLogs
     const matchingLogs = (this.productionLogs || []).filter(matchesLog);
-
-    // If none found in productionLogs, check in machines todayLogs
-    if (matchingLogs.length === 0 && Array.isArray(this.machines)) {
+    if (Array.isArray(this.machines)) {
       this.machines.forEach((m) => {
         if (Array.isArray(m.todayLogs)) {
           m.todayLogs.forEach((l) => {
-            if (matchesLog(l)) matchingLogs.push(l);
+            if (matchesLog(l) && !matchingLogs.some((ml) => ml.id === l.id || ml === l)) {
+              matchingLogs.push(l);
+            }
           });
         }
       });
     }
 
-    if (matchingLogs.length === 0 && !logId) return false;
+    // Add all matching logs' IDs and composite keys to tombstones
+    matchingLogs.forEach((l) => {
+      if (l.id) this.deletedLogIds.add(l.id);
+      const cKey = `${(l.date || '').slice(0, 10)}_${(l.machineId || l.machineName || '').toLowerCase()}_${l.timeSlot || ''}_${l.size || ''}_${l.qty || ''}`;
+      this.deletedLogIds.add(cKey);
+    });
 
-    // 1. Remove ALL matching instances from this.productionLogs
+    // Save tombstones to localStorage
+    try {
+      localStorage.setItem('bondtex_deleted_logs', JSON.stringify(Array.from(this.deletedLogIds)));
+    } catch {}
+
+    // 1. Remove from this.productionLogs
     if (Array.isArray(this.productionLogs)) {
       this.productionLogs = this.productionLogs.filter((l) => !matchesLog(l));
     }
 
-    // 2. Remove ALL matching instances from all machines' todayLogs
+    // 2. Remove from machine todayLogs and recalculate machine output
     if (Array.isArray(this.machines)) {
       this.machines.forEach((mach) => {
         if (Array.isArray(mach.todayLogs)) {
@@ -2255,23 +2303,86 @@ class ClientDatabaseStore {
       });
     }
 
-    // 3. Deduct from Loop Insert order floorProductionQty if applicable
+    // 3. Deduct from Loop Insert order floorProductionQty and order dailyLogs
     matchingLogs.forEach((oldLog) => {
       const oldQty = Number(oldLog.qty) || 0;
+      const logDate = (oldLog.date || oldLog.timestamp || targetDate || '').slice(0, 10);
       const isLoopInsert =
         (oldLog.machineName || '').toLowerCase().includes('loop insert') ||
         (oldLog.machineName || '').toLowerCase().includes('insert loop') ||
         ((oldLog.machineName || '').toLowerCase().includes('insert') && (oldLog.machineName || '').toLowerCase().includes('loop')) ||
         (oldLog.machineId || '').toLowerCase() === 'mch-06';
-      if (isLoopInsert) {
-        const order = this.findLoopOrder(oldLog);
-        if (order && order.floorProductionQty !== undefined) {
+
+      const order = this.findLoopOrder(oldLog) || (this.orders || []).find((o) =>
+        (oldLog.poNumber && o.poNumber === oldLog.poNumber) &&
+        (!oldLog.size || String(o.size).trim() === String(oldLog.size).trim())
+      );
+
+      if (order) {
+        if (isLoopInsert && order.floorProductionQty !== undefined) {
           order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - oldQty);
+        }
+        if (Array.isArray(order.dailyLogs)) {
+          const dLog = order.dailyLogs.find((dl) => dl.date === logDate);
+          if (dLog) {
+            dLog.actualQty = Math.max(0, (Number(dLog.actualQty) || 0) - oldQty);
+          }
+        }
+      }
+
+      // 4. Deduct from Workers
+      if (Array.isArray(this.workers)) {
+        const opName = (oldLog.operator || oldLog.operatorName || '').toLowerCase().trim();
+        if (opName) {
+          const worker = this.workers.find((w) => (w.name || '').toLowerCase().trim() === opName);
+          if (worker) {
+            worker.todayOutput = Math.max(0, (Number(worker.todayOutput) || 0) - oldQty);
+            worker.todayProduced = Math.max(0, (Number(worker.todayProduced) || 0) - oldQty);
+            worker.batchesLogged = Math.max(0, (Number(worker.batchesLogged) || 0) - 1);
+          }
         }
       }
     });
 
+    this.ensureOrderCalculations();
+
+    // 5. HARD DELETE directly in Firebase RTDB
+    if (typeof fetch !== 'undefined') {
+      try {
+        await Promise.allSettled([
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.productionLogs),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/machines.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.machines),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.orders),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/workers.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.workers),
+          }),
+          firebaseRealtime.pushDeletedLogIds(Array.from(this.deletedLogIds)),
+        ]);
+      } catch (err) {
+        console.warn('Realtime hard delete endpoints note:', err?.message);
+      }
+    }
+
     await this.save(true);
+    this.notifySubscribers();
     return true;
   }
 
@@ -2820,6 +2931,17 @@ class ClientDatabaseStore {
       shift,
       workingHours: 9,
       slots: activeSlots,
+      orders: (this.orders || []).map((o) => ({
+        id: o.id,
+        poNumber: o.poNumber,
+        category: o.category,
+        style: o.style,
+        colour: o.colour,
+        size: o.size,
+        orderQty: Number(o.orderQty) || 0,
+        floorProductionQty: Number(o.floorProductionQty) || 0,
+        productionQty: Number(o.productionQty) || 0,
+      })),
       summary: {
         totalHourlyOutput: totalLoopInsertOrderCompleted,
         totalLoopInsertCompleted: totalLoopInsertOrderCompleted,

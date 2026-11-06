@@ -54,6 +54,8 @@ export default function HourlyProductionDashboard({
   const todayIso = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [selectedMachineFilter, setSelectedMachineFilter] = useState('All');
+  const [selectedStyleColorFilter, setSelectedStyleColorFilter] = useState('All');
+  const [selectedSizeFilter, setSelectedSizeFilter] = useState('All');
   const [viewMode, setViewMode] = useState('summary'); // 'summary' | 'stations'
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -290,10 +292,13 @@ export default function HourlyProductionDashboard({
     const unsubscribe = api.subscribe(() => {
       loadHourlyData();
     });
-    // Fast polling fallback (every 4 seconds) to guarantee real-time cross-device sync with phone
-    const pollId = setInterval(() => {
-      loadHourlyData();
-    }, 4000);
+    // Fast polling fallback (every 3.5 seconds) with cloud sync pull to guarantee real-time cross-device sync with mobile phone
+    const pollId = setInterval(async () => {
+      try {
+        await api.syncCloud();
+      } catch {}
+      await loadHourlyData();
+    }, 3500);
     return () => {
       if (unsubscribe) unsubscribe();
       clearInterval(pollId);
@@ -340,17 +345,255 @@ export default function HourlyProductionDashboard({
   };
   const workingHours = data?.workingHours || (shift === 'Night Shift' ? 10 : 13);
 
-  // Filter machines if user selected a single machine
-  const filteredMachines =
-    selectedMachineFilter === 'All'
-      ? machines
-      : machines.filter((m) => m.id === selectedMachineFilter || m.code === selectedMachineFilter);
+  const isLoopInsertMachine = (m) => {
+    if (!m) return false;
+    if (m.isLoopInsert !== undefined) return Boolean(m.isLoopInsert);
+    const name = (m.name || m.machineName || '').toLowerCase();
+    const code = (m.code || m.id || m.machineId || '').toLowerCase();
+    return (
+      name.includes('loop insert') ||
+      name.includes('insert loop') ||
+      (name.includes('loop') && name.includes('insert')) ||
+      code === 'mch-06' ||
+      code.includes('loop')
+    );
+  };
 
-  // Calculate overall factory hourly rate
-  const overallAchievementRate =
-    summary.totalTargetQuota > 0
-      ? Math.round((summary.totalHourlyOutput / summary.totalTargetQuota) * 100)
-      : 0;
+  // Dynamic filter options extracted from machines, orders, and logs
+  const rawStyleColours = new Set();
+  (data?.orders || []).forEach((o) => {
+    if (o.colour && o.colour !== '-' && o.colour !== 'Standard') rawStyleColours.add(o.colour.trim());
+    if (o.style && o.style !== '-' && o.style !== 'Standard') rawStyleColours.add(o.style.trim());
+    if (o.style && o.colour && o.colour !== '-' && o.style !== '-' && o.colour !== 'Standard' && o.style !== 'Standard') {
+      rawStyleColours.add(`${o.style.trim()} - ${o.colour.trim()}`);
+    }
+  });
+  allLogsForDate.forEach((l) => {
+    if (l.colour && l.colour !== '-' && l.colour !== 'Standard') rawStyleColours.add(l.colour.trim());
+    if (l.style && l.style !== '-' && l.style !== 'Standard') rawStyleColours.add(l.style.trim());
+    if (l.style && l.colour && l.colour !== '-' && l.style !== '-' && l.colour !== 'Standard' && l.style !== 'Standard') {
+      rawStyleColours.add(`${l.style.trim()} - ${l.colour.trim()}`);
+    }
+  });
+  machines.forEach((m) => {
+    if (Array.isArray(m.assignedColours)) {
+      m.assignedColours.forEach((c) => { if (c && c !== '-' && c !== 'Standard') rawStyleColours.add(c.trim()); });
+    }
+  });
+  const styleColorOptions = Array.from(rawStyleColours).sort((a, b) => a.localeCompare(b));
+
+  const rawSizes = new Set();
+  (data?.orders || []).forEach((o) => {
+    if (o.size && o.size !== '-') rawSizes.add(String(o.size).trim());
+  });
+  allLogsForDate.forEach((l) => {
+    if (l.size && l.size !== '-') rawSizes.add(String(l.size).trim());
+  });
+  machines.forEach((m) => {
+    if (Array.isArray(m.assignedSizes)) {
+      m.assignedSizes.forEach((sz) => { if (sz && sz !== '-') rawSizes.add(String(sz).trim()); });
+    }
+  });
+  const sizeOptions = Array.from(rawSizes).sort((a, b) => {
+    const numA = Number(a);
+    const numB = Number(b);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return a.localeCompare(b);
+  });
+
+  const matchesLogFilter = (log, machineContext = null) => {
+    if (!log) return false;
+
+    // 1. Machine Filter
+    if (selectedMachineFilter !== 'All') {
+      const mId = (machineContext?.id || machineContext?.code || log.machineId || log.machineCode || '').toLowerCase();
+      const mName = (machineContext?.name || log.machineName || '').toLowerCase();
+      const fM = selectedMachineFilter.toLowerCase();
+      const matchM = mId === fM || mName === fM || mId.includes(fM) || fM.includes(mId) || mName.includes(fM);
+      if (!matchM) return false;
+    }
+
+    // 2. Style / Colour Filter
+    if (selectedStyleColorFilter !== 'All') {
+      const lStyle = (log.style || log.styleCode || '').toLowerCase().trim();
+      const lColour = (log.colour || log.color || '').toLowerCase().trim();
+      const fSC = selectedStyleColorFilter.toLowerCase().trim();
+      const combined = `${lStyle} - ${lColour}`;
+      const matchSC =
+        lStyle === fSC ||
+        lColour === fSC ||
+        combined === fSC ||
+        (lColour && fSC.includes(lColour)) ||
+        (lStyle && fSC.includes(lStyle)) ||
+        (fSC.includes('-') && (fSC.includes(lColour) || fSC.includes(lStyle)));
+      if (!matchSC) return false;
+    }
+
+    // 3. Size Filter
+    if (selectedSizeFilter !== 'All') {
+      const lSize = String(log.size || '').toLowerCase().trim();
+      const fSize = String(selectedSizeFilter).toLowerCase().trim();
+      if (lSize !== fSize) return false;
+    }
+
+    return true;
+  };
+
+  const isFilterActive =
+    selectedMachineFilter !== 'All' ||
+    selectedStyleColorFilter !== 'All' ||
+    selectedSizeFilter !== 'All';
+
+  const activeFilterCount =
+    (selectedMachineFilter !== 'All' ? 1 : 0) +
+    (selectedStyleColorFilter !== 'All' ? 1 : 0) +
+    (selectedSizeFilter !== 'All' ? 1 : 0);
+
+  // Dynamic filter on Summary Matrix
+  const filteredSummaryMatrix = summaryMatrix
+    .filter((row) => {
+      if (selectedMachineFilter === 'All') return true;
+      const rId = (row.code || row.id || '').toLowerCase();
+      const rName = (row.name || '').toLowerCase();
+      const fM = selectedMachineFilter.toLowerCase();
+      return rId === fM || rName === fM || rId.includes(fM) || fM.includes(rId);
+    })
+    .map((row) => {
+      let rowProduced = 0;
+      const filteredSlotOutputs = {};
+
+      timeSlots.forEach((slot) => {
+        const cell = row.slotOutputs?.[slot.id];
+        if (!cell) {
+          filteredSlotOutputs[slot.id] = { qty: 0, logs: [], breakdowns: [] };
+          return;
+        }
+
+        const originalLogs = cell.logs || [];
+        const filteredLogs = originalLogs.filter((l) => matchesLogFilter(l, row));
+        const filteredBreakdowns = (cell.breakdowns || []).filter((b) =>
+          matchesLogFilter({ size: b.size, colour: b.colour, operator: b.operator }, row)
+        );
+
+        const slotQty = filteredLogs.length > 0
+          ? filteredLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0)
+          : (isFilterActive ? 0 : (cell.qty || 0));
+
+        rowProduced += slotQty;
+        filteredSlotOutputs[slot.id] = {
+          ...cell,
+          qty: slotQty,
+          logs: filteredLogs,
+          breakdowns: filteredBreakdowns,
+        };
+      });
+
+      const mTarget = row.dailyTarget !== undefined ? row.dailyTarget : (row.dailyTargetQty || 2500);
+      const mAchieve = mTarget > 0 ? Math.round((rowProduced / mTarget) * 100) : 0;
+      const mRemaining = Math.max(0, mTarget - rowProduced);
+
+      return {
+        ...row,
+        slotOutputs: filteredSlotOutputs,
+        totalProduced: rowProduced,
+        dailyTarget: mTarget,
+        remainingBalance: mRemaining,
+        achievementRate: mAchieve,
+        efficiencyPct: mAchieve,
+      };
+    });
+
+  // Dynamic filter on Station Cards
+  const filteredStationMachines = machines
+    .filter((m) => {
+      if (selectedMachineFilter === 'All') return true;
+      const mId = (m.code || m.id || '').toLowerCase();
+      const mName = (m.name || '').toLowerCase();
+      const fM = selectedMachineFilter.toLowerCase();
+      return mId === fM || mName === fM || mId.includes(fM) || fM.includes(mId);
+    })
+    .map((mach) => {
+      let machProduced = 0;
+      const updatedSlots = (mach.slots || []).map((s) => {
+        const filteredLogs = (s.logs || []).filter((l) => matchesLogFilter(l, mach));
+        const filteredBreakdowns = (s.breakdowns || []).filter((b) =>
+          matchesLogFilter({ size: b.size, colour: b.colour, operator: b.operator }, mach)
+        );
+        const slotQty = filteredLogs.length > 0
+          ? filteredLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0)
+          : (isFilterActive ? 0 : (s.actualOutput || 0));
+
+        machProduced += slotQty;
+        return {
+          ...s,
+          actualOutput: slotQty,
+          logs: filteredLogs,
+          breakdowns: filteredBreakdowns,
+          variance: slotQty - s.expectedHourlyTarget,
+          status: slotQty >= s.expectedHourlyTarget ? 'Ahead' : slotQty > 0 ? 'On Track' : 'Pending',
+        };
+      });
+
+      const target = mach.totals?.totalTarget || mach.dailyTargetQty || 2500;
+      return {
+        ...mach,
+        slots: updatedSlots,
+        totals: {
+          ...mach.totals,
+          totalProduced: machProduced,
+          remainingBalance: Math.max(0, target - machProduced),
+          netVariance: machProduced - target,
+          achievementRate: target > 0 ? Math.round((machProduced / target) * 100) : 0,
+        },
+      };
+    });
+
+  // Dynamic filter on Log History entries
+  const filteredLogsForDate = allLogsForDate.filter((l) => matchesLogFilter(l));
+
+  // Recalculated Metric Strip Values based strictly on active filters
+  const selMachineObj = machines.find((m) => m.id === selectedMachineFilter || m.code === selectedMachineFilter);
+  const isLoopSelected = selectedMachineFilter === 'All' || isLoopInsertMachine(selMachineObj);
+
+  let displayTotalOutput = 0;
+  let displayOrderQuota = 0;
+
+  if (!isFilterActive) {
+    displayTotalOutput = summary.totalLoopInsertCompleted || summary.totalHourlyOutput || 0;
+    displayOrderQuota = summary.totalOrderQty || 271489;
+  } else {
+    if (selectedMachineFilter !== 'All' && !isLoopSelected) {
+      // Intermediate machine (e.g. Cutting Machine, Dry Cut)
+      displayTotalOutput = filteredLogsForDate.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+      displayOrderQuota = selMachineObj?.dailyTargetQty || selMachineObj?.totals?.totalTarget || 2500;
+    } else {
+      // Loop Insert or All Machines filtered by Size / Style / Colour
+      const filteredLoopLogs = (data?.allLogs || []).filter((l) => isLoopInsertMachine(l) && matchesLogFilter(l));
+      displayTotalOutput = filteredLoopLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+
+      const matchingOrders = (data?.orders || []).filter((o) => {
+        if (selectedStyleColorFilter !== 'All') {
+          const oStyle = (o.style || '').toLowerCase().trim();
+          const oColour = (o.colour || '').toLowerCase().trim();
+          const fSC = selectedStyleColorFilter.toLowerCase().trim();
+          const match = oStyle === fSC || oColour === fSC || `${oStyle} - ${oColour}` === fSC || (oColour && fSC.includes(oColour));
+          if (!match) return false;
+        }
+        if (selectedSizeFilter !== 'All') {
+          if (String(o.size).trim() !== String(selectedSizeFilter).trim()) return false;
+        }
+        return true;
+      });
+
+      displayOrderQuota = matchingOrders.length > 0
+        ? matchingOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
+        : (summary.totalOrderQty || 271489);
+    }
+  }
+
+  const displayRemainingBalance = Math.max(0, displayOrderQuota - displayTotalOutput);
+  const displayEfficiencyPct = displayOrderQuota > 0 ? Math.round((displayTotalOutput / displayOrderQuota) * 100) : 0;
+  const filteredShiftOutput = filteredLogsForDate.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-16">
@@ -411,7 +654,7 @@ export default function HourlyProductionDashboard({
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>Log Entries ({allLogsForDate.length})</span>
+                <span>Log Entries ({filteredLogsForDate.length})</span>
               </button>
             </div>
 
@@ -466,21 +709,6 @@ export default function HourlyProductionDashboard({
               </button>
             </div>
 
-            {/* Quick Machine Filter Dropdown */}
-            <select
-              value={selectedMachineFilter}
-              onChange={(e) => setSelectedMachineFilter(e.target.value)}
-              aria-label="Filter by Machine"
-              className="bg-slate-950/80 border border-slate-800 text-xs font-semibold rounded-2xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="All">All Machines Stacked ({machines.length})</option>
-              {machines.map((m) => (
-                <option key={m.id || m.code} value={m.id || m.code}>
-                  {m.name} ({m.category})
-                </option>
-              ))}
-            </select>
-
             {/* Refresh */}
             <button
               onClick={loadHourlyData}
@@ -493,34 +721,124 @@ export default function HourlyProductionDashboard({
         </div>
       </div>
 
-      {/* 2. Top Metric Cards Strip (Requirement 2 & 5: Real-Time Completed from LOOP INSERT ONLY, Remaining Balance from Total Order Quantity) */}
+      {/* 1.5. Dynamic Production Data Filter Controls */}
+      <div className="p-4 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-cyan-400">
+            <Filter className="w-4 h-4 text-cyan-400" />
+            <span className="uppercase tracking-wider text-[11px]">Filter Production Data:</span>
+          </div>
+
+          {/* Machine Filter Dropdown */}
+          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+            <span className="text-slate-400 text-[11px] font-semibold">Machine:</span>
+            <select
+              value={selectedMachineFilter}
+              onChange={(e) => setSelectedMachineFilter(e.target.value)}
+              aria-label="Filter by Machine"
+              className="bg-transparent text-white font-semibold text-xs focus:outline-none cursor-pointer max-w-[170px] truncate"
+            >
+              <option value="All" className="bg-slate-900">All Machines ({machines.length})</option>
+              {machines.map((m) => (
+                <option key={m.id || m.code} value={m.id || m.code} className="bg-slate-900">
+                  {m.name} ({m.code || m.id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Style / Color Filter Dropdown */}
+          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+            <span className="text-slate-400 text-[11px] font-semibold">Style / Colour:</span>
+            <select
+              value={selectedStyleColorFilter}
+              onChange={(e) => setSelectedStyleColorFilter(e.target.value)}
+              aria-label="Filter by Style or Colour"
+              className="bg-transparent text-white font-semibold text-xs focus:outline-none cursor-pointer max-w-[170px] truncate"
+            >
+              <option value="All" className="bg-slate-900">All Styles & Colours ({styleColorOptions.length})</option>
+              {styleColorOptions.map((sc) => (
+                <option key={sc} value={sc} className="bg-slate-900">
+                  {sc}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Size Filter Dropdown */}
+          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-2xl border border-slate-800 text-xs">
+            <span className="text-slate-400 text-[11px] font-semibold">Size:</span>
+            <select
+              value={selectedSizeFilter}
+              onChange={(e) => setSelectedSizeFilter(e.target.value)}
+              aria-label="Filter by Size"
+              className="bg-transparent text-white font-semibold text-xs focus:outline-none cursor-pointer max-w-[110px] truncate"
+            >
+              <option value="All" className="bg-slate-900">All Sizes ({sizeOptions.length})</option>
+              {sizeOptions.map((sz) => (
+                <option key={sz} value={sz} className="bg-slate-900">
+                  Size {sz}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Clear Filters Button & Active Badges */}
+        <div className="flex items-center gap-2 self-start md:self-auto">
+          {isFilterActive ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedMachineFilter('All');
+                setSelectedStyleColorFilter('All');
+                setSelectedSizeFilter('All');
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5 text-rose-400" />
+              <span>Clear Filters ({activeFilterCount})</span>
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-500 font-mono">
+              Showing All Logs & Quotas
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 2. Top Metric Cards Strip (Dynamically Recalculated based strictly on Active Filters) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Total Amount Completed So Far (Strictly LOOP INSERT ONLY) */}
+        {/* Metric 1: Total Amount Completed So Far / Filtered Output */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Total Completed So Far</span>
+              <span>{isFilterActive ? 'Filtered Output So Far' : 'Total Completed So Far'}</span>
             </span>
-            <span className="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold">
-              LOOP INSERT ONLY
+            <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
+              isFilterActive
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+            }`}>
+              {isFilterActive ? 'FILTERED' : 'LOOP INSERT ONLY'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-white font-mono">
-              {formatNumber(summary.totalLoopInsertCompleted || summary.totalHourlyOutput)}
+              {formatNumber(displayTotalOutput)}
             </span>
             <span className="text-xs text-cyan-400 font-mono font-semibold">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Today's Shift Output</span>
+            <span>{isFilterActive ? 'Shift Matching Logs' : "Today's Shift Output"}</span>
             <span className="text-emerald-400 font-mono font-bold">
-              +{formatNumber(summary.totalLoopInsertShiftCompleted || 0)} pcs
+              +{formatNumber(filteredShiftOutput)} pcs
             </span>
           </div>
         </div>
 
-        {/* Metric 2: Remaining Balance = (Total Order Quantity) - (Total Completed from LOOP INSERT) */}
+        {/* Metric 2: Remaining Balance = Quota - Output */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-amber-400 flex items-center gap-1.5">
@@ -528,74 +846,78 @@ export default function HourlyProductionDashboard({
               <span>Remaining Balance</span>
             </span>
             <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
-              (summary.remainingBalance || 0) === 0
+              displayRemainingBalance === 0
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
             }`}>
-              {(summary.remainingBalance || 0) === 0 ? 'COMPLETED' : 'TO GO'}
+              {displayRemainingBalance === 0 ? 'COMPLETED' : 'TO GO'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className={`text-2xl sm:text-3xl font-black font-mono ${
-              (summary.remainingBalance || 0) === 0 ? 'text-emerald-400' : 'text-amber-400'
+              displayRemainingBalance === 0 ? 'text-emerald-400' : 'text-amber-400'
             }`}>
-              {formatNumber(summary.remainingBalance !== undefined ? summary.remainingBalance : Math.max(0, (summary.totalOrderQty || 271489) - (summary.totalLoopInsertCompleted || 0)))}
+              {formatNumber(displayRemainingBalance)}
             </span>
             <span className="text-xs text-slate-400 font-mono">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
             <span>Formula</span>
             <span className="text-slate-300 font-mono text-[10px]">
-              Total Order - Loop Insert
+              {isFilterActive ? 'Filtered Quota - Filtered Output' : 'Total Order - Loop Insert'}
             </span>
           </div>
         </div>
 
-        {/* Metric 3: Current Efficiency / Completion Percentage (%) */}
+        {/* Metric 3: Current Efficiency / Completion Rate */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-400 flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Order Completion Rate</span>
+              <span>Completion Rate</span>
             </span>
             <span className="p-1 rounded-lg border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] font-mono font-bold">
-              {((Number(summary.totalLoopInsertCompleted || 0) / (Number(summary.totalOrderQty) || 271489)) * 100).toFixed(1)}%
+              {displayEfficiencyPct}%
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-300">
-              {summary.efficiencyPct !== undefined ? summary.efficiencyPct : Math.round((Number(summary.totalLoopInsertCompleted || 0) / (Number(summary.totalOrderQty) || 271489)) * 100)}%
+              {displayEfficiencyPct}%
             </span>
             <span className="text-xs text-slate-400">progress</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Intermediate WIP (Preparatory)</span>
+            <span>{isFilterActive ? 'Active Filter Count' : 'Intermediate WIP'}</span>
             <span className="text-slate-300 font-mono">
-              +{formatNumber(summary.intermediateShiftOutput || 0)} units
+              {isFilterActive ? `${activeFilterCount} Active Filters` : `+${formatNumber(summary.intermediateShiftOutput || 0)} units`}
             </span>
           </div>
         </div>
 
-        {/* Metric 4: Total Order Quantity */}
+        {/* Metric 4: Total Order Quantity / Filtered Quota */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Total Order Quantity</span>
+              <span>{isFilterActive ? 'Filtered Quota / Target' : 'Total Order Quantity'}</span>
             </span>
-            <span className="p-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-mono font-bold">
-              CATALOG
+            <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
+              isFilterActive ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+            }`}>
+              {isFilterActive ? 'FILTERED' : 'CATALOG'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono">
-              {formatNumber(summary.totalOrderQty || 271489)}
+              {formatNumber(displayOrderQuota)}
             </span>
             <span className="text-xs text-slate-400 font-mono">pcs target</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
             <span>Plant Fleet</span>
-            <span className="text-slate-300 font-mono">{summary.activeMachinesCount || 5} Stations Active</span>
+            <span className="text-slate-300 font-mono">
+              {isFilterActive ? `${filteredSummaryMatrix.length} Stations Matching` : `${summary.activeMachinesCount || 5} Stations Active`}
+            </span>
           </div>
         </div>
       </div>
@@ -649,7 +971,7 @@ export default function HourlyProductionDashboard({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 px-3 py-1 rounded-xl">
-                {(summaryMatrix.length > 0 ? summaryMatrix : machines).length} Active Stations
+                {filteredSummaryMatrix.length} Active Stations
               </span>
             </div>
           </div>
@@ -681,7 +1003,14 @@ export default function HourlyProductionDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
-                {(summaryMatrix.length > 0 ? summaryMatrix : machines).map((row) => {
+                {filteredSummaryMatrix.length === 0 ? (
+                  <tr>
+                    <td colSpan={4 + timeSlots.length} className="py-16 text-center text-slate-500 font-sans text-xs">
+                      No machine station data or logs match the selected filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSummaryMatrix.map((row) => {
                   const mName = row.name || 'Machine';
                   const mCode = row.code || row.id || '';
                   const mColour = row.colour || (row.assignedColours && row.assignedColours[0]) || '-';
@@ -866,7 +1195,7 @@ export default function HourlyProductionDashboard({
                       </td>
                     </tr>
                   );
-                })}
+                }))}
               </tbody>
             </table>
           </div>
@@ -879,12 +1208,12 @@ export default function HourlyProductionDashboard({
             <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
             <p className="text-sm font-semibold">Aggregating machine hourly breakdowns & syncing logs...</p>
           </div>
-        ) : filteredMachines.length === 0 ? (
+        ) : filteredStationMachines.length === 0 ? (
           <div className="rounded-3xl bg-slate-900 border border-slate-800 p-16 text-center text-slate-400">
-            No machines found matching the selected filter.
+            No machines or output found matching the selected filters.
           </div>
         ) : (
-          filteredMachines.map((machine) => {
+          filteredStationMachines.map((machine) => {
             const isDryCut = machine.isDryCut;
             const isSynced = machine.isSyncedStrap;
             const unit = getMachineUnit(machine);
@@ -1265,7 +1594,7 @@ export default function HourlyProductionDashboard({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-xl">
-                {allLogsForDate.length} Logged Entries
+                {filteredLogsForDate.length} Logged Entries
               </span>
             </div>
           </div>
@@ -1284,14 +1613,16 @@ export default function HourlyProductionDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
-                {allLogsForDate.length === 0 ? (
+                {filteredLogsForDate.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-16 text-center text-slate-500 font-sans text-xs">
-                      No hourly logs recorded for {selectedDate} ({shift}).
+                      {isFilterActive
+                        ? `No hourly logs matching the selected filters on ${selectedDate} (${shift}).`
+                        : `No hourly logs recorded for ${selectedDate} (${shift}).`}
                     </td>
                   </tr>
                 ) : (
-                  allLogsForDate.map((logItem, idx) => {
+                  filteredLogsForDate.map((logItem, idx) => {
                     const unit = logItem.unit || 'pcs';
                     const mach = machines.find((m) => m.code === logItem.machineId || m.id === logItem.machineId || m.name === logItem.machineName);
                     return (
