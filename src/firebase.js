@@ -139,6 +139,21 @@ export const firestoreSync = {
 export const REALTIME_DB_URL = 'https://bondtexlk-f16f5-default-rtdb.firebaseio.com';
 
 /**
+ * Standard Cache-Busting HTTP headers and URL builder
+ * Completely prevents iOS WebKit / Safari from serving stale cached JSON state or stalling network polls
+ */
+export const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+};
+
+export function getNoCacheUrl(url) {
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}_t=${Date.now()}&_r=${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
  * High-speed Realtime Database Sync Engine for multi-device live synchronization (Laptop, Phone, Tablet)
  */
 export const firebaseRealtime = {
@@ -155,14 +170,16 @@ export const firebaseRealtime = {
         updatedAt: new Date().toISOString(),
       };
       await Promise.all([
-        fetch(`${REALTIME_DB_URL}/activeWorkspace.json`, {
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/activeWorkspace.json`), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
           body: JSON.stringify(payload),
         }),
-        fetch(`${REALTIME_DB_URL}/activeWorkspaceId.json`, {
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/activeWorkspaceId.json`), {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
           body: JSON.stringify(workspace.id),
         }),
       ]);
@@ -175,7 +192,10 @@ export const firebaseRealtime = {
 
   async getActiveWorkspacePointer() {
     try {
-      const res = await fetch(`${REALTIME_DB_URL}/activeWorkspace.json`);
+      const res = await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/activeWorkspace.json`), {
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch (err) {
@@ -186,7 +206,7 @@ export const firebaseRealtime = {
 
   async pushState(state) {
     try {
-      const url = `${REALTIME_DB_URL}/state.json`;
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/state.json`);
       const activeWs = state?.activeWorkspace || null;
       const activeWsId = state?.activeWorkspaceId || activeWs?.id || null;
       const normalizedState = {
@@ -197,7 +217,8 @@ export const firebaseRealtime = {
       const promises = [
         fetch(url, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
           body: JSON.stringify(normalizedState),
         }),
       ];
@@ -205,14 +226,16 @@ export const firebaseRealtime = {
       // Mirror active workspace pointer to dedicated endpoints for absolute ground truth
       if (activeWs && activeWsId) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/activeWorkspace.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/activeWorkspace.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(activeWs),
           }),
-          fetch(`${REALTIME_DB_URL}/activeWorkspaceId.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/activeWorkspaceId.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(activeWsId),
           })
         );
@@ -221,27 +244,30 @@ export const firebaseRealtime = {
       // Mirror inventory to dedicated cloud endpoints for strict ground-truth persistence
       if (Array.isArray(state?.inventoryItems)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/inventoryItems.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryItems.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(state.inventoryItems),
           })
         );
       }
       if (Array.isArray(state?.materialRequests)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/materialRequests.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/materialRequests.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(state.materialRequests),
           })
         );
       }
       if (Array.isArray(state?.inventoryLogs)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/inventoryLogs.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryLogs.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(state.inventoryLogs),
           })
         );
@@ -260,27 +286,30 @@ export const firebaseRealtime = {
       const promises = [];
       if (Array.isArray(inventoryItems)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/inventoryItems.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryItems.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(inventoryItems),
           })
         );
       }
       if (Array.isArray(materialRequests)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/materialRequests.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/materialRequests.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(materialRequests),
           })
         );
       }
       if (Array.isArray(inventoryLogs)) {
         promises.push(
-          fetch(`${REALTIME_DB_URL}/inventoryLogs.json`, {
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryLogs.json`), {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
             body: JSON.stringify(inventoryLogs),
           })
         );
@@ -296,9 +325,9 @@ export const firebaseRealtime = {
   async pullInventory() {
     try {
       const [itemsRes, reqsRes, logsRes] = await Promise.all([
-        fetch(`${REALTIME_DB_URL}/inventoryItems.json`),
-        fetch(`${REALTIME_DB_URL}/materialRequests.json`),
-        fetch(`${REALTIME_DB_URL}/inventoryLogs.json`),
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryItems.json`), { cache: 'no-store', headers: NO_CACHE_HEADERS }),
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/materialRequests.json`), { cache: 'no-store', headers: NO_CACHE_HEADERS }),
+        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryLogs.json`), { cache: 'no-store', headers: NO_CACHE_HEADERS }),
       ]);
       const inventoryItems = itemsRes.ok ? await itemsRes.json() : null;
       const materialRequests = reqsRes.ok ? await reqsRes.json() : null;
@@ -326,8 +355,10 @@ export const firebaseRealtime = {
     try {
       if (!itemId) return false;
       // Also delete from direct endpoint if present
-      await fetch(`${REALTIME_DB_URL}/inventoryItems/${encodeURIComponent(itemId)}.json`, {
+      await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/inventoryItems/${encodeURIComponent(itemId)}.json`), {
         method: 'DELETE',
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
       });
       return true;
     } catch {
@@ -338,8 +369,8 @@ export const firebaseRealtime = {
   async deleteWorkspaceArchive(workspaceId) {
     try {
       if (!workspaceId) return false;
-      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`;
-      await fetch(url, { method: 'DELETE' });
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`);
+      await fetch(url, { method: 'DELETE', cache: 'no-store', headers: NO_CACHE_HEADERS });
       return true;
     } catch {
       return false;
@@ -349,10 +380,11 @@ export const firebaseRealtime = {
   async saveWorkspaceArchive(workspace) {
     try {
       if (!workspace || !workspace.id) return null;
-      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspace.id)}.json`;
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspace.id)}.json`);
       const res = await fetch(url, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
         body: JSON.stringify(workspace),
       });
       return await res.json();
@@ -363,8 +395,8 @@ export const firebaseRealtime = {
 
   async getWorkspaceArchive(workspaceId) {
     try {
-      const url = `${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`;
-      const res = await fetch(url);
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/workspaces/${encodeURIComponent(workspaceId)}.json`);
+      const res = await fetch(url, { cache: 'no-store', headers: NO_CACHE_HEADERS });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -374,8 +406,8 @@ export const firebaseRealtime = {
 
   async pullAllWorkspaces() {
     try {
-      const url = `${REALTIME_DB_URL}/workspaces.json`;
-      const res = await fetch(url);
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/workspaces.json`);
+      const res = await fetch(url, { cache: 'no-store', headers: NO_CACHE_HEADERS });
       if (!res.ok) return null;
       const data = await res.json();
       if (!data) return [];
@@ -389,10 +421,11 @@ export const firebaseRealtime = {
     try {
       if (!state || !Array.isArray(state.orders)) return null;
       const snapKey = new Date().toISOString().replace(/[:.]/g, '-');
-      const url = `${REALTIME_DB_URL}/snapshots/${snapKey}.json`;
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/snapshots/${snapKey}.json`);
       await fetch(url, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
         body: JSON.stringify({
           timestamp: new Date().toISOString(),
           lastUpdated: state.lastUpdated,
@@ -412,8 +445,11 @@ export const firebaseRealtime = {
 
   async pullState() {
     try {
-      const url = `${REALTIME_DB_URL}/state.json`;
-      const res = await fetch(url);
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/state.json`);
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
+      });
       if (!res.ok) return null;
       const state = await res.json();
       if (!state) return null;
@@ -440,11 +476,14 @@ export const firebaseRealtime = {
 
     let eventSource = null;
     let pollInterval = null;
+    let heartbeatInterval = null;
     let stopped = false;
     let lastHandledTimestamp = null;
+    let lastEventReceived = Date.now();
 
     const processPayload = async (payload) => {
       try {
+        lastEventReceived = Date.now();
         if (!payload) return;
         let state = null;
         if (payload.path === '/' || !payload.path) {
@@ -484,8 +523,15 @@ export const firebaseRealtime = {
     const connectStream = () => {
       if (stopped) return;
       try {
+        if (eventSource) {
+          try { eventSource.close(); } catch {}
+          eventSource = null;
+        }
         if (window.EventSource) {
-          eventSource = new EventSource(`${REALTIME_DB_URL}/state.json`);
+          // EventSource with cache-busting timestamp URL for iOS WebKit stability
+          eventSource = new EventSource(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`));
+          lastEventReceived = Date.now();
+
           eventSource.addEventListener('put', (e) => {
             try {
               const payload = JSON.parse(e.data);
@@ -505,10 +551,10 @@ export const firebaseRealtime = {
 
           eventSource.onerror = () => {
             if (eventSource) {
-              eventSource.close();
+              try { eventSource.close(); } catch {}
               eventSource = null;
             }
-            if (!stopped) setTimeout(connectStream, 3500);
+            if (!stopped) setTimeout(connectStream, 3000);
           };
         }
       } catch (err) {
@@ -518,7 +564,7 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Fast, gentle fallback poll (every 4 seconds for seamless multi-device PC sync)
+    // Fast, gentle fallback poll (every 3.5 seconds with full cache-busting for seamless multi-device PC & iOS sync)
     pollInterval = setInterval(async () => {
       if (stopped) return;
       try {
@@ -540,11 +586,22 @@ export const firebaseRealtime = {
       } catch {
         // ignore
       }
-    }, 4000);
+    }, 3500);
 
-    // Sync immediately on window focus / tab visibility change
+    // Watchdog heartbeat for iOS Safari / Mobile WebKit
+    // Detects silent socket drops when mobile screen turns off or sleeps
+    heartbeatInterval = setInterval(() => {
+      if (stopped) return;
+      const isStale = Date.now() - lastEventReceived > 25000;
+      if (isStale || (eventSource && eventSource.readyState === 2)) {
+        connectStream();
+      }
+    }, 12000);
+
+    // Sync immediately on window focus, iOS bfcache restoration (pageshow), or tab visibility change
     const handleFocus = async () => {
       try {
+        connectStream(); // Reconnect EventSource on tab wakeup
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
           if (cloudState.lastUpdated && cloudState.lastUpdated === lastHandledTimestamp) return;
@@ -564,16 +621,24 @@ export const firebaseRealtime = {
         // ignore
       }
     };
+
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handleFocus); // Critical for iOS Safari back-forward cache wakeup
+    window.addEventListener('online', handleFocus);
     window.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') handleFocus();
     });
 
     return () => {
       stopped = true;
-      if (eventSource) eventSource.close();
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+      }
       if (pollInterval) clearInterval(pollInterval);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handleFocus);
+      window.removeEventListener('online', handleFocus);
     };
   },
 };

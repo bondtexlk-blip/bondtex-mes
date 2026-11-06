@@ -308,7 +308,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (remote && remote.success) return remote;
-    const updated = dbStore.updateProductionLog(logId, data);
+    const updated = await dbStore.updateProductionLog(logId, data);
     return { success: !!updated, data: updated };
   },
 
@@ -322,7 +322,7 @@ export const api = {
       method: 'DELETE',
     });
     if (remote && remote.success) return remote;
-    const ok = dbStore.deleteProductionLog(logId, query);
+    const ok = await dbStore.deleteProductionLog(logId, query);
     return { success: ok };
   },
 

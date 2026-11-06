@@ -12,6 +12,12 @@
   }
 }
 
+/* iOS Safari responsive tap and button handling */
+button, input, select, textarea, [role="button"], a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 8px;

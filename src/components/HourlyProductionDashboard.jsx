@@ -98,6 +98,62 @@ export default function HourlyProductionDashboard({
       if (onShowToast) onShowToast('Please enter a valid quantity', 'error');
       return;
     }
+    const previousData = data;
+    const logId = editingLogModal.log.id;
+    const oldQty = Number(editingLogModal.log.qty) || 0;
+    const diffQty = num - oldQty;
+
+    // Optimistic UI update
+    if (data && Array.isArray(data.machines)) {
+      const updatedMachines = data.machines.map((m) => {
+        const matchesMach =
+          m.id === editingLogModal.log.machineId ||
+          m.code === editingLogModal.log.machineId ||
+          (m.name && editingLogModal.log.machineName && m.name.toLowerCase() === editingLogModal.log.machineName.toLowerCase());
+        if (!matchesMach) return m;
+
+        const updatedSlots = (m.slots || []).map((s) => {
+          const slotMatches = (s.timeSlot || s.id) === (editingLogModal.slot?.label || editingLogModal.log?.timeSlot);
+          if (!slotMatches) return s;
+          const updatedSlotLogs = (s.logs || []).map((l) =>
+            l.id === logId || l === editingLogModal.log
+              ? { ...l, qty: num, operator: editOperator, notes: editNotes }
+              : l
+          );
+          const newActual = Math.max(0, s.actualOutput + diffQty);
+          return {
+            ...s,
+            logs: updatedSlotLogs,
+            actualOutput: newActual,
+            variance: newActual - s.hourlyTarget,
+            variancePct: s.hourlyTarget > 0 ? Math.round(((newActual - s.hourlyTarget) / s.hourlyTarget) * 100) : 0,
+            status: newActual >= s.hourlyTarget ? 'Ahead' : newActual > 0 ? 'On Track' : 'Pending',
+          };
+        });
+
+        const newTotProduced = Math.max(0, (m.totals?.totalProduced || 0) + diffQty);
+        return {
+          ...m,
+          slots: updatedSlots,
+          totals: {
+            ...m.totals,
+            totalProduced: newTotProduced,
+            netVariance: newTotProduced - (m.totals?.totalTarget || 0),
+          },
+        };
+      });
+
+      setData((prev) => ({
+        ...prev,
+        machines: updatedMachines,
+        allLogs: (prev.allLogs || []).map((l) =>
+          l.id === logId || l === editingLogModal.log
+            ? { ...l, qty: num, operator: editOperator, notes: editNotes }
+            : l
+        ),
+      }));
+    }
+
     try {
       setIsSubmittingEdit(true);
       const res = await api.updateProductionLog(editingLogModal.log.id, {
@@ -119,9 +175,11 @@ export default function HourlyProductionDashboard({
         setEditingLogModal(null);
         await loadHourlyData();
       } else {
+        setData(previousData);
         if (onShowToast) onShowToast('Failed to update hourly production entry', 'error');
       }
     } catch (err) {
+      setData(previousData);
       if (onShowToast) onShowToast(err.message, 'error');
     } finally {
       setIsSubmittingEdit(false);
@@ -135,11 +193,61 @@ export default function HourlyProductionDashboard({
     const confirmMsg = `Are you sure you want to delete this hourly production entry?\n\nMachine: ${logToDelete.machineName || logToDelete.machineId || editingLogModal?.machine?.name || 'Machine'}\nOperator: ${logToDelete.operator || logToDelete.operatorName || 'N/A'}\nSlot: ${logToDelete.timeSlot || editingLogModal?.slot?.label || 'Slot'}\nOutput: ${formatNumber(logToDelete.qty)} ${unit}\n\nThis will permanently delete this record and update Floor Production Qty and Dashboard metrics!`;
     if (!window.confirm(confirmMsg)) return;
 
+    // Instant optimistic state update: Remove immediately from React UI
+    const previousData = data;
+    const logId = logToDelete.id;
+    const targetSlotLabel = logToDelete.timeSlot || editingLogModal?.slot?.label;
+    const deletedQty = Number(logToDelete.qty) || 0;
+
+    if (data && Array.isArray(data.machines)) {
+      const updatedMachines = data.machines.map((m) => {
+        const matchesMach =
+          m.id === logToDelete.machineId ||
+          m.code === logToDelete.machineId ||
+          (m.name && logToDelete.machineName && m.name.toLowerCase() === logToDelete.machineName.toLowerCase());
+        if (!matchesMach) return m;
+
+        const updatedSlots = (m.slots || []).map((s) => {
+          const slotMatches = (s.timeSlot || s.id) === targetSlotLabel;
+          if (!slotMatches) return s;
+          const filteredLogs = (s.logs || []).filter((l) => l.id !== logId && l !== logToDelete);
+          const newActual = filteredLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+          return {
+            ...s,
+            logs: filteredLogs,
+            actualOutput: newActual,
+            variance: newActual - s.hourlyTarget,
+            variancePct: s.hourlyTarget > 0 ? Math.round(((newActual - s.hourlyTarget) / s.hourlyTarget) * 100) : 0,
+            status: newActual >= s.hourlyTarget ? 'Ahead' : newActual > 0 ? 'On Track' : 'Pending',
+          };
+        });
+
+        const newTotProduced = Math.max(0, (m.totals?.totalProduced || 0) - deletedQty);
+        return {
+          ...m,
+          slots: updatedSlots,
+          totals: {
+            ...m.totals,
+            totalProduced: newTotProduced,
+            netVariance: newTotProduced - (m.totals?.totalTarget || 0),
+          },
+        };
+      });
+
+      setData((prev) => ({
+        ...prev,
+        machines: updatedMachines,
+        allLogs: (prev.allLogs || []).filter((l) => l.id !== logId && l !== logToDelete),
+      }));
+    }
+
+    setEditingLogModal(null);
+
     try {
       setIsSubmittingEdit(true);
       const res = await api.deleteProductionLog(logToDelete.id, {
         machineId: logToDelete.machineId || editingLogModal?.machine?.code || editingLogModal?.machine?.id,
-        timeSlot: logToDelete.timeSlot || editingLogModal?.slot?.label,
+        timeSlot: targetSlotLabel,
         date: logToDelete.date || selectedDate,
         size: logToDelete.size,
         qty: logToDelete.qty,
@@ -147,12 +255,13 @@ export default function HourlyProductionDashboard({
 
       if (res && res.success) {
         if (onShowToast) onShowToast('Hourly production log deleted successfully!', 'success');
-        setEditingLogModal(null);
         await loadHourlyData();
       } else {
+        setData(previousData);
         if (onShowToast) onShowToast('Failed to delete hourly production entry', 'error');
       }
     } catch (err) {
+      setData(previousData);
       if (onShowToast) onShowToast(err.message, 'error');
     } finally {
       setIsSubmittingEdit(false);

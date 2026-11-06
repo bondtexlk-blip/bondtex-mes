@@ -79,6 +79,7 @@ class ClientDatabaseStore {
     this.lastSaved = null;
     this.lastAppliedCloudTimestamp = null;
     this.isIntentionalReset = false;
+    this.deletedLogIds = new Set();
     this._notifyTimeout = null;
     this.deviceId = 'srv';
     this.initialized = false;
@@ -319,7 +320,29 @@ class ClientDatabaseStore {
       this.orders = cloudState.orders;
     }
     if (Array.isArray(cloudState.productionLogs)) {
-      this.productionLogs = cloudState.productionLogs;
+      const mergedMap = new Map();
+      cloudState.productionLogs.forEach((l) => {
+        if (!l) return;
+        const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
+        if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
+          mergedMap.set(id, l);
+        }
+      });
+      // Preserve any local logs that were created recently and not yet in this incoming cloud packet
+      (this.productionLogs || []).forEach((l) => {
+        if (!l) return;
+        const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
+        if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
+          if (!mergedMap.has(id)) {
+            mergedMap.set(id, l);
+          }
+        }
+      });
+      this.productionLogs = Array.from(mergedMap.values()).sort((a, b) => {
+        const tA = new Date(a.timestamp || a.date || 0).getTime();
+        const tB = new Date(b.timestamp || b.date || 0).getTime();
+        return tB - tA;
+      });
     }
     if (Array.isArray(cloudState.deliveryReceivedLogs)) {
       this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs;
@@ -638,6 +661,40 @@ class ClientDatabaseStore {
 
       // Automatically broadcast state to Firebase Realtime Database and AWAIT confirmation
       if (broadcastToCloud && typeof fetch !== 'undefined') {
+        // Smart merge with cloud production logs before saving to prevent clobbering concurrent machine entries (e.g. Cutting vs Loop Insert)
+        if (!this.isIntentionalReset && !this.activeWorkspace?.isZeroReset) {
+          try {
+            const cloudState = await firebaseRealtime.pullState();
+            if (cloudState && Array.isArray(cloudState.productionLogs)) {
+              const mergedMap = new Map();
+              // 1. Existing cloud logs (excluding locally deleted logs)
+              cloudState.productionLogs.forEach((l) => {
+                if (!l) return;
+                const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
+                if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
+                  mergedMap.set(id, l);
+                }
+              });
+              // 2. Local logs (excluding locally deleted logs)
+              (this.productionLogs || []).forEach((l) => {
+                if (!l) return;
+                const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
+                if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
+                  mergedMap.set(id, l);
+                }
+              });
+              this.productionLogs = Array.from(mergedMap.values()).sort((a, b) => {
+                const tA = new Date(a.timestamp || a.date || 0).getTime();
+                const tB = new Date(b.timestamp || b.date || 0).getTime();
+                return tB - tA;
+              });
+              payload.productionLogs = this.productionLogs;
+            }
+          } catch {
+            // offline, proceed with local
+          }
+        }
+
         const promises = [
           firebaseRealtime.setActiveWorkspacePointer(this.activeWorkspace),
           firebaseRealtime.pushState(payload),
@@ -2059,7 +2116,7 @@ class ClientDatabaseStore {
     return order;
   }
 
-  updateProductionLog(logId, updatedData = {}) {
+  async updateProductionLog(logId, updatedData = {}) {
     const found = this.findProductionLog(logId, updatedData);
     if (!found) return null;
 
@@ -2128,60 +2185,93 @@ class ClientDatabaseStore {
       }
     }
 
-    this.save(true);
+    await this.save(true);
     return updatedLog;
   }
 
-  deleteProductionLog(logId, query = {}) {
-    const found = this.findProductionLog(logId, query);
-    if (!found) return false;
+  async deleteProductionLog(logId, query = {}) {
+    if (!logId && !query.machineId) return false;
 
-    const oldLog = found.log;
-    const oldQty = Number(oldLog.qty) || 0;
-    const effectiveId = oldLog.id || logId;
+    // Track tombstone so incoming syncs don't resurrect this log
+    if (!this.deletedLogIds) this.deletedLogIds = new Set();
+    if (logId) this.deletedLogIds.add(logId);
 
-    // 1. Remove from productionLogs
+    const targetMachine = query.machineId || query.machineCode;
+    const targetSlot = (query.timeSlot || query.slotId || query.slotLabel || '').replace(/\s+/g, '');
+    const targetDate = query.date ? String(query.date).slice(0, 10) : '';
+    const targetSize = query.size !== undefined && query.size !== null && query.size !== '-' ? String(query.size).trim() : null;
+    const targetQty = query.qty !== undefined && query.qty !== null ? Number(query.qty) : null;
+
+    if (targetMachine && targetSlot && targetDate) {
+      const compositeKey = `${targetDate}_${targetMachine}_${query.timeSlot}_${targetSize || ''}_${targetQty || ''}`;
+      this.deletedLogIds.add(compositeKey);
+    }
+
+    const matchesLog = (l) => {
+      if (!l) return false;
+      if (logId && l.id && l.id === logId) return true;
+      const machMatch =
+        !targetMachine ||
+        l.machineId === targetMachine ||
+        l.machineCode === targetMachine ||
+        (l.machineName && l.machineName.toLowerCase() === targetMachine.toLowerCase()) ||
+        (l.machineId && targetMachine && (l.machineId.toLowerCase().includes(targetMachine.toLowerCase()) || targetMachine.toLowerCase().includes(l.machineId.toLowerCase())));
+      const slotMatch = !targetSlot || (l.timeSlot && l.timeSlot.replace(/\s+/g, '') === targetSlot);
+      const dateMatch = !targetDate || (l.date || l.timestamp || '').slice(0, 10) === targetDate;
+      const szMatch = !targetSize || String(l.size).trim() === targetSize;
+      const qtyMatch = targetQty === null || Number(l.qty) === targetQty || Number(l.rawQty) === targetQty;
+      return machMatch && slotMatch && dateMatch && szMatch && qtyMatch;
+    };
+
+    // Find all matching logs to deduct from floorProductionQty if Loop Insert
+    const matchingLogs = (this.productionLogs || []).filter(matchesLog);
+
+    // If none found in productionLogs, check in machines todayLogs
+    if (matchingLogs.length === 0 && Array.isArray(this.machines)) {
+      this.machines.forEach((m) => {
+        if (Array.isArray(m.todayLogs)) {
+          m.todayLogs.forEach((l) => {
+            if (matchesLog(l)) matchingLogs.push(l);
+          });
+        }
+      });
+    }
+
+    if (matchingLogs.length === 0 && !logId) return false;
+
+    // 1. Remove ALL matching instances from this.productionLogs
     if (Array.isArray(this.productionLogs)) {
-      const pIdx = this.productionLogs.findIndex((l) => (l.id && l.id === effectiveId) || l === oldLog);
-      if (pIdx !== -1) {
-        this.productionLogs.splice(pIdx, 1);
-      }
+      this.productionLogs = this.productionLogs.filter((l) => !matchesLog(l));
     }
 
-    // 2. Remove from machine.todayLogs
-    const targetMachineId = oldLog.machineId || query.machineId;
-    const mach = this.machines.find(
-      (m) =>
-        m.code === targetMachineId ||
-        m.id === targetMachineId ||
-        (m.name || '').toLowerCase() === (oldLog.machineName || '').toLowerCase()
-    );
-    if (mach && Array.isArray(mach.todayLogs)) {
-      const mIdx = mach.todayLogs.findIndex(
-        (l) => (l.id && l.id === effectiveId) || l === oldLog || (l.timeSlot === oldLog.timeSlot && Number(l.qty) === oldQty)
-      );
-      if (mIdx !== -1) {
-        mach.todayLogs.splice(mIdx, 1);
-      }
-      mach.todayProduced = mach.todayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
-      mach.todayOutput = mach.todayProduced;
+    // 2. Remove ALL matching instances from all machines' todayLogs
+    if (Array.isArray(this.machines)) {
+      this.machines.forEach((mach) => {
+        if (Array.isArray(mach.todayLogs)) {
+          mach.todayLogs = mach.todayLogs.filter((l) => !matchesLog(l));
+          mach.todayProduced = mach.todayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+          mach.todayOutput = mach.todayProduced;
+        }
+      });
     }
 
-    // 3. Loop Insert -> floorProductionQty deduction
-    const isLoopInsert =
-      (mach?.name || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
-      (mach?.name || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
-      ((mach?.name || oldLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || '').toLowerCase().includes('loop')) ||
-      (mach?.code || targetMachineId || '').toLowerCase() === 'mch-06';
-
-    if (isLoopInsert) {
-      const order = this.findLoopOrder(oldLog);
-      if (order && order.floorProductionQty !== undefined) {
-        order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - oldQty);
+    // 3. Deduct from Loop Insert order floorProductionQty if applicable
+    matchingLogs.forEach((oldLog) => {
+      const oldQty = Number(oldLog.qty) || 0;
+      const isLoopInsert =
+        (oldLog.machineName || '').toLowerCase().includes('loop insert') ||
+        (oldLog.machineName || '').toLowerCase().includes('insert loop') ||
+        ((oldLog.machineName || '').toLowerCase().includes('insert') && (oldLog.machineName || '').toLowerCase().includes('loop')) ||
+        (oldLog.machineId || '').toLowerCase() === 'mch-06';
+      if (isLoopInsert) {
+        const order = this.findLoopOrder(oldLog);
+        if (order && order.floorProductionQty !== undefined) {
+          order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - oldQty);
+        }
       }
-    }
+    });
 
-    this.save(true);
+    await this.save(true);
     return true;
   }
 
@@ -2406,24 +2496,47 @@ class ClientDatabaseStore {
         return matchMach && (!targetDate || lDate === targetDate);
       });
 
+      const makeLogFingerprint = (l) => {
+        const d = (l.date || l.timestamp || targetDate || '').slice(0, 10);
+        const slot = (l.timeSlot || '').replace(/\s+/g, '');
+        const sz = String(l.size || '').trim();
+        const op = (l.operator || l.operatorName || '').trim().toLowerCase();
+        const q = Number(l.rawQty || l.qty) || 0;
+        return `${d}__${slot}__${sz}__${op}__${q}`;
+      };
+
       // Also include any matching logs from m.todayLogs if not already in machineGlobalLogs
       const seenIds = new Set(machineGlobalLogs.map((l) => l.id).filter(Boolean));
+      const seenFingerprints = new Set(machineGlobalLogs.map(makeLogFingerprint));
+
       const extraLogs = (m.todayLogs || []).filter((l) => {
+        if (!l) return false;
         if (l.id && seenIds.has(l.id)) return false;
+        const fp = makeLogFingerprint(l);
+        if (seenFingerprints.has(fp)) return false;
         const lDate = (l.date || l.timestamp || '').slice(0, 10);
         return lDate === targetDate;
       });
 
-      const sourceLogs = [...machineGlobalLogs, ...extraLogs];
-      // Ensure all logs have stable unique IDs and machine tags
-      sourceLogs.forEach((l, idx) => {
-        if (!l.id) {
-          l.id = `LOG-${m.code || m.id}-${(l.date || targetDate).replace(/-/g, '')}-${(l.timeSlot || '').replace(/[^0-9]/g, '')}-${idx}`;
+      // Strictly deduplicate combined logs so duplicate entries can never inflate counts
+      const sourceLogs = [];
+      const addedLogKeys = new Set();
+      [...machineGlobalLogs, ...extraLogs].forEach((l, idx) => {
+        if (!l) return;
+        const fp = makeLogFingerprint(l);
+        const uniqueKey = l.id ? `id_${l.id}` : `fp_${fp}`;
+        if (!addedLogKeys.has(uniqueKey) && !addedLogKeys.has(fp)) {
+          addedLogKeys.add(uniqueKey);
+          addedLogKeys.add(fp);
+          if (!l.id) {
+            l.id = `LOG-${m.code || m.id}-${(l.date || targetDate).replace(/-/g, '')}-${(l.timeSlot || '').replace(/[^0-9]/g, '')}-${idx}`;
+          }
+          if (!l.machineId) l.machineId = m.code || m.id;
+          if (!l.machineName) l.machineName = m.name;
+          if (!l.date) l.date = targetDate;
+          if (!l.unit) l.unit = machineUnit;
+          sourceLogs.push(l);
         }
-        if (!l.machineId) l.machineId = m.code || m.id;
-        if (!l.machineName) l.machineName = m.name;
-        if (!l.date) l.date = targetDate;
-        if (!l.unit) l.unit = machineUnit;
       });
 
       const shiftLogs = sourceLogs.filter((l) => {
