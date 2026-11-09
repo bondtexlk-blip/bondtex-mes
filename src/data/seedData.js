@@ -69,40 +69,40 @@ const getFutureDateStr = (daysAhead) => {
   return d.toISOString().split('T')[0];
 };
 
-// All 23 Real Production Orders belong strictly to the Loop Category (5 Colours)
+// All 23 Real Production Orders belong strictly to the Loop Category (Active Order Quota: 44,007 pcs)
 export const rawProductionRows = [
-  // PO 4502991550 | 200150259454A2 | Black 093 54A2 | Loop (Total: 53,564 pcs - 100% Completed)
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 21612, productionQty: 21612, deliveryQty: 21612, floorProductionQty: 21612, status: 'Completed' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 24496, productionQty: 24496, deliveryQty: 24496, floorProductionQty: 24496, status: 'Completed' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 6700, productionQty: 6700, deliveryQty: 6700, floorProductionQty: 6700, status: 'Completed' },
-  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 756, productionQty: 756, deliveryQty: 756, floorProductionQty: 756, status: 'Completed' },
+  // PO 4502991557 | 200150259454A2 | Black 093 54A2 | Loop (Total: 13,634 pcs)
+  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '10', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 5235, productionQty: 3522, deliveryQty: 0, floorProductionQty: 3522, status: 'Ahead' },
+  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '12', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 7184, productionQty: 1032, deliveryQty: 0, floorProductionQty: 1032, status: 'Ahead' },
+  { poNumber: '4502991557', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '14', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 1215, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991550', rmMaterial: '200150259454A2', colour: 'Black 093 54A2', size: '16', category: 'Loop', style: 'Loop Elastic Band - 54A2', styleCode: 'LP-54A2', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
 
-  // PO 4502991532 | 200150259439H6 | Marzipan 39H6 | Loop (Total: 57,675 pcs - 100% Completed)
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 35003, productionQty: 35003, deliveryQty: 35003, floorProductionQty: 35003, status: 'Completed' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 20874, productionQty: 20874, deliveryQty: 20874, floorProductionQty: 20874, status: 'Completed' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 1351, productionQty: 1351, deliveryQty: 1351, floorProductionQty: 1351, status: 'Completed' },
-  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 447, productionQty: 447, deliveryQty: 447, floorProductionQty: 447, status: 'Completed' },
+  // PO 4502991538 | 200150259439H6 | Marzipan 39H6 | Loop (Total: 13,222 pcs)
+  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 6296, productionQty: 6296, deliveryQty: 0, floorProductionQty: 6589, status: 'Completed' },
+  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 6508, productionQty: 5299, deliveryQty: 0, floorProductionQty: 5299, status: 'Ahead' },
+  { poNumber: '4502991538', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 418, productionQty: 418, deliveryQty: 0, floorProductionQty: 1288, status: 'Completed' },
+  { poNumber: '4502991532', rmMaterial: '200150259439H6', colour: 'Marzipan 39H6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 39H6', styleCode: 'LP-39H6', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
 
-  // PO 4502991599 | 200150259465H8 | Praline 65H8 | Loop (Total: 100,159 pcs - 100% Completed)
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 61714, productionQty: 61714, deliveryQty: 61714, floorProductionQty: 61714, status: 'Completed' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 31682, productionQty: 31682, deliveryQty: 31682, floorProductionQty: 31682, status: 'Completed' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 6408, productionQty: 6408, deliveryQty: 6408, floorProductionQty: 6408, status: 'Completed' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 291, productionQty: 291, deliveryQty: 291, floorProductionQty: 291, status: 'Completed' },
-  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 64, productionQty: 64, deliveryQty: 64, floorProductionQty: 64, status: 'Completed' },
+  // PO 4502991603 | 200150259465H8 | Praline 65H8 | Loop (Total: 9,029 pcs)
+  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '10', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 5204, productionQty: 5204, deliveryQty: 0, floorProductionQty: 5296, status: 'Completed' },
+  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '12', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 3271, productionQty: 2283, deliveryQty: 0, floorProductionQty: 2283, status: 'Ahead' },
+  { poNumber: '4502991603', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '14', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 554, productionQty: 259, deliveryQty: 0, floorProductionQty: 259, status: 'Ahead' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '16', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991599', rmMaterial: '200150259465H8', colour: 'Praline 65H8', size: '18', category: 'Loop', style: 'Loop Elastic Band - 65H8', styleCode: 'LP-65H8', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
 
-  // PO 4502991520 | 200150259433F6 | Ganache 33F6 | Loop (Total: 7,563 pcs - 100% Completed)
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 923, productionQty: 923, deliveryQty: 923, floorProductionQty: 923, status: 'Completed' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 2506, productionQty: 2506, deliveryQty: 2506, floorProductionQty: 2506, status: 'Completed' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 2420, productionQty: 2420, deliveryQty: 2420, floorProductionQty: 2420, status: 'Completed' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 1500, productionQty: 1500, deliveryQty: 1500, floorProductionQty: 1500, status: 'Completed' },
-  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 214, productionQty: 214, deliveryQty: 214, floorProductionQty: 214, status: 'Completed' },
+  // PO 4502991526 | 200150259433F6 | Ganache 33F6 | Loop (Total: 8,122 pcs)
+  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '10', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 760, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '12', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 5982, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991526', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '14', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 1380, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '16', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991520', rmMaterial: '200150259433F6', colour: 'Ganache 33F6', size: '18', category: 'Loop', style: 'Loop Elastic Band - 33F6', styleCode: 'LP-33F6', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
 
-  // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Loop (Total: 52,528 pcs - Active Floor Execution, Balance: 9,002 pcs)
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 29699, productionQty: 29699, deliveryQty: 29699, floorProductionQty: 29699, status: 'Completed' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 19055, productionQty: 13827, deliveryQty: 13827, floorProductionQty: 13827, status: 'Behind Plan' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 3260, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 451, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
-  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 63, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  // PO 4502991562 | 200150259457H1 | Talc 69-09-47 57H1 | Loop (Total: 0 pcs)
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '10', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '12', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '14', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '16', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
+  { poNumber: '4502991562', rmMaterial: '200150259457H1', colour: 'Talc 69-09-47 57H1', size: '18', category: 'Loop', style: 'Loop Elastic Band - 57H1', styleCode: 'LP-57H1', orderQty: 0, productionQty: 0, deliveryQty: 0, floorProductionQty: 0, status: 'Scheduled' },
 ];
 
 export const initialMachines = [
