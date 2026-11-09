@@ -568,7 +568,7 @@ export default function HourlyProductionDashboard({
 
   if (!isFilterActive) {
     displayTotalOutput = summary.totalLoopInsertCompleted || summary.totalHourlyOutput || 0;
-    displayOrderQuota = summary.totalOrderQty || 271489;
+    displayOrderQuota = summary.totalOrderQty || summary.totalTargetQuota || 0;
   } else {
     if (selectedMachineFilter !== 'All' && !isLoopSelected) {
       // Intermediate machine (e.g. Cutting Machine, Dry Cut)
@@ -595,7 +595,7 @@ export default function HourlyProductionDashboard({
 
       displayOrderQuota = matchingOrders.length > 0
         ? matchingOrders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
-        : (summary.totalOrderQty || 271489);
+        : (summary.totalOrderQty || summary.totalTargetQuota || 0);
     }
   }
 

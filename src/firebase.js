@@ -160,11 +160,17 @@ export const firebaseRealtime = {
   // Singular Active Workspace Pointer in Firebase (survives refreshes & syncs globally across all devices)
   async setActiveWorkspacePointer(workspace) {
     if (!workspace || !workspace.id) return null;
+    // Strict Permanent Hydration Lock: Never allow silent reversion to ws_baseline_2026
+    if (workspace.id === 'ws_baseline_2026' && !workspace.forceAdminSeedReset) {
+      console.warn('Blocked setActiveWorkspacePointer from setting obsolete ws_baseline_2026');
+      return null;
+    }
     try {
+      const isVsLive = workspace.id === 'ws_1793848480892_9ts9r';
       const payload = {
         id: workspace.id,
-        buyerName: workspace.buyerName || 'Active Order',
-        name: workspace.name || `Order - ${workspace.buyerName || workspace.id}`,
+        buyerName: isVsLive ? 'VS' : (workspace.buyerName || 'Active Order'),
+        name: isVsLive ? 'VS Live Production' : (workspace.name || `Order - ${workspace.buyerName || workspace.id}`),
         notes: workspace.notes || '',
         status: 'Active',
         updatedAt: new Date().toISOString(),
@@ -197,7 +203,21 @@ export const firebaseRealtime = {
         headers: NO_CACHE_HEADERS,
       });
       if (!res.ok) return null;
-      return await res.json();
+      const ws = await res.json();
+      if (!ws || !ws.id || ws.id === 'ws_baseline_2026') {
+        // Fallback strictly to live production workspace ws_1793848480892_9ts9r
+        return {
+          id: 'ws_1793848480892_9ts9r',
+          buyerName: 'VS',
+          name: 'VS Live Production',
+          status: 'Active',
+        };
+      }
+      if (ws.id === 'ws_1793848480892_9ts9r') {
+        ws.buyerName = 'VS';
+        ws.name = 'VS Live Production';
+      }
+      return ws;
     } catch (err) {
       console.warn('Realtime cloud activeWorkspace pointer pull note:', err?.message);
       return null;

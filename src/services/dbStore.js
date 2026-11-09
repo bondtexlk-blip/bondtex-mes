@@ -18,14 +18,15 @@ const STORAGE_KEY = 'bondtex_loop_real_v9';
 const VAULT_KEY = 'bondtex_permanent_vault_backup';
 const WORKSPACES_STORAGE_KEY = 'bondtex_workspaces_archive_v1';
 const ACTIVE_WORKSPACE_KEY = 'bondtex_active_workspace_v1';
+const ACTIVE_WORKSPACE_ID_KEY = 'bondtex_active_workspace_id_v1';
 const OLD_STORAGE_KEYS = ['bondtex_loop_real_v9', 'bondtex_loop_real_v8', 'bondtex_loop_real_v7'];
 
 export const DEFAULT_WORKSPACE = {
-  id: 'ws_baseline_2026',
-  buyerName: 'Bondtex Primary (MAS / Brandix)',
-  name: 'Factory Baseline Order (22-Oct Ground Truth)',
-  notes: 'Master factory ground truth dataset initialized with baseline orders and tracking history.',
-  createdAt: '2026-10-22T08:00:00.000Z',
+  id: 'ws_1793848480892_9ts9r',
+  buyerName: 'VS',
+  name: 'VS Live Production',
+  notes: 'Live production floor tracking workspace',
+  createdAt: '2026-11-05T03:14:40.891Z',
   status: 'Active',
 };
 
@@ -127,33 +128,30 @@ class ClientDatabaseStore {
       }
 
       if (parsed && Array.isArray(parsed.orders)) {
-        const parsedWsId = parsed.activeWorkspace?.id || parsed.activeWorkspaceId;
-        const localTotOrder = parsed.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0);
-        const isCorruptBaseline = parsedWsId && parsedWsId !== 'ws_baseline_2026' && localTotOrder >= 250000;
+        this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
+        this.orders = parsed.orders;
+        this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
+          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
+        this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
+        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
+        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+        this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
+        this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
+        this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
+        this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
+        this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
+        this.lastSaved = parsed.lastSaved || null;
 
-        if (!isCorruptBaseline) {
-          this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
-          this.orders = parsed.orders;
-          this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
-            .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
-          this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
-          this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
-          this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
-          this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
-          this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
-          this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
-          this.materialRequests = Array.isArray(parsed.materialRequests) ? parsed.materialRequests : [];
-          this.inventoryLogs = Array.isArray(parsed.inventoryLogs) ? parsed.inventoryLogs : [];
-          this.lastSaved = parsed.lastSaved || null;
-        }
-
-        if (parsed.activeWorkspace && parsed.activeWorkspace.id) {
+        if (parsed.activeWorkspace && parsed.activeWorkspace.id && parsed.activeWorkspace.id !== 'ws_baseline_2026') {
           this.activeWorkspace = parsed.activeWorkspace;
         } else if (typeof window !== 'undefined') {
           const rawActive = localStorage.getItem(ACTIVE_WORKSPACE_KEY);
           if (rawActive) {
             try {
-              this.activeWorkspace = JSON.parse(rawActive);
+              const act = JSON.parse(rawActive);
+              if (act && act.id && act.id !== 'ws_baseline_2026') {
+                this.activeWorkspace = act;
+              }
             } catch {}
           }
         }
@@ -161,6 +159,25 @@ class ClientDatabaseStore {
         if (Array.isArray(parsed.workspaces) && parsed.workspaces.length > 0) {
           this.workspaces = parsed.workspaces;
         }
+      }
+
+      if (typeof window !== 'undefined') {
+        const storedActiveId = localStorage.getItem(ACTIVE_WORKSPACE_ID_KEY);
+        if (storedActiveId && storedActiveId !== 'ws_baseline_2026') {
+          if (!this.activeWorkspace || this.activeWorkspace.id !== storedActiveId) {
+            const matchedWs = (this.workspaces || []).find((w) => w.id === storedActiveId);
+            if (matchedWs) {
+              this.activeWorkspace = matchedWs;
+            } else {
+              this.activeWorkspace = { ...this.activeWorkspace, id: storedActiveId };
+            }
+          }
+        }
+      }
+
+      if (this.activeWorkspace && this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+        this.activeWorkspace.buyerName = 'VS';
+        this.activeWorkspace.name = 'VS Live Production';
       }
     } catch (err) {
       console.warn('Local cache sync warning:', err);
@@ -251,15 +268,26 @@ class ClientDatabaseStore {
     // 1. GLOBAL WORKSPACE SWITCH DETECTION:
     // If the cloud state has an activeWorkspaceId different from local, an admin or user
     // switched or created a workspace on another device (Phone <-> Web). Follow the switch!
+    // PERMANENT LOCK: Never allow silent regression to obsolete ws_baseline_2026
+    if (cloudWsId === 'ws_baseline_2026' && localWsId && localWsId !== 'ws_baseline_2026') {
+      console.warn(`[Sync Guard] Blocked baseline workspace switch to ws_baseline_2026 while active is ${localWsId}.`);
+      return;
+    }
+
     const isDifferentWorkspace = Boolean(cloudWsId && localWsId && cloudWsId !== localWsId);
 
     if (isDifferentWorkspace) {
       console.log(`[Cloud Sync] Global Workspace switch detected: ${localWsId} -> ${cloudWsId} (${cloudState.activeWorkspace?.buyerName || ''})`);
       this.activeWorkspace = cloudState.activeWorkspace || {
         id: cloudWsId,
-        buyerName: cloudState.buyerName || 'Active Order',
+        buyerName: cloudWsId === 'ws_1793848480892_9ts9r' ? 'VS' : (cloudState.buyerName || 'Active Order'),
+        name: cloudWsId === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (cloudState.name || 'Live Order'),
         status: 'Active',
       };
+      if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+        this.activeWorkspace.buyerName = 'VS';
+        this.activeWorkspace.name = 'VS Live Production';
+      }
       if (Array.isArray(cloudState.workspaces)) {
         this.workspaces = cloudState.workspaces;
       }
@@ -302,6 +330,7 @@ class ClientDatabaseStore {
           localStorage.setItem(VAULT_KEY, payloadStr);
           localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces));
           localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+          localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
         } catch {}
       }
 
@@ -318,10 +347,10 @@ class ClientDatabaseStore {
       ? cloudState.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
       : 0;
 
-    // Strict Anti-Baseline-Resurrection Guard:
-    // If the active workspace is NOT ws_baseline_2026, NEVER allow incoming baseline orders (271,489 pcs) to overwrite it!
-    if (localWsId && localWsId !== DEFAULT_WORKSPACE.id && (cloudTotOrder >= 250000 || (cloudTotProd >= 250000 && (cloudState.lastUpdated || '').startsWith('2026-10')))) {
-      console.warn(`[Sync Guard] Blocked baseline 271,489 order regression (${cloudTotOrder} pcs) from overwriting active workspace ${localWsId}.`);
+    // Strict Permanent Hydration Lock:
+    // Never allow incoming state for ws_baseline_2026 to overwrite active live workspace!
+    if ((cloudWsId === 'ws_baseline_2026' || cloudState.activeWorkspace?.id === 'ws_baseline_2026') && localWsId && localWsId !== 'ws_baseline_2026') {
+      console.warn(`[Sync Guard] Blocked baseline workspace resurrection (ws_baseline_2026) while active workspace is ${localWsId}.`);
       return;
     }
 
@@ -403,6 +432,11 @@ class ClientDatabaseStore {
     this.ensureOrderCalculations();
     this.lastSaved = cloudState.lastUpdated || new Date().toISOString();
 
+    if (this.activeWorkspace && this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      this.activeWorkspace.buyerName = 'VS';
+      this.activeWorkspace.name = 'VS Live Production';
+    }
+
     if (typeof window !== 'undefined') {
       try {
         const payloadStr = JSON.stringify({
@@ -424,8 +458,17 @@ class ClientDatabaseStore {
         });
         localStorage.setItem(STORAGE_KEY, payloadStr);
         localStorage.setItem(VAULT_KEY, payloadStr);
+        if (this.activeWorkspace) {
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+          if (this.activeWorkspace.id) {
+            localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+          }
+        }
         localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
         localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+        if (this.activeWorkspace?.id) {
+          localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+        }
       } catch {
         // ignore storage quota errors
       }
@@ -479,25 +522,30 @@ class ClientDatabaseStore {
           }
 
           // 3. Strict Active Workspace Hydration from Cloud Active Pointer
-          const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+          let rawTargetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+          // Permanent Hydration Lock: Never hydrate ws_baseline_2026
+          if (!rawTargetActiveId || rawTargetActiveId === 'ws_baseline_2026') {
+            rawTargetActiveId = 'ws_1793848480892_9ts9r';
+          }
+          const targetActiveId = rawTargetActiveId;
 
           if (targetActiveId) {
-            const cloudTotOrder = Array.isArray(cloudState?.orders)
-              ? cloudState.orders.reduce((sum, o) => sum + (Number(o.orderQty) || 0), 0)
-              : 0;
-
             const isCloudMatching = Boolean(
               cloudState &&
-              (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId) &&
-              !(targetActiveId !== 'ws_baseline_2026' && cloudTotOrder >= 250000)
+              (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)
             );
 
             if (isCloudMatching) {
               this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
                 id: targetActiveId,
-                buyerName: cloudState.buyerName || 'Active Order',
+                buyerName: targetActiveId === 'ws_1793848480892_9ts9r' ? 'VS' : (cloudState.buyerName || 'Active Order'),
+                name: targetActiveId === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (cloudState.name || 'Live Order'),
                 status: 'Active',
               };
+              if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+                this.activeWorkspace.buyerName = 'VS';
+                this.activeWorkspace.name = 'VS Live Production';
+              }
               this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
               this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
               this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
@@ -514,8 +562,8 @@ class ClientDatabaseStore {
               if (targetWs) {
                 this.activeWorkspace = {
                   id: targetWs.id,
-                  buyerName: targetWs.buyerName || 'Active Order',
-                  name: targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`,
+                  buyerName: targetWs.id === 'ws_1793848480892_9ts9r' ? 'VS' : (targetWs.buyerName || 'Active Order'),
+                  name: targetWs.id === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`),
                   notes: targetWs.notes || '',
                   status: 'Active',
                   createdAt: targetWs.createdAt || new Date().toISOString(),
@@ -544,6 +592,13 @@ class ClientDatabaseStore {
               this.workspaces[actIdx] = { ...this.workspaces[actIdx], ...actObj };
             } else {
               this.workspaces.unshift(actObj);
+            }
+
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+                localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+              } catch {}
             }
           }
 
@@ -602,7 +657,11 @@ class ClientDatabaseStore {
         }
       }
 
-      const targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+      let targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
+      // Permanent Hydration Lock: Never switch to ws_baseline_2026
+      if (!targetActiveId || targetActiveId === 'ws_baseline_2026') {
+        targetActiveId = 'ws_1793848480892_9ts9r';
+      }
       if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
         if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
           this.applyCloudState(cloudState);
@@ -658,8 +717,12 @@ class ClientDatabaseStore {
       const nowIso = new Date().toISOString();
       this.lastSaved = nowIso;
 
-      if (!this.activeWorkspace || !this.activeWorkspace.id) {
+      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
         this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+      }
+      if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+        this.activeWorkspace.buyerName = 'VS';
+        this.activeWorkspace.name = 'VS Live Production';
       }
 
       const payload = {
@@ -689,6 +752,9 @@ class ClientDatabaseStore {
           localStorage.setItem(VAULT_KEY, payloadStr);
           localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
           localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+          if (this.activeWorkspace?.id) {
+            localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+          }
         } catch {
           // ignore quota
         }
@@ -792,6 +858,9 @@ class ClientDatabaseStore {
           localStorage.setItem(VAULT_KEY, payloadStr);
           localStorage.setItem(WORKSPACES_STORAGE_KEY, JSON.stringify(this.workspaces || []));
           localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+          if (this.activeWorkspace?.id) {
+            localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+          }
         } catch (storageErr) {
           console.warn('LocalStorage save warning:', storageErr);
         }
@@ -840,8 +909,12 @@ class ClientDatabaseStore {
   // ==========================================================
 
   getActiveWorkspace() {
-    if (!this.activeWorkspace || !this.activeWorkspace.id) {
+    if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
       this.activeWorkspace = { ...DEFAULT_WORKSPACE };
+    }
+    if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      this.activeWorkspace.buyerName = 'VS';
+      this.activeWorkspace.name = 'VS Live Production';
     }
     return {
       ...this.activeWorkspace,
@@ -2031,6 +2104,12 @@ class ClientDatabaseStore {
         });
         localStorage.setItem(STORAGE_KEY, payloadStr);
         localStorage.setItem(VAULT_KEY, payloadStr);
+        if (this.activeWorkspace) {
+          localStorage.setItem(ACTIVE_WORKSPACE_KEY, JSON.stringify(this.activeWorkspace));
+          if (this.activeWorkspace.id) {
+            localStorage.setItem(ACTIVE_WORKSPACE_ID_KEY, this.activeWorkspace.id);
+          }
+        }
       } catch {}
     }
 
