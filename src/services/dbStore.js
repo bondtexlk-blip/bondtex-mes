@@ -22,7 +22,7 @@ const ACTIVE_WORKSPACE_ID_KEY = 'bondtex_active_workspace_id_v1';
 const OLD_STORAGE_KEYS = ['bondtex_loop_real_v9', 'bondtex_loop_real_v8', 'bondtex_loop_real_v7'];
 
 export const DEFAULT_WORKSPACE = {
-  id: 'ws_1793848480892_9ts9r',
+  id: 'ws_live_production_vs',
   buyerName: 'VS',
   name: 'VS Live Production',
   notes: 'Live production floor tracking workspace',
@@ -175,7 +175,8 @@ class ClientDatabaseStore {
         }
       }
 
-      if (this.activeWorkspace && this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      if (this.activeWorkspace && (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r')) {
+        this.activeWorkspace.id = 'ws_live_production_vs';
         this.activeWorkspace.buyerName = 'VS';
         this.activeWorkspace.name = 'VS Live Production';
       }
@@ -278,13 +279,15 @@ class ClientDatabaseStore {
 
     if (isDifferentWorkspace) {
       console.log(`[Cloud Sync] Global Workspace switch detected: ${localWsId} -> ${cloudWsId} (${cloudState.activeWorkspace?.buyerName || ''})`);
+      const isLiveVs = cloudWsId === 'ws_live_production_vs' || cloudWsId === 'ws_1793848480892_9ts9r';
       this.activeWorkspace = cloudState.activeWorkspace || {
-        id: cloudWsId,
-        buyerName: cloudWsId === 'ws_1793848480892_9ts9r' ? 'VS' : (cloudState.buyerName || 'Active Order'),
-        name: cloudWsId === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (cloudState.name || 'Live Order'),
+        id: isLiveVs ? 'ws_live_production_vs' : cloudWsId,
+        buyerName: isLiveVs ? 'VS' : (cloudState.buyerName || 'Active Order'),
+        name: isLiveVs ? 'VS Live Production' : (cloudState.name || 'Live Order'),
         status: 'Active',
       };
-      if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      if (isLiveVs) {
+        this.activeWorkspace.id = 'ws_live_production_vs';
         this.activeWorkspace.buyerName = 'VS';
         this.activeWorkspace.name = 'VS Live Production';
       }
@@ -432,7 +435,8 @@ class ClientDatabaseStore {
     this.ensureOrderCalculations();
     this.lastSaved = cloudState.lastUpdated || new Date().toISOString();
 
-    if (this.activeWorkspace && this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+    if (this.activeWorkspace && (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r')) {
+      this.activeWorkspace.id = 'ws_live_production_vs';
       this.activeWorkspace.buyerName = 'VS';
       this.activeWorkspace.name = 'VS Live Production';
     }
@@ -524,8 +528,8 @@ class ClientDatabaseStore {
           // 3. Strict Active Workspace Hydration from Cloud Active Pointer
           let rawTargetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
           // Permanent Hydration Lock: Never hydrate ws_baseline_2026
-          if (!rawTargetActiveId || rawTargetActiveId === 'ws_baseline_2026') {
-            rawTargetActiveId = 'ws_1793848480892_9ts9r';
+          if (!rawTargetActiveId || rawTargetActiveId === 'ws_baseline_2026' || rawTargetActiveId === 'ws_1793848480892_9ts9r') {
+            rawTargetActiveId = 'ws_live_production_vs';
           }
           const targetActiveId = rawTargetActiveId;
 
@@ -535,14 +539,16 @@ class ClientDatabaseStore {
               (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)
             );
 
+            const isVsLiveTarget = targetActiveId === 'ws_live_production_vs' || targetActiveId === 'ws_1793848480892_9ts9r';
             if (isCloudMatching) {
               this.activeWorkspace = cloudState.activeWorkspace || cloudActivePointer || {
-                id: targetActiveId,
-                buyerName: targetActiveId === 'ws_1793848480892_9ts9r' ? 'VS' : (cloudState.buyerName || 'Active Order'),
-                name: targetActiveId === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (cloudState.name || 'Live Order'),
+                id: isVsLiveTarget ? 'ws_live_production_vs' : targetActiveId,
+                buyerName: isVsLiveTarget ? 'VS' : (cloudState.buyerName || 'Active Order'),
+                name: isVsLiveTarget ? 'VS Live Production' : (cloudState.name || 'Live Order'),
                 status: 'Active',
               };
-              if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+              if (isVsLiveTarget) {
+                this.activeWorkspace.id = 'ws_live_production_vs';
                 this.activeWorkspace.buyerName = 'VS';
                 this.activeWorkspace.name = 'VS Live Production';
               }
@@ -561,9 +567,9 @@ class ClientDatabaseStore {
               }
               if (targetWs) {
                 this.activeWorkspace = {
-                  id: targetWs.id,
-                  buyerName: targetWs.id === 'ws_1793848480892_9ts9r' ? 'VS' : (targetWs.buyerName || 'Active Order'),
-                  name: targetWs.id === 'ws_1793848480892_9ts9r' ? 'VS Live Production' : (targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`),
+                  id: isVsLiveTarget ? 'ws_live_production_vs' : targetWs.id,
+                  buyerName: isVsLiveTarget ? 'VS' : (targetWs.buyerName || 'Active Order'),
+                  name: isVsLiveTarget ? 'VS Live Production' : (targetWs.name || `Order - ${targetWs.buyerName || targetWs.id}`),
                   notes: targetWs.notes || '',
                   status: 'Active',
                   createdAt: targetWs.createdAt || new Date().toISOString(),
@@ -659,8 +665,8 @@ class ClientDatabaseStore {
 
       let targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
       // Permanent Hydration Lock: Never switch to ws_baseline_2026
-      if (!targetActiveId || targetActiveId === 'ws_baseline_2026') {
-        targetActiveId = 'ws_1793848480892_9ts9r';
+      if (!targetActiveId || targetActiveId === 'ws_baseline_2026' || targetActiveId === 'ws_1793848480892_9ts9r') {
+        targetActiveId = 'ws_live_production_vs';
       }
       if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
         if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
@@ -687,26 +693,59 @@ class ClientDatabaseStore {
   }
 
   ensureOrderCalculations() {
+    const isLiveVs = !this.activeWorkspace || this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r';
+    const loopLogs = (this.productionLogs || []).filter(isLoopInsertMachine);
+
     this.orders.forEach((o) => {
       o.orderQty = Number(o.orderQty) || 0;
       o.deliveryQty = Number(o.deliveryQty) || 0;
-      o.productionQty = Number(o.productionQty) || o.deliveryQty;
-      if (o.floorProductionQty === undefined || o.floorProductionQty === null) {
-        o.floorProductionQty = o.productionQty;
+
+      if (isLiveVs) {
+        const oSize = String(o.size || '').trim();
+        const oPo = String(o.poNumber || '').trim();
+        const oColour = (o.colour || '').toLowerCase().trim();
+
+        const matching = loopLogs.filter((l) => {
+          const lSize = String(l.size || '').trim();
+          const lPo = String(l.poNumber || '').trim();
+          const lColour = (l.colour || '').toLowerCase().trim();
+
+          if (lSize !== oSize) return false;
+          if (lPo && oPo && lPo === oPo) return true;
+          if (lColour && oColour && (oColour.includes(lColour) || lColour.includes(oColour))) return true;
+          return false;
+        });
+
+        const floorLoopQty = matching.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+        o.floorProductionQty = floorLoopQty;
+        o.productionQty = floorLoopQty;
+        o.balanceQty = Math.max(0, o.orderQty - o.productionQty);
+        o.deliveryBalanceQty = Math.max(0, o.orderQty - o.deliveryQty);
+        if (o.orderQty > 0 && o.balanceQty <= 0) {
+          o.status = 'Completed';
+        } else if (o.productionQty > 0) {
+          o.status = 'Ahead';
+        } else {
+          o.status = 'On Track';
+        }
       } else {
-        o.floorProductionQty = Number(o.floorProductionQty) || 0;
-      }
-      // Balance allows negative values when actual/delivery exceeds order plan
-      o.balanceQty = o.orderQty - o.deliveryQty;
-      o.deliveryBalanceQty = o.balanceQty;
-      if (o.orderQty > 0 && o.balanceQty <= 0) {
-        o.status = 'Completed';
-      } else if (o.deliveryQty >= o.orderQty * 0.9 && o.orderQty > 0) {
-        o.status = 'Ahead';
-      } else if (o.deliveryQty === 0) {
-        o.status = 'Scheduled';
-      } else {
-        o.status = 'Behind Plan';
+        o.productionQty = Number(o.productionQty) || o.deliveryQty;
+        if (o.floorProductionQty === undefined || o.floorProductionQty === null) {
+          o.floorProductionQty = o.productionQty;
+        } else {
+          o.floorProductionQty = Number(o.floorProductionQty) || 0;
+        }
+        o.balanceQty = o.orderQty - o.deliveryQty;
+        o.deliveryBalanceQty = o.balanceQty;
+        if (o.orderQty > 0 && o.balanceQty <= 0) {
+          o.status = 'Completed';
+        } else if (o.deliveryQty >= o.orderQty * 0.9 && o.orderQty > 0) {
+          o.status = 'Ahead';
+        } else if (o.deliveryQty === 0) {
+          o.status = 'Scheduled';
+        } else {
+          o.status = 'Behind Plan';
+        }
       }
     });
   }
@@ -717,10 +756,11 @@ class ClientDatabaseStore {
       const nowIso = new Date().toISOString();
       this.lastSaved = nowIso;
 
-      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
+      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
         this.activeWorkspace = { ...DEFAULT_WORKSPACE };
       }
-      if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      if (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+        this.activeWorkspace.id = 'ws_live_production_vs';
         this.activeWorkspace.buyerName = 'VS';
         this.activeWorkspace.name = 'VS Live Production';
       }
@@ -909,10 +949,11 @@ class ClientDatabaseStore {
   // ==========================================================
 
   getActiveWorkspace() {
-    if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
+    if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
       this.activeWorkspace = { ...DEFAULT_WORKSPACE };
     }
-    if (this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+    if (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      this.activeWorkspace.id = 'ws_live_production_vs';
       this.activeWorkspace.buyerName = 'VS';
       this.activeWorkspace.name = 'VS Live Production';
     }
@@ -3107,10 +3148,24 @@ class ClientDatabaseStore {
       });
     });
 
+    // Compute recent active dates with production logs for quick navigation
+    const activeDateCounts = {};
+    (this.productionLogs || []).forEach((l) => {
+      const d = (l.date || l.timestamp || '').slice(0, 10);
+      if (d) activeDateCounts[d] = (activeDateCounts[d] || 0) + 1;
+    });
+    const activeDates = Object.entries(activeDateCounts)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .slice(0, 7)
+      .map(([d, count]) => ({ date: d, count }));
+    const latestActiveDate = activeDates[0]?.date || targetDate;
+
     return {
       date: targetDate,
       shift,
       workingHours: 9,
+      activeDates,
+      latestActiveDate,
       slots: activeSlots,
       orders: (this.orders || []).map((o) => ({
         id: o.id,

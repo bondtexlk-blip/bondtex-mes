@@ -59,7 +59,28 @@ export default function HourlyProductionDashboard({
     }
   });
   const todayIso = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayIso);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    try {
+      return sessionStorage.getItem('bondtex_hourly_date') || todayIso;
+    } catch {
+      return todayIso;
+    }
+  });
+  const [hasUserManuallySetDate, setHasUserManuallySetDate] = useState(() => {
+    try {
+      return Boolean(sessionStorage.getItem('bondtex_hourly_date'));
+    } catch {
+      return false;
+    }
+  });
+
+  const handleSelectDate = (dateVal) => {
+    setSelectedDate(dateVal);
+    setHasUserManuallySetDate(true);
+    try {
+      sessionStorage.setItem('bondtex_hourly_date', dateVal);
+    } catch {}
+  };
   const [selectedMachineFilter, setSelectedMachineFilter] = useState('All');
   const [selectedStyleColorFilter, setSelectedStyleColorFilter] = useState('All');
   const [selectedSizeFilter, setSelectedSizeFilter] = useState('All');
@@ -283,6 +304,17 @@ export default function HourlyProductionDashboard({
       if (showSpinner || !data) setLoading(true);
       const res = await api.getHourlyProduction({ shift, date: selectedDate });
       if (res.success && res.data) {
+        // Smart auto-date selection: If the current selectedDate has 0 logs, and user hasn't manually clicked,
+        // automatically switch to the most recent date that has live floor logs (e.g. 2026-11-07)!
+        const returnedActiveDates = res.data.activeDates || [];
+        const currentLogsCount = (res.data.allLogs || []).length;
+        if (!hasUserManuallySetDate && currentLogsCount === 0 && returnedActiveDates.length > 0) {
+          const bestDate = returnedActiveDates[0].date;
+          if (bestDate && bestDate !== selectedDate) {
+            setSelectedDate(bestDate);
+            return;
+          }
+        }
         setData(res.data);
         setLastRefreshed(new Date());
       }
@@ -408,6 +440,20 @@ export default function HourlyProductionDashboard({
     if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
     return a.localeCompare(b);
   });
+
+  const activeDatesList = data?.activeDates || [];
+  const activeDatePills = activeDatesList.map((d) => {
+    let label = d.date;
+    try {
+      const parts = d.date.split('-');
+      if (parts.length === 3) {
+        const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        label = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+    } catch {}
+    return { ...d, label };
+  });
+  const todayLogsCount = activeDatesList.find((d) => d.date === todayIso)?.count || 0;
 
   const matchesLogFilter = (log, machineContext = null) => {
     if (!log) return false;
@@ -732,14 +778,14 @@ export default function HourlyProductionDashboard({
               <input
                 type="date"
                 value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                onChange={(e) => handleSelectDate(e.target.value)}
                 className="bg-transparent text-white font-mono text-xs focus:outline-none cursor-pointer"
                 title="Select Production Date to view hourly output"
               />
               {selectedDate !== todayIso && (
                 <button
                   type="button"
-                  onClick={() => setSelectedDate(todayIso)}
+                  onClick={() => handleSelectDate(todayIso)}
                   className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 text-[11px] font-bold border border-cyan-500/30 transition"
                   title="Jump back to Today"
                 >
@@ -798,6 +844,68 @@ export default function HourlyProductionDashboard({
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
+          </div>
+        </div>
+
+        {/* Quick-Switch Date Pills for Actual Live Production Days */}
+        <div className="relative z-10 mt-5 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 mr-1">
+              <Calendar className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Production Dates:</span>
+            </span>
+            {activeDatePills.map((p) => {
+              const isSelected = selectedDate === p.date;
+              return (
+                <button
+                  key={p.date}
+                  type="button"
+                  onClick={() => handleSelectDate(p.date)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm ${
+                    isSelected
+                      ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/20 font-black ring-2 ring-cyan-400 scale-[1.02]'
+                      : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800 hover:border-slate-700'
+                  }`}
+                  title={`View hourly records for ${p.date}`}
+                >
+                  <span>{p.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      isSelected
+                        ? 'bg-slate-950 text-cyan-300'
+                        : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                    }`}
+                  >
+                    {p.count} logs
+                  </span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => handleSelectDate(todayIso)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-sm ${
+                selectedDate === todayIso
+                  ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/20 font-black ring-2 ring-cyan-400 scale-[1.02]'
+                  : 'bg-slate-950/80 text-slate-400 hover:bg-slate-800 border border-slate-800 hover:border-slate-700'
+              }`}
+              title="Jump to Today's floor entries"
+            >
+              <span>Today ({todayIso})</span>
+              {todayLogsCount > 0 && (
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                    selectedDate === todayIso ? 'bg-slate-950 text-cyan-300' : 'bg-cyan-500/10 text-cyan-400'
+                  }`}
+                >
+                  {todayLogsCount} logs
+                </span>
+              )}
+            </button>
+          </div>
+          <div className="text-xs text-slate-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Order Workspace: <strong className="text-white font-bold">VS Live Production</strong></span>
           </div>
         </div>
 

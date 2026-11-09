@@ -166,9 +166,10 @@ export const firebaseRealtime = {
       return null;
     }
     try {
-      const isVsLive = workspace.id === 'ws_1793848480892_9ts9r';
+      const isVsLive = workspace.id === 'ws_live_production_vs' || workspace.id === 'ws_1793848480892_9ts9r';
+      const targetId = isVsLive ? 'ws_live_production_vs' : workspace.id;
       const payload = {
-        id: workspace.id,
+        id: targetId,
         buyerName: isVsLive ? 'VS' : (workspace.buyerName || 'Active Order'),
         name: isVsLive ? 'VS Live Production' : (workspace.name || `Order - ${workspace.buyerName || workspace.id}`),
         notes: workspace.notes || '',
@@ -186,7 +187,7 @@ export const firebaseRealtime = {
           method: 'PUT',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          body: JSON.stringify(workspace.id),
+          body: JSON.stringify(targetId),
         }),
       ]);
       return payload;
@@ -205,15 +206,16 @@ export const firebaseRealtime = {
       if (!res.ok) return null;
       const ws = await res.json();
       if (!ws || !ws.id || ws.id === 'ws_baseline_2026') {
-        // Fallback strictly to live production workspace ws_1793848480892_9ts9r
+        // Fallback strictly to live production workspace ws_live_production_vs
         return {
-          id: 'ws_1793848480892_9ts9r',
+          id: 'ws_live_production_vs',
           buyerName: 'VS',
           name: 'VS Live Production',
           status: 'Active',
         };
       }
-      if (ws.id === 'ws_1793848480892_9ts9r') {
+      if (ws.id === 'ws_live_production_vs' || ws.id === 'ws_1793848480892_9ts9r') {
+        ws.id = 'ws_live_production_vs';
         ws.buyerName = 'VS';
         ws.name = 'VS Live Production';
       }
