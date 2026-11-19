@@ -61,18 +61,15 @@ export default function HourlyProductionDashboard({
   const todayIso = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(() => {
     try {
-      return sessionStorage.getItem('bondtex_hourly_date') || todayIso;
+      const stored = sessionStorage.getItem('bondtex_hourly_date');
+      if (stored && stored === todayIso) return stored;
+      try { sessionStorage.removeItem('bondtex_hourly_date'); } catch {}
+      return todayIso;
     } catch {
       return todayIso;
     }
   });
-  const [hasUserManuallySetDate, setHasUserManuallySetDate] = useState(() => {
-    try {
-      return Boolean(sessionStorage.getItem('bondtex_hourly_date'));
-    } catch {
-      return false;
-    }
-  });
+  const [hasUserManuallySetDate, setHasUserManuallySetDate] = useState(false);
 
   const handleSelectDate = (dateVal) => {
     setSelectedDate(dateVal);
@@ -304,17 +301,6 @@ export default function HourlyProductionDashboard({
       if (showSpinner || !data) setLoading(true);
       const res = await api.getHourlyProduction({ shift, date: selectedDate });
       if (res.success && res.data) {
-        // Smart auto-date selection: If the current selectedDate has 0 logs, and user hasn't manually clicked,
-        // automatically switch to the most recent date that has live floor logs (e.g. 2026-11-07)!
-        const returnedActiveDates = res.data.activeDates || [];
-        const currentLogsCount = (res.data.allLogs || []).length;
-        if (!hasUserManuallySetDate && currentLogsCount === 0 && returnedActiveDates.length > 0) {
-          const bestDate = returnedActiveDates[0].date;
-          if (bestDate && bestDate !== selectedDate) {
-            setSelectedDate(bestDate);
-            return;
-          }
-        }
         setData(res.data);
         setLastRefreshed(new Date());
       }

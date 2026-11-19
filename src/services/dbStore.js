@@ -22,11 +22,11 @@ const ACTIVE_WORKSPACE_ID_KEY = 'bondtex_active_workspace_id_v1';
 const OLD_STORAGE_KEYS = ['bondtex_loop_real_v9', 'bondtex_loop_real_v8', 'bondtex_loop_real_v7'];
 
 export const DEFAULT_WORKSPACE = {
-  id: 'ws_live_production_vs',
+  id: 'ws_1795058516781_9m143',
   buyerName: 'VS',
-  name: 'VS Live Production',
-  notes: 'Live production floor tracking workspace',
-  createdAt: '2026-11-05T03:14:40.891Z',
+  name: 'Order - VS 179655',
+  notes: 'VS 179,665 pcs live production workspace',
+  createdAt: '2026-11-19T03:22:00.000Z',
   status: 'Active',
 };
 
@@ -59,6 +59,31 @@ export function getDefaultMachineUnit(name = '', code = '') {
 export function getMachineUnit(m) {
   if (m?.unit && typeof m.unit === 'string' && m.unit.trim()) return m.unit.trim();
   return getDefaultMachineUnit(m?.name || m?.machineName, m?.code || m?.id || m?.machineId);
+}
+
+export function makeLogFingerprint(l, fallbackDate = '') {
+  if (!l) return '';
+  const d = (l.date || l.timestamp || fallbackDate || '').slice(0, 10);
+  const slot = (l.timeSlot || '').replace(/\s+/g, '');
+  const sz = String(l.size || '').trim();
+  const op = (l.operator || l.operatorName || '').trim().toLowerCase();
+  const q = Number(l.rawQty || l.qty) || 0;
+  return `${d}__${slot}__${sz}__${op}__${q}`;
+}
+
+export function isLogDeleted(l, deletedIdsSet) {
+  if (!l || !deletedIdsSet || deletedIdsSet.size === 0) return false;
+  if (l.id && deletedIdsSet.has(l.id)) return true;
+  const fp = makeLogFingerprint(l);
+  if (fp && deletedIdsSet.has(fp)) return true;
+  const d = (l.date || l.timestamp || '').slice(0, 10);
+  const m = (l.machineId || l.machineName || l.machineCode || '').toLowerCase().trim();
+  const slot = (l.timeSlot || '').trim();
+  const sz = String(l.size || '').trim();
+  const q = Number(l.qty || l.rawQty) || 0;
+  if (deletedIdsSet.has(`${d}_${m}_${slot}_${sz}_${q}`)) return true;
+  if (deletedIdsSet.has(`${d}_${m}_${slot.replace(/\s+/g, '')}_${sz}_${q}`)) return true;
+  return false;
 }
 
 class ClientDatabaseStore {
@@ -175,10 +200,8 @@ class ClientDatabaseStore {
         }
       }
 
-      if (this.activeWorkspace && (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r')) {
-        this.activeWorkspace.id = 'ws_live_production_vs';
-        this.activeWorkspace.buyerName = 'VS';
-        this.activeWorkspace.name = 'VS Live Production';
+      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
+        this.activeWorkspace = { ...DEFAULT_WORKSPACE };
       }
     } catch (err) {
       console.warn('Local cache sync warning:', err);
@@ -279,23 +302,19 @@ class ClientDatabaseStore {
 
     if (isDifferentWorkspace) {
       console.log(`[Cloud Sync] Global Workspace switch detected: ${localWsId} -> ${cloudWsId} (${cloudState.activeWorkspace?.buyerName || ''})`);
-      const isLiveVs = cloudWsId === 'ws_live_production_vs' || cloudWsId === 'ws_1793848480892_9ts9r';
       this.activeWorkspace = cloudState.activeWorkspace || {
-        id: isLiveVs ? 'ws_live_production_vs' : cloudWsId,
-        buyerName: isLiveVs ? 'VS' : (cloudState.buyerName || 'Active Order'),
-        name: isLiveVs ? 'VS Live Production' : (cloudState.name || 'Live Order'),
+        id: cloudWsId,
+        buyerName: cloudState.buyerName || 'Active Order',
+        name: cloudState.name || `Order - ${cloudState.buyerName || cloudWsId}`,
         status: 'Active',
       };
-      if (isLiveVs) {
-        this.activeWorkspace.id = 'ws_live_production_vs';
-        this.activeWorkspace.buyerName = 'VS';
-        this.activeWorkspace.name = 'VS Live Production';
-      }
       if (Array.isArray(cloudState.workspaces)) {
         this.workspaces = cloudState.workspaces;
       }
       this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
-      this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
+      this.productionLogs = Array.isArray(cloudState.productionLogs)
+        ? cloudState.productionLogs.filter((l) => !isLogDeleted(l, this.deletedLogIds))
+        : [];
       this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
       this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
       this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
@@ -369,23 +388,19 @@ class ClientDatabaseStore {
     if (Array.isArray(cloudState.productionLogs)) {
       const mergedMap = new Map();
       cloudState.productionLogs.forEach((l) => {
-        if (!l) return;
-        const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
-        if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
-          mergedMap.set(id, l);
-        }
+        if (!l || isLogDeleted(l, this.deletedLogIds)) return;
+        const id = l.id || makeLogFingerprint(l);
+        mergedMap.set(id, l);
       });
       // Only preserve un-synced optimistic local logs created in the last 30 seconds
       const nowTime = Date.now();
       (this.productionLogs || []).forEach((l) => {
-        if (!l) return;
-        const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
-        if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
-          if (!mergedMap.has(id)) {
-            const createdTime = new Date(l.timestamp || l.createdAt || 0).getTime();
-            if (nowTime - createdTime < 30000) {
-              mergedMap.set(id, l);
-            }
+        if (!l || isLogDeleted(l, this.deletedLogIds)) return;
+        const id = l.id || makeLogFingerprint(l);
+        if (!mergedMap.has(id)) {
+          const createdTime = new Date(l.timestamp || l.createdAt || 0).getTime();
+          if (nowTime - createdTime < 30000) {
+            mergedMap.set(id, l);
           }
         }
       });
@@ -417,9 +432,21 @@ class ClientDatabaseStore {
       this.categories = cloudState.categories;
     }
     if (Array.isArray(cloudState.machines)) {
-      this.machines = cloudState.machines.filter(
-        (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
-      );
+      this.machines = cloudState.machines
+        .filter(
+          (m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress'))
+        )
+        .map((m) => {
+          if (Array.isArray(m.todayLogs)) {
+            const sanitizedLogs = m.todayLogs.filter((l) => !isLogDeleted(l, this.deletedLogIds));
+            return {
+              ...m,
+              todayLogs: sanitizedLogs,
+              todayProduced: sanitizedLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0),
+            };
+          }
+          return m;
+        });
     }
     if (Array.isArray(cloudState.workers)) {
       this.workers = cloudState.workers;
@@ -435,10 +462,8 @@ class ClientDatabaseStore {
     this.ensureOrderCalculations();
     this.lastSaved = cloudState.lastUpdated || new Date().toISOString();
 
-    if (this.activeWorkspace && (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r')) {
-      this.activeWorkspace.id = 'ws_live_production_vs';
-      this.activeWorkspace.buyerName = 'VS';
-      this.activeWorkspace.name = 'VS Live Production';
+    if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
+      this.activeWorkspace = { ...DEFAULT_WORKSPACE };
     }
 
     if (typeof window !== 'undefined') {
@@ -665,8 +690,8 @@ class ClientDatabaseStore {
 
       let targetActiveId = cloudActivePointer?.id || cloudState?.activeWorkspaceId || cloudState?.activeWorkspace?.id;
       // Permanent Hydration Lock: Never switch to ws_baseline_2026
-      if (!targetActiveId || targetActiveId === 'ws_baseline_2026' || targetActiveId === 'ws_1793848480892_9ts9r') {
-        targetActiveId = 'ws_live_production_vs';
+      if (!targetActiveId || targetActiveId === 'ws_baseline_2026') {
+        targetActiveId = this.activeWorkspace?.id || DEFAULT_WORKSPACE.id;
       }
       if (targetActiveId && targetActiveId !== this.activeWorkspace?.id) {
         if (cloudState && (cloudState.activeWorkspaceId === targetActiveId || cloudState.activeWorkspace?.id === targetActiveId)) {
@@ -693,59 +718,44 @@ class ClientDatabaseStore {
   }
 
   ensureOrderCalculations() {
-    const isLiveVs = !this.activeWorkspace || this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r';
-    const loopLogs = (this.productionLogs || []).filter(isLoopInsertMachine);
+    const activeProductionLogs = (this.productionLogs || []).filter((l) => !isLogDeleted(l, this.deletedLogIds));
+    const loopLogs = activeProductionLogs.filter(isLoopInsertMachine);
 
     this.orders.forEach((o) => {
       o.orderQty = Number(o.orderQty) || 0;
       o.deliveryQty = Number(o.deliveryQty) || 0;
 
-      if (isLiveVs) {
-        const oSize = String(o.size || '').trim();
-        const oPo = String(o.poNumber || '').trim();
-        const oColour = (o.colour || '').toLowerCase().trim();
+      const oSize = String(o.size || '').trim();
+      const oPo = String(o.poNumber || '').trim();
+      const oColour = (o.colour || '').toLowerCase().trim();
 
-        const matching = loopLogs.filter((l) => {
-          const lSize = String(l.size || '').trim();
-          const lPo = String(l.poNumber || '').trim();
-          const lColour = (l.colour || '').toLowerCase().trim();
+      const matching = loopLogs.filter((l) => {
+        const lSize = String(l.size || '').trim();
+        const lPo = String(l.poNumber || '').trim();
+        const lColour = (l.colour || '').toLowerCase().trim();
 
-          if (lSize !== oSize) return false;
-          if (lPo && oPo && lPo === oPo) return true;
-          if (lColour && oColour && (oColour.includes(lColour) || lColour.includes(oColour))) return true;
-          return false;
-        });
+        if (lSize !== oSize) return false;
+        if (lPo && oPo && lPo === oPo) return true;
+        if (lColour && oColour && (oColour.includes(lColour) || lColour.includes(oColour))) return true;
+        if ((!lColour || !oColour) && lPo && oPo && lPo === oPo) return true;
+        return false;
+      });
 
-        const floorLoopQty = matching.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
-        o.floorProductionQty = floorLoopQty;
-        o.productionQty = floorLoopQty;
-        o.balanceQty = Math.max(0, o.orderQty - o.productionQty);
-        o.deliveryBalanceQty = Math.max(0, o.orderQty - o.deliveryQty);
-        if (o.orderQty > 0 && o.balanceQty <= 0) {
-          o.status = 'Completed';
-        } else if (o.productionQty > 0) {
-          o.status = 'Ahead';
-        } else {
-          o.status = 'On Track';
-        }
+      const totalLoopProduced = matching.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+      const deliveredQty = Number(o.deliveryQty) || 0;
+
+      // Hourly Loop Insert filling sets floor output; Completed delivery reduces floor output
+      o.floorProductionQty = Math.max(0, totalLoopProduced - deliveredQty);
+      o.productionQty = totalLoopProduced > 0 ? totalLoopProduced : (Number(o.productionQty) || deliveredQty);
+      o.balanceQty = Math.max(0, o.orderQty - deliveredQty);
+      o.deliveryBalanceQty = Math.max(0, o.orderQty - deliveredQty);
+
+      if (o.orderQty > 0 && o.balanceQty <= 0) {
+        o.status = 'Completed';
+      } else if (o.productionQty > 0 || deliveredQty > 0) {
+        o.status = 'Ahead';
       } else {
-        o.productionQty = Number(o.productionQty) || o.deliveryQty;
-        if (o.floorProductionQty === undefined || o.floorProductionQty === null) {
-          o.floorProductionQty = o.productionQty;
-        } else {
-          o.floorProductionQty = Number(o.floorProductionQty) || 0;
-        }
-        o.balanceQty = o.orderQty - o.deliveryQty;
-        o.deliveryBalanceQty = o.balanceQty;
-        if (o.orderQty > 0 && o.balanceQty <= 0) {
-          o.status = 'Completed';
-        } else if (o.deliveryQty >= o.orderQty * 0.9 && o.orderQty > 0) {
-          o.status = 'Ahead';
-        } else if (o.deliveryQty === 0) {
-          o.status = 'Scheduled';
-        } else {
-          o.status = 'Behind Plan';
-        }
+        o.status = 'Scheduled';
       }
     });
   }
@@ -756,13 +766,8 @@ class ClientDatabaseStore {
       const nowIso = new Date().toISOString();
       this.lastSaved = nowIso;
 
-      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
+      if (!this.activeWorkspace || !this.activeWorkspace.id || this.activeWorkspace.id === 'ws_baseline_2026') {
         this.activeWorkspace = { ...DEFAULT_WORKSPACE };
-      }
-      if (this.activeWorkspace.id === 'ws_live_production_vs' || this.activeWorkspace.id === 'ws_1793848480892_9ts9r') {
-        this.activeWorkspace.id = 'ws_live_production_vs';
-        this.activeWorkspace.buyerName = 'VS';
-        this.activeWorkspace.name = 'VS Live Production';
       }
 
       const payload = {
@@ -808,21 +813,17 @@ class ClientDatabaseStore {
             const cloudState = await firebaseRealtime.pullState();
             if (cloudState && Array.isArray(cloudState.productionLogs)) {
               const mergedMap = new Map();
-              // 1. Existing cloud logs (excluding locally deleted logs)
+              // 1. Existing cloud logs (strictly excluding deleted logs)
               cloudState.productionLogs.forEach((l) => {
-                if (!l) return;
-                const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
-                if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
-                  mergedMap.set(id, l);
-                }
+                if (!l || isLogDeleted(l, this.deletedLogIds)) return;
+                const id = l.id || makeLogFingerprint(l);
+                mergedMap.set(id, l);
               });
-              // 2. Local logs (excluding locally deleted logs)
+              // 2. Local logs (strictly excluding deleted logs)
               (this.productionLogs || []).forEach((l) => {
-                if (!l) return;
-                const id = l.id || `${l.date}_${l.machineId || l.machineName}_${l.timeSlot}_${l.size}_${l.rawQty || l.qty}_${l.operator || ''}`;
-                if (!this.deletedLogIds?.has(id) && (!l.id || !this.deletedLogIds?.has(l.id))) {
-                  mergedMap.set(id, l);
-                }
+                if (!l || isLogDeleted(l, this.deletedLogIds)) return;
+                const id = l.id || makeLogFingerprint(l);
+                mergedMap.set(id, l);
               });
               this.productionLogs = Array.from(mergedMap.values()).sort((a, b) => {
                 const tA = new Date(a.timestamp || a.date || 0).getTime();
@@ -2030,11 +2031,7 @@ class ClientDatabaseStore {
       matchedOrder = this.orders.find((o) => String(o.size) === strSize && o.category.toLowerCase() === machine.category.toLowerCase());
     }
 
-    const isLoopInsert =
-      (machine.name || '').toLowerCase().includes('loop insert') ||
-      (machine.name || '').toLowerCase().includes('insert loop') ||
-      ((machine.name || '').toLowerCase().includes('insert') && (machine.name || '').toLowerCase().includes('loop')) ||
-      (machine.code || '').toLowerCase() === 'mch-06';
+    const isLoopInsert = isLoopInsertMachine(machine);
 
     const todayStr = (data.date || new Date().toISOString().split('T')[0]).slice(0, 10);
     if (matchedOrder) {
@@ -2413,11 +2410,7 @@ class ClientDatabaseStore {
     }
 
     // 3. Loop Insert logic -> floorProductionQty
-    const isLoopInsert =
-      (mach?.name || updatedLog.machineName || oldLog.machineName || '').toLowerCase().includes('loop insert') ||
-      (mach?.name || updatedLog.machineName || oldLog.machineName || '').toLowerCase().includes('insert loop') ||
-      ((mach?.name || updatedLog.machineName || '').toLowerCase().includes('insert') && (mach?.name || '').toLowerCase().includes('loop')) ||
-      (mach?.code || targetMachineId || '').toLowerCase() === 'mch-06';
+    const isLoopInsert = isLoopInsertMachine(mach || updatedLog || oldLog);
 
     if (isLoopInsert && qtyDelta !== 0) {
       const order = this.findLoopOrder(updatedLog) || this.findLoopOrder(oldLog);
@@ -2429,6 +2422,7 @@ class ClientDatabaseStore {
       }
     }
 
+    this.ensureOrderCalculations();
     await this.save(true);
     return updatedLog;
   }
@@ -2448,6 +2442,7 @@ class ClientDatabaseStore {
     if (targetMachine && targetSlot && targetDate) {
       const compositeKey = `${targetDate}_${targetMachine}_${query.timeSlot}_${targetSize || ''}_${targetQty || ''}`;
       this.deletedLogIds.add(compositeKey);
+      this.deletedLogIds.add(`${targetDate}_${targetMachine}_${targetSlot}_${targetSize || ''}_${targetQty || ''}`);
     }
 
     const matchesLog = (l) => {
@@ -2484,11 +2479,15 @@ class ClientDatabaseStore {
       });
     }
 
-    // Add all matching logs' IDs and composite keys to tombstones
+    // Add all matching logs' IDs, fingerprints, and composite keys to tombstones
     matchingLogs.forEach((l) => {
       if (l.id) this.deletedLogIds.add(l.id);
+      const fp = makeLogFingerprint(l, targetDate);
+      if (fp) this.deletedLogIds.add(fp);
       const cKey = `${(l.date || '').slice(0, 10)}_${(l.machineId || l.machineName || '').toLowerCase()}_${l.timeSlot || ''}_${l.size || ''}_${l.qty || ''}`;
       this.deletedLogIds.add(cKey);
+      const cKeyNoSpace = `${(l.date || '').slice(0, 10)}_${(l.machineId || l.machineName || '').toLowerCase()}_${(l.timeSlot || '').replace(/\s+/g, '')}_${l.size || ''}_${l.qty || ''}`;
+      this.deletedLogIds.add(cKeyNoSpace);
     });
 
     // Save tombstones to localStorage
@@ -2498,14 +2497,14 @@ class ClientDatabaseStore {
 
     // 1. Remove from this.productionLogs
     if (Array.isArray(this.productionLogs)) {
-      this.productionLogs = this.productionLogs.filter((l) => !matchesLog(l));
+      this.productionLogs = this.productionLogs.filter((l) => !matchesLog(l) && !isLogDeleted(l, this.deletedLogIds));
     }
 
     // 2. Remove from machine todayLogs and recalculate machine output
     if (Array.isArray(this.machines)) {
       this.machines.forEach((mach) => {
         if (Array.isArray(mach.todayLogs)) {
-          mach.todayLogs = mach.todayLogs.filter((l) => !matchesLog(l));
+          mach.todayLogs = mach.todayLogs.filter((l) => !matchesLog(l) && !isLogDeleted(l, this.deletedLogIds));
           mach.todayProduced = mach.todayLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
           mach.todayOutput = mach.todayProduced;
         }
@@ -2516,11 +2515,7 @@ class ClientDatabaseStore {
     matchingLogs.forEach((oldLog) => {
       const oldQty = Number(oldLog.qty) || 0;
       const logDate = (oldLog.date || oldLog.timestamp || targetDate || '').slice(0, 10);
-      const isLoopInsert =
-        (oldLog.machineName || '').toLowerCase().includes('loop insert') ||
-        (oldLog.machineName || '').toLowerCase().includes('insert loop') ||
-        ((oldLog.machineName || '').toLowerCase().includes('insert') && (oldLog.machineName || '').toLowerCase().includes('loop')) ||
-        (oldLog.machineId || '').toLowerCase() === 'mch-06';
+      const isLoopInsert = isLoopInsertMachine(oldLog);
 
       const order = this.findLoopOrder(oldLog) || (this.orders || []).find((o) =>
         (oldLog.poNumber && o.poNumber === oldLog.poNumber) &&
@@ -2556,41 +2551,18 @@ class ClientDatabaseStore {
     this.ensureOrderCalculations();
 
     // 5. HARD DELETE directly in Firebase RTDB
-    if (typeof fetch !== 'undefined') {
-      try {
-        await Promise.allSettled([
-          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
-            method: 'PUT',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-            body: JSON.stringify(this.productionLogs),
-          }),
-          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/machines.json`), {
-            method: 'PUT',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-            body: JSON.stringify(this.machines),
-          }),
-          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
-            method: 'PUT',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-            body: JSON.stringify(this.orders),
-          }),
-          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/workers.json`), {
-            method: 'PUT',
-            cache: 'no-store',
-            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-            body: JSON.stringify(this.workers),
-          }),
-          firebaseRealtime.pushDeletedLogIds(Array.from(this.deletedLogIds)),
-        ]);
-      } catch (err) {
-        console.warn('Realtime hard delete endpoints note:', err?.message);
-      }
+    this.isIntentionalReset = true;
+    try {
+      await Promise.allSettled([
+        firebaseRealtime.pushDeletedLogIds(Array.from(this.deletedLogIds)),
+        this.forceSaveToCloud(),
+      ]);
+    } catch (err) {
+      console.warn('Realtime hard delete endpoints note:', err?.message);
+    } finally {
+      this.isIntentionalReset = false;
     }
 
-    await this.save(true);
     this.notifySubscribers();
     return true;
   }
@@ -2601,7 +2573,7 @@ class ClientDatabaseStore {
 
     const categoryOrders = this.orders.filter((o) => o.category.toLowerCase() === category.toLowerCase());
     const relevantLogs = (this.productionLogs || []).filter(
-      (l) => l.category?.toLowerCase() === category.toLowerCase() && l.date === targetDate
+      (l) => !isLogDeleted(l, this.deletedLogIds) && l.category?.toLowerCase() === category.toLowerCase() && l.date === targetDate
     );
 
     // Today's Permanent Deliveries (dispatched from Delivery & Received page)
@@ -2812,6 +2784,7 @@ class ClientDatabaseStore {
 
       // Find all logs for this machine on targetDate from global productionLogs (authoritative)
       const machineGlobalLogs = (this.productionLogs || []).filter((l) => {
+        if (!l || isLogDeleted(l, this.deletedLogIds)) return false;
         const matchMach =
           l.machineId === m.id ||
           l.machineId === m.code ||
@@ -2820,23 +2793,14 @@ class ClientDatabaseStore {
         return matchMach && (!targetDate || lDate === targetDate);
       });
 
-      const makeLogFingerprint = (l) => {
-        const d = (l.date || l.timestamp || targetDate || '').slice(0, 10);
-        const slot = (l.timeSlot || '').replace(/\s+/g, '');
-        const sz = String(l.size || '').trim();
-        const op = (l.operator || l.operatorName || '').trim().toLowerCase();
-        const q = Number(l.rawQty || l.qty) || 0;
-        return `${d}__${slot}__${sz}__${op}__${q}`;
-      };
-
       // Also include any matching logs from m.todayLogs if not already in machineGlobalLogs
       const seenIds = new Set(machineGlobalLogs.map((l) => l.id).filter(Boolean));
-      const seenFingerprints = new Set(machineGlobalLogs.map(makeLogFingerprint));
+      const seenFingerprints = new Set(machineGlobalLogs.map((l) => makeLogFingerprint(l, targetDate)));
 
       const extraLogs = (m.todayLogs || []).filter((l) => {
-        if (!l) return false;
+        if (!l || isLogDeleted(l, this.deletedLogIds)) return false;
         if (l.id && seenIds.has(l.id)) return false;
-        const fp = makeLogFingerprint(l);
+        const fp = makeLogFingerprint(l, targetDate);
         if (seenFingerprints.has(fp)) return false;
         const lDate = (l.date || l.timestamp || '').slice(0, 10);
         return lDate === targetDate;
@@ -2846,8 +2810,8 @@ class ClientDatabaseStore {
       const sourceLogs = [];
       const addedLogKeys = new Set();
       [...machineGlobalLogs, ...extraLogs].forEach((l, idx) => {
-        if (!l) return;
-        const fp = makeLogFingerprint(l);
+        if (!l || isLogDeleted(l, this.deletedLogIds)) return;
+        const fp = makeLogFingerprint(l, targetDate);
         const uniqueKey = l.id ? `id_${l.id}` : `fp_${fp}`;
         if (!addedLogKeys.has(uniqueKey) && !addedLogKeys.has(fp)) {
           addedLogKeys.add(uniqueKey);
@@ -3198,7 +3162,7 @@ class ClientDatabaseStore {
   }
 
   // Delivery & Received Multi-Step Workflow Engine
-  recordDeliveryReceived(payload) {
+  async recordDeliveryReceived(payload) {
     const {
       type = 'Delivery', // 'Delivery' | 'Received'
       subCategory = 'Outsource', // 'Outsource' | 'Permanent' | 'Internal'
@@ -3225,13 +3189,25 @@ class ClientDatabaseStore {
       const targetSize = String(item.size || size || '').trim();
       const numQty = Math.max(1, Number(item.qty || qty) || 0);
 
+      const normTargetColour = (targetColour || '').toLowerCase().trim();
+      const normTargetSize = String(targetSize || size || '').trim();
+      const normTargetPo = String(targetPo || poNumber || '').trim();
+
       // Find matching order by PO #, Colour, Size
       const order = this.orders.find((o) => {
-        const matchPo = o.poNumber === targetPo || o.id === targetPo;
-        const matchColour = !targetColour || (o.colour || '').toLowerCase() === targetColour.toLowerCase();
-        const matchSize = !targetSize || String(o.size).trim() === targetSize;
+        const oPo = String(o.poNumber || '').trim();
+        const oSize = String(o.size || '').trim();
+        const oColour = (o.colour || '').toLowerCase().trim();
+
+        const matchPo = !normTargetPo || oPo === normTargetPo || o.id === normTargetPo;
+        const matchSize = !normTargetSize || oSize === normTargetSize;
+        const matchColour = !normTargetColour || oColour === normTargetColour || oColour.includes(normTargetColour) || normTargetColour.includes(oColour);
         return matchPo && matchColour && matchSize;
-      }) || this.orders.find((o) => o.poNumber === targetPo);
+      }) || this.orders.find((o) => {
+        const oPo = String(o.poNumber || '').trim();
+        const oSize = String(o.size || '').trim();
+        return normTargetPo && (oPo === normTargetPo || o.id === normTargetPo) && normTargetSize && oSize === normTargetSize;
+      });
 
       let calculationEffect = '';
       let dayTargetDeduction = 0;
@@ -3264,13 +3240,13 @@ class ClientDatabaseStore {
           if (!this.outsourceConsignments) this.outsourceConsignments = [];
           this.outsourceConsignments.unshift(consignment);
           calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Day's Target. Consignment #${consignment.id} opened for ${outsourcePartner || 'Partner'} (Pending Return in Received page)`;
-        } else if (subCategory === 'Permanent') {
-          // Permanent Delivery increases Actual/Invoiced & reduces Balance to produce
+        } else if (subCategory === 'Permanent' || !subCategory || subCategory === 'Standard') {
+          // Permanent Delivery increases Delivered/Invoiced & strictly reduces Floor Production Qty
           balanceDeduction = numQty;
           if (order) {
-            order.productionQty = (Number(order.productionQty) || 0) + numQty;
             order.deliveryQty = (Number(order.deliveryQty) || 0) + numQty;
-            order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
+            order.floorProductionQty = Math.max(0, (Number(order.floorProductionQty) || 0) - numQty);
+            order.balanceQty = Math.max(0, (Number(order.orderQty) || 0) - order.deliveryQty);
             order.deliveryBalanceQty = order.balanceQty;
 
             if (order.balanceQty <= 0) {
@@ -3290,7 +3266,7 @@ class ClientDatabaseStore {
               notes: `Permanent Dispatch (${numQty} pcs)`,
             });
           }
-          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Remaining Balance (Remaining Balance: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs, Total Delivered: ${order ? order.deliveryQty.toLocaleString() : 'N/A'} pcs)`;
+          calculationEffect = `Deducted ${numQty.toLocaleString()} pcs from Floor Production & Order Balance (Remaining Floor: ${order ? order.floorProductionQty.toLocaleString() : '0'} pcs, Remaining Order Balance: ${order ? order.balanceQty.toLocaleString() : 'N/A'} pcs, Total Delivered: ${order ? order.deliveryQty.toLocaleString() : 'N/A'} pcs)`;
         }
       } else {
         // Received Flow
@@ -3310,6 +3286,7 @@ class ClientDatabaseStore {
         dayTargetDeduction,
         balanceDeduction,
         productQtyAfter: order ? order.productionQty : null,
+        floorQtyAfter: order ? order.floorProductionQty : null,
         systemBalanceAfter: order ? order.balanceQty : null,
         orderStatusAfter: order ? order.status : null,
         date: todayStr,
@@ -3323,7 +3300,9 @@ class ClientDatabaseStore {
       createdLogs.push(logEntry);
     }
 
-    this.save(true);
+    this.ensureOrderCalculations();
+    await this.forceSaveToCloud();
+    this.notifySubscribers();
 
     return {
       success: true,
