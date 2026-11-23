@@ -436,38 +436,7 @@ export default function WorkerPortal({
     setRejectReason('');
     setNotes('');
 
-    // Optimistically update local dayStats and machine
-    const optimisticLog = {
-      id: `LOG-OPT-${Date.now()}`,
-      timeSlot: loggedSlot,
-      qty: loggedOutputQty,
-      rawQty: loggedRawQty,
-      multiplier: dryCutMultiplier,
-      unit: machineUnit,
-      size: loggedSize,
-      colour: loggedColour,
-      operator: selectedOperator || machine.operatorName || 'Floor Worker',
-      rejectReason: rejectReason || '',
-      time: loggedTime,
-      notes: notes.trim(),
-    };
-
-    setDayStats((prev) => {
-      const prevLogs = prev?.logs || [];
-      const newTotal = (prev?.totalProduced || 0) + loggedOutputQty;
-      return {
-        ...prev,
-        totalProduced: newTotal,
-        logs: [optimisticLog, ...prevLogs],
-      };
-    });
-
-    if (machine) {
-      machine.todayProduced = (machine.todayProduced || 0) + loggedOutputQty;
-      if (!machine.todayLogs) machine.todayLogs = [];
-      machine.todayLogs = [optimisticLog, ...machine.todayLogs];
-    }
-
+    // Show feedback immediately
     if (onShowToast) {
       const msg = isDryCut
         ? `Logged ${loggedRawQty} units × ${dryCutMultiplier} = ${loggedOutputQty} ${machineUnit} (${loggedSlot})!`
@@ -477,10 +446,23 @@ export default function WorkerPortal({
 
     setTimeout(() => setSuccessBanner(null), 4000);
 
-    // 2. NON-BLOCKING ASYNC SYNC: Submit lightweight atomic write without freezing UI
+    // 2. Instant Local Write & Network Broadcast via api.submitWorkerBatch
     try {
       setSubmitting(true);
-      await api.submitWorkerBatch(payload);
+      const res = await api.submitWorkerBatch(payload);
+      if (res && res.submission) {
+        const canonicalLog = res.submission;
+        const currentMach = res.machine || machine;
+        setDayStats((prev) => {
+          const prevLogs = prev?.logs || [];
+          const updatedLogs = [canonicalLog, ...prevLogs.filter((l) => l.id !== canonicalLog.id && (!l.id || !l.id.startsWith('LOG-OPT')))];
+          return {
+            ...prev,
+            totalProduced: currentMach?.todayProduced || ((prev?.totalProduced || 0) + loggedOutputQty),
+            logs: updatedLogs,
+          };
+        });
+      }
       if (onDataUpdated) onDataUpdated();
     } catch (err) {
       console.warn('Background sync note:', err);

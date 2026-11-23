@@ -60,7 +60,9 @@ export default function HourlyProductionDashboard({
       return 'Day Shift';
     }
   });
-  const todayIso = new Date().toISOString().split('T')[0];
+  const getLocalDateIso = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const todayIso = getLocalDateIso();
   const [selectedDate, setSelectedDate] = useState(() => {
     try {
       const stored = sessionStorage.getItem('bondtex_hourly_date');
@@ -320,15 +322,30 @@ export default function HourlyProductionDashboard({
     const unsubscribe = api.subscribe(() => {
       loadHourlyData(false);
     });
-    // Fast polling fallback (every 2.5 seconds) with cloud sync pull to guarantee real-time cross-device sync with mobile phone
+
+    let meshBc = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        meshBc = new BroadcastChannel('bondtex_mesh_sync');
+        meshBc.onmessage = () => {
+          loadHourlyData(false);
+        };
+      }
+    } catch {}
+
+    // Lightweight fallback poll (every 2.5 seconds) with cloud sync pull to guarantee real-time cross-device sync with mobile phone
     const pollId = setInterval(async () => {
       try {
         await api.syncCloud();
       } catch {}
       await loadHourlyData(false);
     }, 2500);
+
     return () => {
       if (unsubscribe) unsubscribe();
+      if (meshBc) {
+        try { meshBc.close(); } catch {}
+      }
       clearInterval(pollId);
     };
   }, [shift, selectedDate]);

@@ -114,9 +114,36 @@ class ClientDatabaseStore {
     this._notifyTimeout = null;
     this.deviceId = 'srv';
     this.initialized = false;
+    this.meshChannel = null;
 
     // Load cached database instantly from LocalStorage on construction (0ms delay)
     this.loadSynchronousLocalCache();
+
+    // Instant Cross-Tab Mesh Synchronization via BroadcastChannel and Storage Listener
+    if (typeof window !== 'undefined') {
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          this.meshChannel = new BroadcastChannel('bondtex_mesh_sync');
+          this.meshChannel.onmessage = (evt) => {
+            if (evt?.data?.type === 'MESH_UPDATE') {
+              this.loadSynchronousLocalCache();
+              this.ensureSpecialMachines();
+              this.ensureOrderCalculations();
+              this.notifySubscribers(false);
+            }
+          };
+        }
+      } catch {}
+
+      window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY || e.key === VAULT_KEY || e.key === ACTIVE_WORKSPACE_KEY) {
+          this.loadSynchronousLocalCache();
+          this.ensureSpecialMachines();
+          this.ensureOrderCalculations();
+          this.notifySubscribers(false);
+        }
+      });
+    }
 
     this.ensureSpecialMachines();
     this.ensureOrderCalculations();
@@ -156,7 +183,13 @@ class ClientDatabaseStore {
         this.categories = Array.isArray(parsed.categories) && parsed.categories.length ? parsed.categories : this.categories;
         this.orders = parsed.orders;
         this.machines = (Array.isArray(parsed.machines) ? parsed.machines : this.machines)
-          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')));
+          .filter((m) => m.id !== 'MCH-CMP' && m.code !== 'MCH-CMP' && !((m.name || '').toLowerCase().includes('compress')))
+          .map((m) => {
+            if (Array.isArray(m.todayLogs)) {
+              m.todayLogs = m.todayLogs.filter((l) => !l.id || !l.id.startsWith('LOG-OPT'));
+            }
+            return m;
+          });
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
         this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
         this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
@@ -228,7 +261,12 @@ class ClientDatabaseStore {
   }
 
   // Debounced notification to eliminate high-frequency React re-renders and CPU lockups
-  notifySubscribers() {
+  notifySubscribers(broadcastMesh = true) {
+    if (broadcastMesh && this.meshChannel) {
+      try {
+        this.meshChannel.postMessage({ type: 'MESH_UPDATE', timestamp: Date.now() });
+      } catch {}
+    }
     if (this._notifyTimeout) clearTimeout(this._notifyTimeout);
     this._notifyTimeout = setTimeout(() => {
       this.subscribers.forEach((cb) => {
@@ -245,23 +283,32 @@ class ClientDatabaseStore {
   applyCloudState(cloudState) {
     if (!cloudState) return;
 
-    // Guard against echo loops: only ignore if the incoming state originated from this device AND the log count, delivery count, and lastUpdated match local
-    const cloudLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
-    const localLogsCount = Array.isArray(this.productionLogs) ? this.productionLogs.length : 0;
+    const cloudLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
+    const localLogs = Array.isArray(this.productionLogs) ? this.productionLogs : [];
+    const cloudLogsCount = cloudLogs.length;
+    const localLogsCount = localLogs.length;
     const cloudDeliveryCount = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs.length : 0;
     const cloudDeliverySum = Array.isArray(cloudState.deliveryReceivedLogs)
       ? cloudState.deliveryReceivedLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
       : 0;
     const localDeliveryCount = Array.isArray(this.deliveryReceivedLogs) ? this.deliveryReceivedLogs.length : 0;
+    const cloudLatestLogId = cloudLogs[0]?.id || '';
+    const localLatestLogId = localLogs[0]?.id || '';
 
+    // Guard against echo loops: only ignore if the incoming state originated from this device AND logs, deliveries, and timestamp match exactly
     if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) {
-      if (cloudLogsCount === localLogsCount && cloudDeliveryCount === localDeliveryCount && cloudState.lastUpdated === this.lastSaved) {
+      if (
+        cloudLogsCount === localLogsCount &&
+        cloudDeliveryCount === localDeliveryCount &&
+        cloudLatestLogId === localLatestLogId &&
+        cloudState.lastUpdated === this.lastSaved
+      ) {
         return;
       }
     }
 
     // Guard against re-applying the exact same cloud snapshot repeatedly
-    const snapshotKey = `${cloudState.lastUpdated || ''}_${cloudLogsCount}_${Array.isArray(cloudState.orders) ? cloudState.orders.length : 0}_${cloudDeliveryCount}_${cloudDeliverySum}`;
+    const snapshotKey = `${cloudState.lastUpdated || ''}_${cloudLogsCount}_${cloudLatestLogId}_${Array.isArray(cloudState.orders) ? cloudState.orders.length : 0}_${cloudDeliveryCount}_${cloudDeliverySum}`;
     if (snapshotKey === this.lastAppliedSnapshotKey) {
       return;
     }
@@ -444,7 +491,9 @@ class ClientDatabaseStore {
         )
         .map((m) => {
           if (Array.isArray(m.todayLogs)) {
-            const sanitizedLogs = m.todayLogs.filter((l) => !isLogDeleted(l, this.deletedLogIds));
+            const sanitizedLogs = m.todayLogs.filter(
+              (l) => (!l.id || !l.id.startsWith('LOG-OPT')) && !isLogDeleted(l, this.deletedLogIds)
+            );
             return {
               ...m,
               todayLogs: sanitizedLogs,
@@ -668,6 +717,12 @@ class ClientDatabaseStore {
   async pullCloudState() {
     if (typeof window === 'undefined') return null;
     try {
+      // High-speed lightweight check: query 30-byte lastUpdated timestamp first to prevent connection flooding
+      const remoteLastUpdated = await firebaseRealtime.pullLastUpdated();
+      if (remoteLastUpdated && remoteLastUpdated === this.lastSaved && this.productionLogs?.length > 0) {
+        return { success: true, activeWorkspace: this.activeWorkspace, noChange: true };
+      }
+
       const [cloudActivePointer, cloudState, cloudInventory, cloudDeletedLogs] = await Promise.all([
         firebaseRealtime.getActiveWorkspacePointer(),
         firebaseRealtime.pullState(),
@@ -2087,6 +2142,7 @@ class ClientDatabaseStore {
     };
 
     if (!machine.todayLogs) machine.todayLogs = [];
+    machine.todayLogs = machine.todayLogs.filter((l) => !l.id || !l.id.startsWith('LOG-OPT'));
     machine.todayLogs.unshift(logEntry);
     machine.todayProduced = (machine.todayProduced || 0) + effectiveQty;
     machine.todayOutput = machine.todayProduced;
@@ -2182,34 +2238,18 @@ class ClientDatabaseStore {
         lastDeviceId: this.deviceId,
       };
 
-      Promise.allSettled([
-        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`), {
+      try {
+        const primaryPut = fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state.json`), {
           method: 'PUT',
           cache: 'no-store',
           headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
           body: JSON.stringify(fullSyncPayload),
-        }),
-        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
-          method: 'PUT',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          body: JSON.stringify(this.productionLogs),
-        }),
-        fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/machines.json`), {
-          method: 'PUT',
-          cache: 'no-store',
-          headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-          body: JSON.stringify(this.machines),
-        }),
-        matchedOrder
-          ? fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
-              method: 'PUT',
-              cache: 'no-store',
-              headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
-              body: JSON.stringify(this.orders),
-            })
-          : Promise.resolve(),
-      ]).catch((err) => console.warn('Atomic batch write note:', err));
+        });
+        const timeout = new Promise((resolve) => setTimeout(resolve, 2500));
+        await Promise.race([primaryPut, timeout]);
+      } catch (err) {
+        console.warn('Atomic batch write note:', err);
+      }
 
       // Non-blocking Firestore audit write
       try {

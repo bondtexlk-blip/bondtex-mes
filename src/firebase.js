@@ -523,6 +523,20 @@ export const firebaseRealtime = {
     }
   },
 
+  async pullLastUpdated() {
+    try {
+      const url = getNoCacheUrl(`${REALTIME_DB_URL}/state/lastUpdated.json`);
+      const res = await fetch(url, {
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
   listenToChanges(onUpdate) {
     if (typeof window === 'undefined') return () => {};
 
@@ -531,7 +545,22 @@ export const firebaseRealtime = {
     let heartbeatInterval = null;
     let stopped = false;
     let lastHandledSnapshotKey = null;
+    let lastHandledTimestamp = null;
     let lastEventReceived = Date.now();
+    let isPullInProgress = false;
+
+    const computeSnapshotKey = (state) => {
+      if (!state) return '';
+      const stateLogs = Array.isArray(state.productionLogs) ? state.productionLogs : [];
+      const stateLogsCount = stateLogs.length;
+      const latestLogId = stateLogs[0]?.id || stateLogs[stateLogsCount - 1]?.id || '';
+      const stateOrdersCount = Array.isArray(state.orders) ? state.orders.length : 0;
+      const stateDeliveryCount = Array.isArray(state.deliveryReceivedLogs) ? state.deliveryReceivedLogs.length : 0;
+      const stateDeliveriesTotal = Array.isArray(state.deliveryReceivedLogs)
+        ? state.deliveryReceivedLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+        : 0;
+      return `${state.lastUpdated || ''}_${stateLogsCount}_${latestLogId}_${stateOrdersCount}_${stateDeliveryCount}_${stateDeliveriesTotal}`;
+    };
 
     const processPayload = async (payload) => {
       try {
@@ -545,7 +574,7 @@ export const firebaseRealtime = {
             state = await firebaseRealtime.pullState();
           }
         } else {
-          // Subpath modification detected (e.g. /productionLogs, /orders, /inventory)
+          // Subpath modification detected (e.g. /productionLogs, /machines, /orders, /lastUpdated)
           state = await firebaseRealtime.pullState();
         }
 
@@ -562,19 +591,12 @@ export const firebaseRealtime = {
           } catch {}
         }
 
-        // Actionable snapshot change detection: triggers on ANY change in log count, orders, deliveries, or timestamp
-        const stateLogsCount = Array.isArray(state.productionLogs) ? state.productionLogs.length : 0;
-        const stateOrdersCount = Array.isArray(state.orders) ? state.orders.length : 0;
-        const stateDeliveryCount = Array.isArray(state.deliveryReceivedLogs) ? state.deliveryReceivedLogs.length : 0;
-        const stateDeliveriesTotal = Array.isArray(state.deliveryReceivedLogs)
-          ? state.deliveryReceivedLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
-          : 0;
-        const snapshotKey = `${state.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}_${stateDeliveryCount}_${stateDeliveriesTotal}`;
-
+        const snapshotKey = computeSnapshotKey(state);
         if (snapshotKey === lastHandledSnapshotKey) {
           return;
         }
         lastHandledSnapshotKey = snapshotKey;
+        if (state.lastUpdated) lastHandledTimestamp = state.lastUpdated;
 
         onUpdate(state);
       } catch (err) {
@@ -625,18 +647,23 @@ export const firebaseRealtime = {
 
     connectStream();
 
-    // Fast, reliable fallback poll (every 3 seconds with full cache-busting for multi-device cross-sync)
+    // High-speed, ultra-lightweight fallback check (polls 30-byte timestamp every 2 seconds without flooding connections)
     pollInterval = setInterval(async () => {
-      if (stopped) return;
+      if (stopped || isPullInProgress) return;
       try {
+        const remoteLastUpdated = await firebaseRealtime.pullLastUpdated();
+        // If remote timestamp matches what we already handled, zero data transfer needed!
+        if (remoteLastUpdated && remoteLastUpdated === lastHandledTimestamp && lastHandledSnapshotKey) {
+          return;
+        }
+
+        isPullInProgress = true;
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
-          const stateLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
-          const stateOrdersCount = Array.isArray(cloudState.orders) ? cloudState.orders.length : 0;
-          const snapshotKey = `${cloudState.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
-
+          const snapshotKey = computeSnapshotKey(cloudState);
           if (snapshotKey === lastHandledSnapshotKey) return;
           lastHandledSnapshotKey = snapshotKey;
+          if (cloudState.lastUpdated) lastHandledTimestamp = cloudState.lastUpdated;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
@@ -650,8 +677,10 @@ export const firebaseRealtime = {
         }
       } catch {
         // ignore
+      } finally {
+        isPullInProgress = false;
       }
-    }, 3000);
+    }, 2000);
 
     // Watchdog heartbeat for iOS Safari / Mobile WebKit
     heartbeatInterval = setInterval(() => {
@@ -668,12 +697,10 @@ export const firebaseRealtime = {
         connectStream();
         const cloudState = await firebaseRealtime.pullState();
         if (cloudState && (cloudState.orders || cloudState.productionLogs || cloudState.lastUpdated)) {
-          const stateLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
-          const stateOrdersCount = Array.isArray(cloudState.orders) ? cloudState.orders.length : 0;
-          const snapshotKey = `${cloudState.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
-
+          const snapshotKey = computeSnapshotKey(cloudState);
           if (snapshotKey === lastHandledSnapshotKey) return;
           lastHandledSnapshotKey = snapshotKey;
+          if (cloudState.lastUpdated) lastHandledTimestamp = cloudState.lastUpdated;
 
           if (!Array.isArray(cloudState.inventoryItems)) {
             const inv = await firebaseRealtime.pullInventory();
