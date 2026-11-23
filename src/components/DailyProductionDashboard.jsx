@@ -91,6 +91,11 @@ export default function DailyProductionDashboard({
         qty: num,
         operator: editOperator,
         notes: editNotes,
+        machineId: editingLogModal.machineId || editingLogModal.machineCode,
+        timeSlot: editingLogModal.timeSlot,
+        date: editingLogModal.date || selectedDate,
+        size: editingLogModal.size,
+        colour: editingLogModal.colour,
       });
       if (onShowToast) onShowToast(`Log updated to ${num} pcs successfully!`, 'success');
       setEditingLogModal(null);
@@ -102,10 +107,16 @@ export default function DailyProductionDashboard({
     }
   };
 
-  const handleDeleteLog = async (logId) => {
+  const handleDeleteLog = async (logId, log = null) => {
     if (!window.confirm('Are you sure you want to delete this production log entry?')) return;
     try {
-      await api.deleteProductionLog(logId);
+      await api.deleteProductionLog(logId, log ? {
+        machineId: log.machineId || log.machineCode,
+        timeSlot: log.timeSlot,
+        date: log.date || selectedDate,
+        size: log.size,
+        qty: log.qty,
+      } : {});
       if (onShowToast) onShowToast('Production log deleted successfully!', 'success');
       setEditingLogModal(null);
       await loadDailyData();
@@ -853,7 +864,7 @@ export default function DailyProductionDashboard({
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => handleDeleteLog(log.id)}
+                                onClick={() => handleDeleteLog(log.id, log)}
                                 className="p-1.5 rounded-lg bg-rose-500/15 text-rose-300 hover:bg-rose-500/30 transition border border-rose-500/30"
                                 title="Delete Log"
                               >
@@ -971,7 +982,7 @@ export default function DailyProductionDashboard({
             <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={() => handleDeleteLog(editingLogModal.id)}
+                onClick={() => handleDeleteLog(editingLogModal.id, editingLogModal)}
                 className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold text-xs border border-rose-500/30 transition flex items-center gap-1.5"
               >
                 <Trash2 className="w-3.5 h-3.5" />

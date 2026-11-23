@@ -403,6 +403,36 @@ export const firebaseRealtime = {
     }
   },
 
+  async pullDeletedDeliveryLogIds() {
+    try {
+      const res = await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/deletedDeliveryLogIds.json`), {
+        cache: 'no-store',
+        headers: NO_CACHE_HEADERS,
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (!data) return [];
+      return Array.isArray(data) ? data : Object.values(data);
+    } catch {
+      return [];
+    }
+  },
+
+  async pushDeletedDeliveryLogIds(deletedIds) {
+    try {
+      if (!Array.isArray(deletedIds)) return false;
+      await fetch(getNoCacheUrl(`${REALTIME_DB_URL}/deletedDeliveryLogIds.json`), {
+        method: 'PUT',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+        body: JSON.stringify(deletedIds),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   async deleteInventoryItem(itemId) {
     try {
       if (!itemId) return false;

@@ -86,6 +86,18 @@ export function isLogDeleted(l, deletedIdsSet) {
   return false;
 }
 
+export function isDeliveryLogDeleted(l, deletedDeliverySet) {
+  if (!l || !deletedDeliverySet || deletedDeliverySet.size === 0) return false;
+  if (l.id && deletedDeliverySet.has(l.id)) return true;
+  const d = (l.date || l.timestamp || '').slice(0, 10);
+  const po = String(l.poNumber || '').trim();
+  const sz = String(l.size || '').trim();
+  const q = Number(l.qty) || 0;
+  if (d && po && sz && deletedDeliverySet.has(`${d}_${po}_${sz}_${q}`)) return true;
+  if (po && sz && deletedDeliverySet.has(`${po}_${sz}_${q}`)) return true;
+  return false;
+}
+
 class ClientDatabaseStore {
   constructor() {
     this.categories = JSON.parse(JSON.stringify(initialCategories));
@@ -110,6 +122,12 @@ class ClientDatabaseStore {
       this.deletedLogIds = storedDeleted ? new Set(JSON.parse(storedDeleted)) : new Set();
     } catch {
       this.deletedLogIds = new Set();
+    }
+    try {
+      const storedDeletedDel = typeof window !== 'undefined' ? localStorage.getItem('bondtex_deleted_delivery_logs') : null;
+      this.deletedDeliveryLogIds = storedDeletedDel ? new Set(JSON.parse(storedDeletedDel)) : new Set();
+    } catch {
+      this.deletedDeliveryLogIds = new Set();
     }
     this._notifyTimeout = null;
     this.deviceId = 'srv';
@@ -149,6 +167,10 @@ class ClientDatabaseStore {
     this.ensureOrderCalculations();
 
     this.readyPromise = this.init();
+  }
+
+  isDeliveryLogDeleted(l) {
+    return isDeliveryLogDeleted(l, this.deletedDeliveryLogIds);
   }
 
   loadSynchronousLocalCache() {
@@ -191,8 +213,10 @@ class ClientDatabaseStore {
             return m;
           });
         this.workers = Array.isArray(parsed.workers) ? parsed.workers : this.workers;
-        this.productionLogs = Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [];
-        this.deliveryReceivedLogs = Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [];
+        this.productionLogs = (Array.isArray(parsed.productionLogs) ? parsed.productionLogs : [])
+          .filter((l) => !isLogDeleted(l, this.deletedLogIds));
+        this.deliveryReceivedLogs = (Array.isArray(parsed.deliveryReceivedLogs) ? parsed.deliveryReceivedLogs : [])
+          .filter((l) => !this.isDeliveryLogDeleted(l));
         this.outsourceConsignments = Array.isArray(parsed.outsourceConsignments) ? parsed.outsourceConsignments : [];
         this.productionPlans = Array.isArray(parsed.productionPlans) ? parsed.productionPlans : [];
         this.inventoryItems = Array.isArray(parsed.inventoryItems) ? parsed.inventoryItems : this.inventoryItems;
@@ -368,7 +392,8 @@ class ClientDatabaseStore {
       this.productionLogs = Array.isArray(cloudState.productionLogs)
         ? cloudState.productionLogs.filter((l) => !isLogDeleted(l, this.deletedLogIds))
         : [];
-      this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
+      this.deliveryReceivedLogs = (Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [])
+        .filter((l) => !this.isDeliveryLogDeleted(l));
       this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
       this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
       if (Array.isArray(cloudState.inventoryItems)) this.inventoryItems = cloudState.inventoryItems;
@@ -464,7 +489,7 @@ class ClientDatabaseStore {
       });
     }
     if (Array.isArray(cloudState.deliveryReceivedLogs)) {
-      this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs;
+      this.deliveryReceivedLogs = cloudState.deliveryReceivedLogs.filter((l) => !this.isDeliveryLogDeleted(l));
     }
     if (Array.isArray(cloudState.outsourceConsignments)) {
       this.outsourceConsignments = cloudState.outsourceConsignments;
@@ -571,21 +596,31 @@ class ClientDatabaseStore {
           firebaseRealtime.pullState(),
           firebaseRealtime.pullInventory(),
           firebaseRealtime.pullDeletedLogIds(),
+          firebaseRealtime.pullDeletedDeliveryLogIds(),
         ]);
 
         const raceResult = await Promise.race([syncPromise, timeoutPromise]);
         if (raceResult !== 'timeout' && Array.isArray(raceResult)) {
-          const [ptrRes, stateRes, invRes, delRes] = raceResult;
+          const [ptrRes, stateRes, invRes, delRes, delDelivRes] = raceResult;
           const cloudActivePointer = ptrRes.status === 'fulfilled' ? ptrRes.value : null;
           const cloudState = stateRes.status === 'fulfilled' ? stateRes.value : null;
           const cloudInventory = invRes.status === 'fulfilled' ? invRes.value : null;
           const cloudDeletedLogs = delRes.status === 'fulfilled' && Array.isArray(delRes.value) ? delRes.value : [];
+          const cloudDeletedDeliveryLogs = delDelivRes?.status === 'fulfilled' && Array.isArray(delDelivRes.value) ? delDelivRes.value : [];
 
           if (cloudDeletedLogs.length > 0) {
             if (!this.deletedLogIds) this.deletedLogIds = new Set();
             cloudDeletedLogs.forEach((id) => this.deletedLogIds.add(id));
             try {
               localStorage.setItem('bondtex_deleted_logs', JSON.stringify(Array.from(this.deletedLogIds)));
+            } catch {}
+          }
+
+          if (cloudDeletedDeliveryLogs.length > 0) {
+            if (!this.deletedDeliveryLogIds) this.deletedDeliveryLogIds = new Set();
+            cloudDeletedDeliveryLogs.forEach((id) => this.deletedDeliveryLogIds.add(id));
+            try {
+              localStorage.setItem('bondtex_deleted_delivery_logs', JSON.stringify(Array.from(this.deletedDeliveryLogIds)));
             } catch {}
           }
 
@@ -633,8 +668,10 @@ class ClientDatabaseStore {
                 this.activeWorkspace.name = 'VS Live Production';
               }
               this.orders = Array.isArray(cloudState.orders) ? cloudState.orders : [];
-              this.productionLogs = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [];
-              this.deliveryReceivedLogs = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [];
+              this.productionLogs = (Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs : [])
+                .filter((l) => !isLogDeleted(l, this.deletedLogIds));
+              this.deliveryReceivedLogs = (Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs : [])
+                .filter((l) => !this.isDeliveryLogDeleted(l));
               this.outsourceConsignments = Array.isArray(cloudState.outsourceConsignments) ? cloudState.outsourceConsignments : [];
               this.productionPlans = Array.isArray(cloudState.productionPlans) ? cloudState.productionPlans : [];
               if (Array.isArray(cloudState.categories) && cloudState.categories.length) this.categories = cloudState.categories;
@@ -656,8 +693,10 @@ class ClientDatabaseStore {
                   isZeroReset: targetWs.isZeroReset || false,
                 };
                 this.orders = Array.isArray(targetWs.orders) ? targetWs.orders : [];
-                this.productionLogs = Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [];
-                this.deliveryReceivedLogs = Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [];
+                this.productionLogs = (Array.isArray(targetWs.productionLogs) ? targetWs.productionLogs : [])
+                  .filter((l) => !isLogDeleted(l, this.deletedLogIds));
+                this.deliveryReceivedLogs = (Array.isArray(targetWs.deliveryReceivedLogs) ? targetWs.deliveryReceivedLogs : [])
+                  .filter((l) => !this.isDeliveryLogDeleted(l));
                 this.outsourceConsignments = Array.isArray(targetWs.outsourceConsignments) ? targetWs.outsourceConsignments : [];
                 this.productionPlans = Array.isArray(targetWs.productionPlans) ? targetWs.productionPlans : [];
               } else if (cloudState && (cloudState.activeWorkspaceId || cloudState.activeWorkspace)) {
@@ -723,16 +762,22 @@ class ClientDatabaseStore {
         return { success: true, activeWorkspace: this.activeWorkspace, noChange: true };
       }
 
-      const [cloudActivePointer, cloudState, cloudInventory, cloudDeletedLogs] = await Promise.all([
+      const [cloudActivePointer, cloudState, cloudInventory, cloudDeletedLogs, cloudDeletedDeliveryLogs] = await Promise.all([
         firebaseRealtime.getActiveWorkspacePointer(),
         firebaseRealtime.pullState(),
         firebaseRealtime.pullInventory(),
         firebaseRealtime.pullDeletedLogIds(),
+        firebaseRealtime.pullDeletedDeliveryLogIds(),
       ]);
 
       if (Array.isArray(cloudDeletedLogs) && cloudDeletedLogs.length > 0) {
         if (!this.deletedLogIds) this.deletedLogIds = new Set();
         cloudDeletedLogs.forEach((id) => this.deletedLogIds.add(id));
+      }
+
+      if (Array.isArray(cloudDeletedDeliveryLogs) && cloudDeletedDeliveryLogs.length > 0) {
+        if (!this.deletedDeliveryLogIds) this.deletedDeliveryLogIds = new Set();
+        cloudDeletedDeliveryLogs.forEach((id) => this.deletedDeliveryLogIds.add(id));
       }
 
       if (cloudInventory && Array.isArray(cloudInventory.inventoryItems) && cloudInventory.inventoryItems.length > 0) {
@@ -782,9 +827,13 @@ class ClientDatabaseStore {
     const activeProductionLogs = (this.productionLogs || []).filter((l) => !isLogDeleted(l, this.deletedLogIds));
     const loopLogs = activeProductionLogs.filter(isLoopInsertMachine);
 
+    // Active Delivery Logs (strictly excluding deleted delivery logs)
+    const activeDeliveryLogs = (this.deliveryReceivedLogs || []).filter(
+      (l) => l && l.type === 'Delivery' && (l.subCategory === 'Permanent' || !l.subCategory) && !this.isDeliveryLogDeleted(l)
+    );
+
     this.orders.forEach((o) => {
       o.orderQty = Number(o.orderQty) || 0;
-      o.deliveryQty = Number(o.deliveryQty) || 0;
 
       const oSize = String(o.size || '').trim();
       const oPo = String(o.poNumber || '').trim();
@@ -803,11 +852,26 @@ class ClientDatabaseStore {
       });
 
       const totalLoopProduced = matching.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
-      const deliveredQty = Number(o.deliveryQty) || 0;
+
+      // Dynamically derive delivered quantity from confirmed non-deleted delivery logs
+      const matchingDeliveries = activeDeliveryLogs.filter((l) => {
+        const lSize = String(l.size || '').trim();
+        const lPo = String(l.poNumber || '').trim();
+        const lColour = (l.colour || '').toLowerCase().trim();
+
+        if (lSize !== oSize) return false;
+        if (lPo && oPo && lPo === oPo) return true;
+        if (lColour && oColour && (oColour.includes(lColour) || lColour.includes(oColour))) return true;
+        if ((!lColour || !oColour) && lPo && oPo && lPo === oPo) return true;
+        return false;
+      });
+
+      const deliveredQty = matchingDeliveries.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
+      o.deliveryQty = deliveredQty;
 
       // Hourly Loop Insert filling sets floor output; Completed delivery reduces floor output
       o.floorProductionQty = Math.max(0, totalLoopProduced - deliveredQty);
-      o.productionQty = totalLoopProduced > 0 ? totalLoopProduced : (Number(o.productionQty) || deliveredQty);
+      o.productionQty = totalLoopProduced > 0 ? totalLoopProduced : deliveredQty;
       o.balanceQty = Math.max(0, o.orderQty - deliveredQty);
       o.deliveryBalanceQty = Math.max(0, o.orderQty - deliveredQty);
 
@@ -2005,7 +2069,7 @@ class ClientDatabaseStore {
     return machine;
   }
 
-  deleteMachine(id) {
+  async deleteMachine(id) {
     if (!id) return false;
     const clean = String(id).trim().toLowerCase();
     const idx = this.machines.findIndex(
@@ -2013,7 +2077,7 @@ class ClientDatabaseStore {
     );
     if (idx === -1) return false;
     this.machines.splice(idx, 1);
-    this.save(true);
+    await this.save(true);
     return true;
   }
 
@@ -2314,11 +2378,11 @@ class ClientDatabaseStore {
     return this.workers[index];
   }
 
-  deleteWorker(id) {
+  async deleteWorker(id) {
     const index = this.workers.findIndex((w) => w.id === id || w.empId === id);
     if (index === -1) return false;
     this.workers.splice(index, 1);
-    this.save(true);
+    await this.save(true);
     return true;
   }
 
@@ -2599,14 +2663,48 @@ class ClientDatabaseStore {
     // 5. HARD DELETE directly in Firebase RTDB
     this.isIntentionalReset = true;
     try {
-      await Promise.allSettled([
-        firebaseRealtime.pushDeletedLogIds(Array.from(this.deletedLogIds)),
-        this.forceSaveToCloud(),
-      ]);
+      const nowIso = new Date().toISOString();
+      this.lastSaved = nowIso;
+      if (typeof fetch !== 'undefined') {
+        await Promise.allSettled([
+          firebaseRealtime.pushDeletedLogIds(Array.from(this.deletedLogIds)),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/productionLogs.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.productionLogs),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/machines.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.machines),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.orders),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/lastUpdated.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(nowIso),
+          }),
+          this.forceSaveToCloud(),
+        ]);
+      }
     } catch (err) {
       console.warn('Realtime hard delete endpoints note:', err?.message);
     } finally {
       this.isIntentionalReset = false;
+    }
+
+    if (this.meshChannel) {
+      try {
+        this.meshChannel.postMessage({ type: 'MESH_UPDATE', timestamp: Date.now() });
+      } catch {}
     }
 
     this.notifySubscribers();
@@ -3057,7 +3155,9 @@ class ClientDatabaseStore {
 
     // Filter Loop Insert machines and all Loop Insert logs across the order
     const loopInsertTables = machineTables.filter((mt) => isLoopInsertMachine(mt));
-    const allLoopInsertLogs = (this.productionLogs || []).filter((l) => isLoopInsertMachine(l));
+    const allLoopInsertLogs = (this.productionLogs || []).filter(
+      (l) => !isLogDeleted(l, this.deletedLogIds) && isLoopInsertMachine(l)
+    );
 
     // Total pieces completed from LOOP INSERT across the entire active order
     const totalLoopInsertOrderCompleted = allLoopInsertLogs.reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
@@ -3460,7 +3560,7 @@ class ClientDatabaseStore {
       limit = 100,
     } = params;
 
-    let list = this.deliveryReceivedLogs || [];
+    let list = (this.deliveryReceivedLogs || []).filter((l) => !this.isDeliveryLogDeleted(l));
 
     if (type !== 'All') {
       list = list.filter((l) => l.type.toLowerCase() === type.toLowerCase());
@@ -3486,7 +3586,7 @@ class ClientDatabaseStore {
     }
 
     // Summary calculations
-    const allLogs = this.deliveryReceivedLogs || [];
+    const allLogs = (this.deliveryReceivedLogs || []).filter((l) => !this.isDeliveryLogDeleted(l));
     const targetDate = (params.date || new Date().toISOString().split('T')[0]).slice(0, 10);
     const dateLogs = allLogs.filter((l) => (l.date || l.timestamp || '').slice(0, 10) === targetDate);
 
@@ -3522,68 +3622,107 @@ class ClientDatabaseStore {
     };
   }
 
-  deleteDeliveryReceived(id) {
+  async deleteDeliveryReceived(id) {
     if (!id) return { success: false, message: 'Missing transaction ID' };
     const index = (this.deliveryReceivedLogs || []).findIndex((l) => l.id === id);
     if (index === -1) {
+      if (!this.deletedDeliveryLogIds) this.deletedDeliveryLogIds = new Set();
+      this.deletedDeliveryLogIds.add(id);
+      try {
+        localStorage.setItem('bondtex_deleted_delivery_logs', JSON.stringify(Array.from(this.deletedDeliveryLogIds)));
+      } catch {}
       return { success: false, message: `Transaction with ID '${id}' not found` };
     }
 
     const log = this.deliveryReceivedLogs[index];
     const qty = Number(log.qty) || 0;
 
-    // Find the associated order
-    const order = this.orders.find((o) => {
-      const matchPo = o.poNumber === log.poNumber || o.id === log.poNumber;
-      const matchColour = !log.colour || (o.colour || '').toLowerCase() === (log.colour || '').toLowerCase();
-      const matchSize = !log.size || String(o.size).trim() === String(log.size).trim();
-      return matchPo && matchColour && matchSize;
-    }) || this.orders.find((o) => o.poNumber === log.poNumber);
+    // 1. Tombstone tracking to permanently prevent resurrection on refresh or cloud pull
+    if (!this.deletedDeliveryLogIds) this.deletedDeliveryLogIds = new Set();
+    this.deletedDeliveryLogIds.add(id);
+    const dStr = (log.date || log.timestamp || '').slice(0, 10);
+    const poStr = String(log.poNumber || '').trim();
+    const szStr = String(log.size || '').trim();
+    if (dStr && poStr && szStr) {
+      this.deletedDeliveryLogIds.add(`${dStr}_${poStr}_${szStr}_${qty}`);
+      this.deletedDeliveryLogIds.add(`${poStr}_${szStr}_${qty}`);
+    }
+    try {
+      localStorage.setItem('bondtex_deleted_delivery_logs', JSON.stringify(Array.from(this.deletedDeliveryLogIds)));
+    } catch {}
 
-    if (order) {
-      if (log.type === 'Delivery') {
-        if (log.subCategory === 'Outsource') {
-          // Reverse day target deduction
-          order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - qty);
-          const cIdx = (this.outsourceConsignments || []).findIndex((c) => c.poNumber === log.poNumber && c.sentQty === qty && c.receivedQty === 0);
-          if (cIdx !== -1) this.outsourceConsignments.splice(cIdx, 1);
-        } else if (log.subCategory === 'Permanent') {
-          // Reverse permanent delivery deduction and production
-          order.productionQty = (Number(order.productionQty) || 0) - qty;
-          order.deliveryQty = (Number(order.deliveryQty) || 0) - qty;
-          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
-          order.deliveryBalanceQty = order.balanceQty;
+    // 2. Remove from local array
+    this.deliveryReceivedLogs.splice(index, 1);
 
-          if (order.balanceQty <= 0) {
-            order.status = 'Completed';
-          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
-            order.status = 'Ahead';
-          } else {
-            order.status = 'Behind Plan';
-          }
-
-          if (order.dailyLogs) {
-            const dlIdx = order.dailyLogs.findIndex(
-              (l) => l.deliveryQty === qty && (l.notes || '').includes('Permanent Dispatch')
-            );
-            if (dlIdx !== -1) order.dailyLogs.splice(dlIdx, 1);
-          }
-        }
-      }
+    // 3. Reverse Outsource consignments if applicable
+    if (log.type === 'Delivery' && log.subCategory === 'Outsource' && Array.isArray(this.outsourceConsignments)) {
+      const cIdx = this.outsourceConsignments.findIndex((c) => c.poNumber === log.poNumber && c.sentQty === qty && c.receivedQty === 0);
+      if (cIdx !== -1) this.outsourceConsignments.splice(cIdx, 1);
     }
 
-    this.deliveryReceivedLogs.splice(index, 1);
-    this.save(true);
+    // 4. Clean order dailyLogs referencing this delivery
+    this.orders.forEach((o) => {
+      if (Array.isArray(o.dailyLogs)) {
+        o.dailyLogs = o.dailyLogs.filter(
+          (dl) => !(dl.deliveryQty === qty && ((dl.notes || '').includes(id) || (dl.notes || '').includes('Permanent Dispatch')))
+        );
+      }
+    });
+
+    // 5. Authoritatively recalculate all order deliveryQty, floorProductionQty, balanceQty, and status
+    this.ensureOrderCalculations();
+
+    // 6. Direct Atomic HARD DELETE write to Firebase RTDB
+    this.isIntentionalReset = true;
+    try {
+      const nowIso = new Date().toISOString();
+      this.lastSaved = nowIso;
+      if (typeof fetch !== 'undefined') {
+        await Promise.allSettled([
+          firebaseRealtime.pushDeletedDeliveryLogIds(Array.from(this.deletedDeliveryLogIds)),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/deliveryReceivedLogs.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.deliveryReceivedLogs),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.orders),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/lastUpdated.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(nowIso),
+          }),
+          this.forceSaveToCloud(),
+        ]);
+      }
+    } catch (err) {
+      console.warn('Realtime hard delete delivery logs note:', err?.message);
+    } finally {
+      this.isIntentionalReset = false;
+    }
+
+    // 7. Instant cross-tab broadcast and UI notification
+    if (this.meshChannel) {
+      try {
+        this.meshChannel.postMessage({ type: 'MESH_UPDATE', timestamp: Date.now() });
+      } catch {}
+    }
+    this.notifySubscribers(true);
 
     return {
       success: true,
       message: `Transaction #${id} successfully deleted and balance impacts reversed.`,
       reversedQty: qty,
-      order,
     };
   }
 
-  updateDeliveryReceived(id, updateData = {}) {
+  async updateDeliveryReceived(id, updateData = {}) {
     if (!id) return { success: false, message: 'Missing transaction ID' };
     const log = (this.deliveryReceivedLogs || []).find((l) => l.id === id);
     if (!log) {
@@ -3597,50 +3736,6 @@ class ClientDatabaseStore {
     const newNotes = updateData.notes !== undefined ? updateData.notes : log.notes;
     const newSubCategory = updateData.subCategory !== undefined ? updateData.subCategory : log.subCategory;
 
-    const order = this.orders.find((o) => {
-      const matchPo = o.poNumber === log.poNumber || o.id === log.poNumber;
-      const matchColour = !log.colour || (o.colour || '').toLowerCase() === (log.colour || '').toLowerCase();
-      const matchSize = !log.size || String(o.size).trim() === String(log.size).trim();
-      return matchPo && matchColour && matchSize;
-    }) || this.orders.find((o) => o.poNumber === log.poNumber);
-
-    if (order) {
-      // 1. Revert previous impact
-      if (log.type === 'Delivery') {
-        if (log.subCategory === 'Outsource') {
-          order.dayTargetDeduction = Math.max(0, (Number(order.dayTargetDeduction) || 0) - oldQty);
-        } else if (log.subCategory === 'Permanent') {
-          order.productionQty = (Number(order.productionQty) || 0) - oldQty;
-          order.deliveryQty = (Number(order.deliveryQty) || 0) - oldQty;
-          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
-          order.deliveryBalanceQty = order.balanceQty;
-        }
-      }
-
-      // 2. Apply new impact
-      if (log.type === 'Delivery') {
-        if (newSubCategory === 'Outsource') {
-          order.dayTargetDeduction = (Number(order.dayTargetDeduction) || 0) + newQty;
-          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Day's Target (${newPartner || 'Outsource'})`;
-        } else if (newSubCategory === 'Permanent') {
-          order.productionQty = (Number(order.productionQty) || 0) + newQty;
-          order.deliveryQty = (Number(order.deliveryQty) || 0) + newQty;
-          order.balanceQty = (Number(order.orderQty) || 0) - order.deliveryQty;
-          order.deliveryBalanceQty = order.balanceQty;
-
-          if (order.balanceQty <= 0) {
-            order.status = 'Completed';
-          } else if (order.productionQty >= (Number(order.orderQty) || 0) * 0.9) {
-            order.status = 'Ahead';
-          } else {
-            order.status = 'Behind Plan';
-          }
-
-          log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Remaining Balance (Remaining Balance: ${order.balanceQty.toLocaleString()} pcs, Total Delivered: ${order.deliveryQty.toLocaleString()} pcs)`;
-        }
-      }
-    }
-
     if (updateData.date) {
       log.date = String(updateData.date).slice(0, 10);
     }
@@ -3649,11 +3744,68 @@ class ClientDatabaseStore {
     log.handlerName = newHandler;
     log.notes = newNotes;
     log.subCategory = newSubCategory;
-    log.systemBalanceAfter = order ? order.balanceQty : null;
-    log.productQtyAfter = order ? order.productionQty : null;
-    log.orderStatusAfter = order ? order.status : null;
 
-    this.save(true);
+    // Recalculate all orders dynamically from active deliveryReceivedLogs
+    this.ensureOrderCalculations();
+
+    const order = this.orders.find((o) => {
+      const matchPo = o.poNumber === log.poNumber || o.id === log.poNumber;
+      const matchColour = !log.colour || (o.colour || '').toLowerCase() === (log.colour || '').toLowerCase();
+      const matchSize = !log.size || String(o.size).trim() === String(log.size).trim();
+      return matchPo && matchColour && matchSize;
+    }) || this.orders.find((o) => o.poNumber === log.poNumber);
+
+    if (order) {
+      if (newSubCategory === 'Outsource') {
+        log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Day's Target (${newPartner || 'Outsource'})`;
+      } else {
+        log.calculationEffect = `Deducted ${newQty.toLocaleString()} pcs from Remaining Balance (Remaining Balance: ${order.balanceQty.toLocaleString()} pcs, Total Delivered: ${order.deliveryQty.toLocaleString()} pcs)`;
+      }
+      log.systemBalanceAfter = order.balanceQty;
+      log.productQtyAfter = order.productionQty;
+      log.floorQtyAfter = order.floorProductionQty;
+      log.orderStatusAfter = order.status;
+    }
+
+    this.isIntentionalReset = true;
+    try {
+      const nowIso = new Date().toISOString();
+      this.lastSaved = nowIso;
+      if (typeof fetch !== 'undefined') {
+        await Promise.allSettled([
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/deliveryReceivedLogs.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.deliveryReceivedLogs),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/orders.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(this.orders),
+          }),
+          fetch(getNoCacheUrl(`${REALTIME_DB_URL}/state/lastUpdated.json`), {
+            method: 'PUT',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json', ...NO_CACHE_HEADERS },
+            body: JSON.stringify(nowIso),
+          }),
+          this.forceSaveToCloud(),
+        ]);
+      }
+    } catch (err) {
+      console.warn('Realtime update delivery logs note:', err?.message);
+    } finally {
+      this.isIntentionalReset = false;
+    }
+
+    if (this.meshChannel) {
+      try {
+        this.meshChannel.postMessage({ type: 'MESH_UPDATE', timestamp: Date.now() });
+      } catch {}
+    }
+    this.notifySubscribers(true);
 
     return {
       success: true,

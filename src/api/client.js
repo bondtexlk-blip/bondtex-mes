@@ -352,7 +352,7 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (remote && remote.success) return remote;
-    return dbStore.updateDeliveryReceived(id, data);
+    return await dbStore.updateDeliveryReceived(id, data);
   },
 
   deleteDeliveryReceived: async (id) => {
@@ -360,7 +360,7 @@ export const api = {
       method: 'DELETE',
     });
     if (remote && remote.success) return remote;
-    return dbStore.deleteDeliveryReceived(id);
+    return await dbStore.deleteDeliveryReceived(id);
   },
 
   // 18B. Outsource Consignments Management & Inbound Return Confirmation
