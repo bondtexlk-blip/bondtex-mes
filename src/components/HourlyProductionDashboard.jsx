@@ -29,10 +29,12 @@ import {
   Pencil,
   Trash2,
   X,
+  PackageCheck,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { formatNumber } from '../utils/formatters';
 import { detectCurrentShift } from '../utils/timeSlots';
+import { isLoopInsertMachine } from '../services/dbStore';
 
 export function getMachineUnit(m) {
   if (m?.unit && typeof m.unit === 'string' && m.unit.trim()) return m.unit.trim();
@@ -82,6 +84,7 @@ export default function HourlyProductionDashboard({
   const [selectedStyleColorFilter, setSelectedStyleColorFilter] = useState('All');
   const [selectedSizeFilter, setSelectedSizeFilter] = useState('All');
   const [viewMode, setViewMode] = useState('summary'); // 'summary' | 'stations'
+  const [metricScope, setMetricScope] = useState('shift'); // 'shift' (Today's shift output) | 'order' (Cumulative order total)
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState(new Date());
@@ -370,20 +373,6 @@ export default function HourlyProductionDashboard({
     activeMachinesCount: 0,
   };
   const workingHours = data?.workingHours || (shift === 'Night Shift' ? 10 : shift === 'All' ? 23 : 13);
-
-  const isLoopInsertMachine = (m) => {
-    if (!m) return false;
-    if (m.isLoopInsert !== undefined) return Boolean(m.isLoopInsert);
-    const name = (m.name || m.machineName || '').toLowerCase();
-    const code = (m.code || m.id || m.machineId || '').toLowerCase();
-    return (
-      name.includes('loop insert') ||
-      name.includes('insert loop') ||
-      (name.includes('loop') && name.includes('insert')) ||
-      code === 'mch-06' ||
-      code.includes('loop')
-    );
-  };
 
   // Dynamic filter options extracted from machines, orders, and logs
   const rawStyleColours = new Set();
@@ -694,6 +683,43 @@ export default function HourlyProductionDashboard({
       : shift === 'All'
       ? "Today's Total Output (All Shifts)"
       : "Today's Shift Output (Day)";
+
+  // Loop Insert Shift Target (default 14,401 pcs matching Summary Matrix)
+  const shiftLoopTarget = summary.loopInsertShiftTarget || 14401;
+  const shiftOutput = displayShiftOutput; // Today's completed loop insert (matches matrix, e.g. 7,476 pcs)
+  const shiftRemaining = Math.max(0, shiftLoopTarget - shiftOutput);
+  const shiftEfficiency = shiftLoopTarget > 0 ? Math.round((shiftOutput / shiftLoopTarget) * 100) : 0;
+
+  // All-time Order Cumulative values
+  const orderLoopCompleted = summary.totalLoopInsertCompleted || summary.totalHourlyOutput || 0;
+  const orderTarget = summary.totalOrderQty || summary.totalTargetQuota || 179665;
+  const orderRemaining = Math.max(0, orderTarget - orderLoopCompleted);
+  const orderEfficiency = orderTarget > 0 ? Math.round((orderLoopCompleted / orderTarget) * 100) : 0;
+
+  // Active Metric Values (Shift vs Order toggle, or Filtered if filters active)
+  const activeMainOutput = isFilterActive
+    ? displayTotalOutput
+    : metricScope === 'shift'
+    ? shiftOutput
+    : orderLoopCompleted;
+
+  const activeMainQuota = isFilterActive
+    ? displayOrderQuota
+    : metricScope === 'shift'
+    ? shiftLoopTarget
+    : orderTarget;
+
+  const activeRemainingBalance = isFilterActive
+    ? displayRemainingBalance
+    : metricScope === 'shift'
+    ? shiftRemaining
+    : orderRemaining;
+
+  const activeEfficiencyPct = isFilterActive
+    ? displayEfficiencyPct
+    : metricScope === 'shift'
+    ? shiftEfficiency
+    : orderEfficiency;
 
   return (
     <div className="space-y-6 animate-fade-in max-w-7xl mx-auto pb-16">
@@ -1023,116 +1049,227 @@ export default function HourlyProductionDashboard({
         </div>
       </div>
 
-      {/* 2. Top Metric Cards Strip (Dynamically Recalculated based strictly on Active Filters) */}
+      {/* Scope Switcher: Today's Shift Output vs Cumulative Order Output */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 border border-slate-800/80 px-4 py-3 rounded-2xl">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+            <Activity className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white flex items-center gap-2">
+              <span>Production Scope View</span>
+              <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30">
+                {metricScope === 'shift' ? "Today's Shift" : "All-Time Order"}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {metricScope === 'shift'
+                ? "Displaying Loop Insert completed pcs for today's shift (matches Summary Matrix row below)"
+                : "Displaying all-time cumulative Loop Insert completed pcs across the entire order"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setMetricScope('shift')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              metricScope === 'shift'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Today's Shift ({formatNumber(shiftOutput)} pcs)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMetricScope('order')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+              metricScope === 'order'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <PackageCheck className="w-3.5 h-3.5" />
+            <span>Order Total So Far ({formatNumber(orderLoopCompleted)} pcs)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Top Metric Cards Strip (Dynamically Recalculated based strictly on Active Scope & Filters) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Total Amount Completed So Far / Filtered Output */}
+        {/* Metric 1: Total Completed Output */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-cyan-400 flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{isFilterActive ? 'Filtered Output So Far' : 'Total Completed So Far'}</span>
+              <span>
+                {isFilterActive
+                  ? 'Filtered Output'
+                  : metricScope === 'shift'
+                  ? "Today's Completed"
+                  : 'Total Order Completed'}
+              </span>
             </span>
             <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
               isFilterActive
                 ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
             }`}>
-              {isFilterActive ? 'FILTERED' : 'LOOP INSERT ONLY'}
+              {isFilterActive ? 'FILTERED' : metricScope === 'shift' ? 'LOOP INSERT ONLY' : 'ALL-TIME ORDER'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-white font-mono">
-              {formatNumber(displayTotalOutput)}
+              {formatNumber(activeMainOutput)}
             </span>
             <span className="text-xs text-cyan-400 font-mono font-semibold">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>{displayShiftOutputLabel}</span>
+            <span>
+              {isFilterActive
+                ? displayShiftOutputLabel
+                : metricScope === 'shift'
+                ? 'Total Order Cumulative'
+                : "Today's Shift Output"}
+            </span>
             <span className="text-emerald-400 font-mono font-bold">
-              +{formatNumber(displayShiftOutput)} pcs
+              {isFilterActive
+                ? `+${formatNumber(displayShiftOutput)} pcs`
+                : metricScope === 'shift'
+                ? `+${formatNumber(orderLoopCompleted)} pcs (${orderEfficiency}%)`
+                : `+${formatNumber(shiftOutput)} pcs`}
             </span>
           </div>
         </div>
 
-        {/* Metric 2: Remaining Balance = Quota - Output */}
+        {/* Metric 2: Remaining Balance */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-amber-400 flex items-center gap-1.5">
               <Scale className="w-3.5 h-3.5 text-amber-400" />
-              <span>Remaining Balance</span>
+              <span>
+                {isFilterActive
+                  ? 'Filtered Remaining'
+                  : metricScope === 'shift'
+                  ? 'Shift Remaining Target'
+                  : 'Remaining Order Balance'}
+              </span>
             </span>
             <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
-              displayRemainingBalance === 0
+              activeRemainingBalance === 0
                 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
                 : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
             }`}>
-              {displayRemainingBalance === 0 ? 'COMPLETED' : 'TO GO'}
+              {activeRemainingBalance === 0 ? 'COMPLETED' : 'TO GO'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className={`text-2xl sm:text-3xl font-black font-mono ${
-              displayRemainingBalance === 0 ? 'text-emerald-400' : 'text-amber-400'
+              activeRemainingBalance === 0 ? 'text-emerald-400' : 'text-amber-400'
             }`}>
-              {formatNumber(displayRemainingBalance)}
+              {formatNumber(activeRemainingBalance)}
             </span>
             <span className="text-xs text-slate-400 font-mono">pcs</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Formula</span>
+            <span>
+              {metricScope === 'shift' && !isFilterActive ? 'Total Order Remaining' : 'Formula'}
+            </span>
             <span className="text-slate-300 font-mono text-[10px]">
-              {isFilterActive ? 'Filtered Quota - Filtered Output' : 'Total Order - Loop Insert'}
+              {isFilterActive
+                ? 'Filtered Quota - Filtered Output'
+                : metricScope === 'shift'
+                ? `${formatNumber(orderRemaining)} pcs to go`
+                : 'Total Order - Loop Insert'}
             </span>
           </div>
         </div>
 
-        {/* Metric 3: Current Efficiency / Completion Rate */}
+        {/* Metric 3: Efficiency / Completion Rate */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-emerald-400 flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Completion Rate</span>
+              <span>
+                {isFilterActive
+                  ? 'Filtered Rate'
+                  : metricScope === 'shift'
+                  ? 'Shift Efficiency'
+                  : 'Order Completion Rate'}
+              </span>
             </span>
             <span className="p-1 rounded-lg border bg-emerald-500/10 text-emerald-400 border-emerald-500/30 text-[10px] font-mono font-bold">
-              {displayEfficiencyPct}%
+              {activeEfficiencyPct}%
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black font-mono text-emerald-300">
-              {displayEfficiencyPct}%
+              {activeEfficiencyPct}%
             </span>
-            <span className="text-xs text-slate-400">progress</span>
+            <span className="text-xs text-slate-400">
+              {metricScope === 'shift' && !isFilterActive ? 'shift target' : 'progress'}
+            </span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>{isFilterActive ? 'Active Filter Count' : 'Intermediate WIP'}</span>
+            <span>
+              {isFilterActive
+                ? 'Active Filter Count'
+                : metricScope === 'shift'
+                ? 'Total Order Progress'
+                : 'Intermediate WIP'}
+            </span>
             <span className="text-slate-300 font-mono">
-              {isFilterActive ? `${activeFilterCount} Active Filters` : `+${formatNumber(summary.intermediateShiftOutput || 0)} units`}
+              {isFilterActive
+                ? `${activeFilterCount} Active Filters`
+                : metricScope === 'shift'
+                ? `${orderEfficiency}% | WIP: +${formatNumber(summary.intermediateShiftOutput || 0)}`
+                : `+${formatNumber(summary.intermediateShiftOutput || 0)} units`}
             </span>
           </div>
         </div>
 
-        {/* Metric 4: Total Order Quantity / Filtered Quota */}
+        {/* Metric 4: Total Order Quantity / Shift Quota */}
         <div className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-xl space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-bold uppercase tracking-wider text-[11px] text-indigo-400 flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{isFilterActive ? 'Filtered Quota / Target' : 'Total Order Quantity'}</span>
+              <span>
+                {isFilterActive
+                  ? 'Filtered Quota / Target'
+                  : metricScope === 'shift'
+                  ? 'Shift Target Quota'
+                  : 'Total Order Quantity'}
+              </span>
             </span>
             <span className={`p-1 rounded-lg border text-[10px] font-mono font-bold ${
-              isFilterActive ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+              isFilterActive
+                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                : metricScope === 'shift'
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
             }`}>
-              {isFilterActive ? 'FILTERED' : 'CATALOG'}
+              {isFilterActive ? 'FILTERED' : metricScope === 'shift' ? '9-HR SHIFT' : 'CATALOG'}
             </span>
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-black text-indigo-300 font-mono">
-              {formatNumber(displayOrderQuota)}
+              {formatNumber(activeMainQuota)}
             </span>
             <span className="text-xs text-slate-400 font-mono">pcs target</span>
           </div>
           <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-800">
-            <span>Plant Fleet</span>
+            <span>
+              {metricScope === 'shift' && !isFilterActive ? 'Total Order Target' : 'Plant Fleet'}
+            </span>
             <span className="text-slate-300 font-mono">
-              {isFilterActive ? `${filteredSummaryMatrix.length} Stations Matching` : `${summary.activeMachinesCount || 5} Stations Active`}
+              {isFilterActive
+                ? `${filteredSummaryMatrix.length} Stations Matching`
+                : metricScope === 'shift'
+                ? `${formatNumber(orderTarget)} pcs`
+                : `${summary.activeMachinesCount || 5} Stations Active`}
             </span>
           </div>
         </div>

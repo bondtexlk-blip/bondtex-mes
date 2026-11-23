@@ -562,10 +562,14 @@ export const firebaseRealtime = {
           } catch {}
         }
 
-        // Actionable snapshot change detection: triggers on ANY change in log count, orders, or timestamp
+        // Actionable snapshot change detection: triggers on ANY change in log count, orders, deliveries, or timestamp
         const stateLogsCount = Array.isArray(state.productionLogs) ? state.productionLogs.length : 0;
         const stateOrdersCount = Array.isArray(state.orders) ? state.orders.length : 0;
-        const snapshotKey = `${state.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}`;
+        const stateDeliveryCount = Array.isArray(state.deliveryReceivedLogs) ? state.deliveryReceivedLogs.length : 0;
+        const stateDeliveriesTotal = Array.isArray(state.deliveryReceivedLogs)
+          ? state.deliveryReceivedLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+          : 0;
+        const snapshotKey = `${state.lastUpdated || ''}_${stateLogsCount}_${stateOrdersCount}_${stateDeliveryCount}_${stateDeliveriesTotal}`;
 
         if (snapshotKey === lastHandledSnapshotKey) {
           return;

@@ -137,8 +137,17 @@ export default function DailyProductionDashboard({
     const unsubscribe = api.subscribe(() => {
       loadDailyData();
     });
+    // Fast polling fallback (every 2.5s) with cloud sync pull to guarantee instant real-time sync with mobile phone & delivery updates
+    const pollId = setInterval(async () => {
+      try {
+        await api.syncCloud();
+      } catch {}
+      await loadDailyData();
+    }, 2500);
+
     return () => {
       if (unsubscribe) unsubscribe();
+      clearInterval(pollId);
     };
   }, [category, selectedDate]);
 

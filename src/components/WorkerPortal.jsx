@@ -140,15 +140,28 @@ export default function WorkerPortal({
   const [producedQty, setProducedQty] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [notes, setNotes] = useState('');
+  const [activeOrders, setActiveOrders] = useState([]);
 
-  // Auto-resolve Style and PO Number based on colour in Loop production
+  // Auto-resolve Style and PO Number dynamically based on colour in active order
   const resolveStyleAndPoForColour = (col) => {
-    const c = (col || '').toLowerCase();
+    const c = (col || '').toLowerCase().trim();
+    if (!c) return null;
+    // 1. Check live active orders in the current workspace
+    if (activeOrders && activeOrders.length > 0) {
+      const match = activeOrders.find((o) => {
+        const oCol = (o.colour || '').toLowerCase().trim();
+        return oCol === c || oCol.includes(c) || c.includes(oCol);
+      });
+      if (match) {
+        return { style: match.style, poNumber: match.poNumber };
+      }
+    }
+    // 2. Active VS Order workspace fallbacks
+    if (c.includes('black')) return { style: 'Loop Elastic Band - 54A2', poNumber: '4503044543' };
+    if (c.includes('praline')) return { style: 'Loop Elastic Band - 65H8', poNumber: '4503044560' };
+    if (c.includes('marzipan')) return { style: 'Loop Elastic Band - 39H6', poNumber: '4502991538' };
+    if (c.includes('ganache')) return { style: 'Loop Elastic Band - 33F6', poNumber: '4502991526' };
     if (c.includes('talc')) return { style: 'Loop Elastic Band - 57H1', poNumber: '4502991562' };
-    if (c.includes('black')) return { style: 'Loop Elastic Band - 54A2', poNumber: '4502991550' };
-    if (c.includes('marzipan')) return { style: 'Loop Elastic Band - 39H6', poNumber: '4502991532' };
-    if (c.includes('praline')) return { style: 'Loop Elastic Band - 65H8', poNumber: '4502991599' };
-    if (c.includes('ganache')) return { style: 'Loop Elastic Band - 33F6', poNumber: '4502991520' };
     return null;
   };
 
@@ -196,11 +209,16 @@ export default function WorkerPortal({
   const fetchMachineDetails = async (idToFetch) => {
     try {
       setLoading(true);
-      const [machineRes, allMachinesRes, workersRes] = await Promise.all([
+      const [machineRes, allMachinesRes, workersRes, ordersRes] = await Promise.all([
         api.getMachineById(idToFetch || machineId),
         api.getMachines(),
         api.getWorkers().catch(() => ({ success: false })),
+        api.getOrders().catch(() => ({ success: false })),
       ]);
+
+      if (ordersRes && ordersRes.success && Array.isArray(ordersRes.data)) {
+        setActiveOrders(ordersRes.data);
+      }
 
       if (allMachinesRes.success) {
         setMachinesList(allMachinesRes.data || []);

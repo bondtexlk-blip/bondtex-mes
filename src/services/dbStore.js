@@ -245,17 +245,23 @@ class ClientDatabaseStore {
   applyCloudState(cloudState) {
     if (!cloudState) return;
 
-    // Guard against echo loops: only ignore if the incoming state originated from this device AND the log count and lastUpdated match local
+    // Guard against echo loops: only ignore if the incoming state originated from this device AND the log count, delivery count, and lastUpdated match local
     const cloudLogsCount = Array.isArray(cloudState.productionLogs) ? cloudState.productionLogs.length : 0;
     const localLogsCount = Array.isArray(this.productionLogs) ? this.productionLogs.length : 0;
+    const cloudDeliveryCount = Array.isArray(cloudState.deliveryReceivedLogs) ? cloudState.deliveryReceivedLogs.length : 0;
+    const cloudDeliverySum = Array.isArray(cloudState.deliveryReceivedLogs)
+      ? cloudState.deliveryReceivedLogs.reduce((s, l) => s + (Number(l.qty) || 0), 0)
+      : 0;
+    const localDeliveryCount = Array.isArray(this.deliveryReceivedLogs) ? this.deliveryReceivedLogs.length : 0;
+
     if (cloudState.lastDeviceId && cloudState.lastDeviceId === this.deviceId) {
-      if (cloudLogsCount === localLogsCount && cloudState.lastUpdated === this.lastSaved) {
+      if (cloudLogsCount === localLogsCount && cloudDeliveryCount === localDeliveryCount && cloudState.lastUpdated === this.lastSaved) {
         return;
       }
     }
 
     // Guard against re-applying the exact same cloud snapshot repeatedly
-    const snapshotKey = `${cloudState.lastUpdated || ''}_${cloudLogsCount}_${Array.isArray(cloudState.orders) ? cloudState.orders.length : 0}`;
+    const snapshotKey = `${cloudState.lastUpdated || ''}_${cloudLogsCount}_${Array.isArray(cloudState.orders) ? cloudState.orders.length : 0}_${cloudDeliveryCount}_${cloudDeliverySum}`;
     if (snapshotKey === this.lastAppliedSnapshotKey) {
       return;
     }
@@ -2568,6 +2574,7 @@ class ClientDatabaseStore {
   }
 
   getDailyProduction(params = {}) {
+    this.ensureOrderCalculations();
     const category = params.category || 'Loop';
     const targetDate = params.date || new Date().toISOString().split('T')[0];
 
@@ -3146,6 +3153,7 @@ class ClientDatabaseStore {
         totalHourlyOutput: totalLoopInsertOrderCompleted,
         totalLoopInsertCompleted: totalLoopInsertOrderCompleted,
         totalLoopInsertShiftCompleted,
+        loopInsertShiftTarget: loopInsertTables.reduce((s, mt) => s + (Number(mt.totals?.totalTarget) || Number(mt.dailyTargetQty) || 0), 0) || 14401,
         totalOrderQty,
         totalTargetQuota: totalOrderQty,
         overallNetVariance,
